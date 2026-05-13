@@ -75,6 +75,12 @@ final class SnippetExpander: HalenPlugin {
               !ch.isWhitespace, !ch.isPunctuation {
             start -= 1
         }
+        // Extend backward to include the snippet sentinel ';' — otherwise the
+        // word-boundary scan stops *after* it (semicolons count as punctuation)
+        // and we never see the trigger.
+        if start > 0, let preceding = character(ns, at: start - 1), preceding == ";" {
+            start -= 1
+        }
         guard start < end else { return }
 
         let token = ns.substring(with: NSRange(location: start, length: end - start))

@@ -55,6 +55,12 @@ final class MeetingPrep: HalenPlugin {
                 Task { @MainActor [weak self] in
                     await self?.generateNow()
                 }
+            },
+            onRequestAccess: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.requestPermissions()
+                    self?.refreshNextEvent()
+                }
             }
         ))
     }
@@ -114,7 +120,10 @@ final class MeetingPrep: HalenPlugin {
     }
 
     private func generateNow() async {
-        guard state.calendarAuthorized else { return }
+        guard state.calendarAuthorized else {
+            state.generation = .error(message: "Calendar access required — grant it above.")
+            return
+        }
         let now = Date()
         let predicate = store.predicateForEvents(
             withStart: now,
@@ -125,11 +134,16 @@ final class MeetingPrep: HalenPlugin {
             .filter({ !$0.isAllDay })
             .sorted(by: { ($0.startDate ?? .distantFuture) < ($1.startDate ?? .distantFuture) })
             .first
-        else { return }
+        else {
+            state.generation = .error(message: "No upcoming events in the next 24 hours.")
+            return
+        }
+        state.generation = .generating(title: next.title ?? "Untitled")
         await brief(event: next, force: true)
     }
 
     private func brief(event: EKEvent, force: Bool = false) async {
+        let title = event.title ?? "Untitled"
         let attendees = (event.attendees ?? [])
             .compactMap { $0.name }
             .filter { !$0.isEmpty }
@@ -140,7 +154,7 @@ final class MeetingPrep: HalenPlugin {
         Write a 5-bullet meeting briefing. Output only the bullets, no preamble or trailing text.
         Cover: what's likely on the agenda; suggested questions to ask; things to bring up; prep needed; tone cue.
 
-        Meeting: \(event.title ?? "Untitled")
+        Meeting: \(title)
         Attendees: \(attendees.isEmpty ? "(none listed)" : attendees)
         Description: \(description.isEmpty ? "(none)" : description)
         """
@@ -149,7 +163,10 @@ final class MeetingPrep: HalenPlugin {
         do {
             let response = try await services.inference.complete(request)
             let briefing = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !briefing.isEmpty else { return }
+            guard !briefing.isEmpty else {
+                state.generation = .error(message: "Gemma returned an empty briefing.")
+                return
+            }
 
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(briefing, forType: .string)
@@ -157,19 +174,21 @@ final class MeetingPrep: HalenPlugin {
             await postNotification(for: event, briefing: briefing)
 
             let entry = MeetingPrepState.Brief(
-                title: event.title ?? "Untitled",
+                title: title,
                 body: briefing,
                 timestamp: Date()
             )
             state.recentBriefings.insert(entry, at: 0)
             if state.recentBriefings.count > 3 { state.recentBriefings.removeLast() }
+            state.generation = .success(title: title)
 
             if !force, let id = event.eventIdentifier {
                 processedIds.insert(id)
                 saveProcessed()
             }
-            Log.info("MeetingPrep: briefed \"\(event.title ?? "?")\" (\(response.latencyMs)ms)")
+            Log.info("MeetingPrep: briefed \"\(title)\" (\(response.latencyMs)ms)")
         } catch {
+            state.generation = .error(message: error.localizedDescription)
             Log.warn("MeetingPrep: brief failed: \(error.localizedDescription)")
         }
     }
@@ -208,9 +227,13 @@ final class MeetingPrep: HalenPlugin {
         if let next = events.first {
             state.nextEventTitle = next.title
             state.nextEventStart = next.startDate
+            state.nextEventAttendees = (next.attendees ?? [])
+                .compactMap { $0.name }
+                .filter { !$0.isEmpty }
         } else {
             state.nextEventTitle = nil
             state.nextEventStart = nil
+            state.nextEventAttendees = []
         }
     }
 
@@ -250,9 +273,18 @@ final class MeetingPrepState {
         let timestamp: Date
     }
 
+    enum GenerationStatus: Equatable {
+        case idle
+        case generating(title: String)
+        case success(title: String)
+        case error(message: String)
+    }
+
     var calendarAuthorized = false
     var notificationsAuthorized = false
     var nextEventTitle: String?
     var nextEventStart: Date?
+    var nextEventAttendees: [String] = []
     var recentBriefings: [Brief] = []
+    var generation: GenerationStatus = .idle
 }
