@@ -86,6 +86,7 @@ final class AppCoordinator {
 
         // Register first-party plugins. Subagent-built features get added here.
         registry.register(TypoFixer(services: services, store: typoStore))
+        registry.register(SentimentGuard(services: services))
     }
 
     private func startEventLogger() {

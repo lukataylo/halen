@@ -204,8 +204,14 @@ final class CaretObserver {
 
     private func emitTextSnapshot(reason: String) {
         guard let element = focusedElement, let app = observedApp else { return }
-        let text = axReadString(element, kAXValueAttribute) ?? ""
-        let caretOffset = axReadSelectedRange(element)?.location ?? 0
+        let fullText = axReadString(element, kAXValueAttribute) ?? ""
+        let fullOffset = axReadSelectedRange(element)?.location ?? 0
+
+        // Cap payloads at 8k chars (windowed around the caret) so subscribers
+        // — especially Gemma-backed plugins — don't get blasted with terminal
+        // scrollback. For small inputs (typical email/Slack/Notes), this is
+        // a no-op.
+        let (text, caretOffset) = windowAroundCaret(text: fullText, offset: fullOffset, radius: 4000)
 
         eventBus.publish(.textPaused(.init(
             appBundleId: app.bundleIdentifier ?? "",
@@ -214,7 +220,7 @@ final class CaretObserver {
             caretOffset: caretOffset,
             timestamp: Date()
         )))
-        Log.debug("text.pause reason=\(reason) app=\(app.localizedName ?? "?") chars=\(text.count) offset=\(caretOffset)")
+        Log.debug("text.pause reason=\(reason) app=\(app.localizedName ?? "?") fullChars=\(fullText.count) sent=\(text.count) offset=\(caretOffset)")
     }
 
     private func emitCaretMoved(element: AXUIElement) {

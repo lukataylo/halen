@@ -83,6 +83,24 @@ func levenshtein(_ a: String, _ b: String) -> Int {
     return prev[n]
 }
 
+/// Returns a substring of `text` centred around UTF-16 `offset`, of total length up
+/// to `2 * radius`. Also returns the new caret offset relative to the substring.
+/// Used to cap event-bus payloads and Gemma prompts when the focused field has a
+/// huge buffer (terminal scrollback, long documents).
+func windowAroundCaret(text: String, offset: Int, radius: Int) -> (text: String, offset: Int) {
+    let ns = text as NSString
+    let len = ns.length
+    if len <= radius * 2 {
+        return (text, max(0, min(offset, len)))
+    }
+    let clamped = max(0, min(offset, len))
+    let start = max(0, clamped - radius)
+    let endRaw = clamped + radius
+    let end = min(len, endRaw)
+    let windowed = ns.substring(with: NSRange(location: start, length: end - start))
+    return (windowed, clamped - start)
+}
+
 /// What we consider a "word" for correction-learning purposes: 3–30 chars,
 /// only letters (plus apostrophes and hyphens). Filters out single letters,
 /// numbers, code identifiers, and other false-positive sources.

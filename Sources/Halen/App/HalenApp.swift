@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 @main
 struct HalenApp: App {
@@ -11,8 +12,19 @@ struct HalenApp: App {
                 registry: appDelegate.coordinator.registry
             )
         } label: {
-            Image(systemName: "text.cursor")
+            Image(nsImage: Self.menubarIcon)
         }
         .menuBarExtraStyle(.window)
     }
+
+    /// Loaded once at startup. Set as a template image so macOS tints it
+    /// black or white to match the menubar's appearance. Falls back to the
+    /// SF Symbol if the asset isn't bundled (e.g., dev runs before icons exist).
+    private static let menubarIcon: NSImage = {
+        let image = NSImage(named: "HalenMenubar")
+            ?? NSImage(systemSymbolName: "text.cursor", accessibilityDescription: "Halen")
+            ?? NSImage()
+        image.isTemplate = true
+        return image
+    }()
 }
