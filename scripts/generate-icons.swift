@@ -97,6 +97,13 @@ for (px, suffix) in [(22, ""), (44, "@2x"), (66, "@3x")] {
     print("✓ HalenMenubar\(suffix).png")
 }
 
+// MARK: - In-app brand logo (white on cobalt blue, square; SwiftUI rounds at use time)
+for (px, suffix) in [(32, ""), (64, "@2x"), (96, "@3x")] {
+    let img = render(whiteURL, size: NSSize(width: px, height: px), background: cobalt, inset: 0.18)
+    try writePNG(img, to: resourcesDir.appending(path: "HalenLogo\(suffix).png"))
+    print("✓ HalenLogo\(suffix).png")
+}
+
 // MARK: - Build .icns via iconutil
 let icnsURL = resourcesDir.appending(path: "AppIcon.icns")
 let process = Process()

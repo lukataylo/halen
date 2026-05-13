@@ -39,6 +39,11 @@ if [[ -d "$ROOT/Resources/Menubar" ]]; then
     cp "$ROOT/Resources/Menubar/HalenMenubar@2x.png" "$RESOURCES/HalenMenubar@2x.png" 2>/dev/null || true
     cp "$ROOT/Resources/Menubar/HalenMenubar@3x.png" "$RESOURCES/HalenMenubar@3x.png" 2>/dev/null || true
 fi
+for variant in HalenLogo.png HalenLogo@2x.png HalenLogo@3x.png; do
+    if [[ -f "$ROOT/Resources/$variant" ]]; then
+        cp "$ROOT/Resources/$variant" "$RESOURCES/$variant"
+    fi
+done
 
 echo "→ signing with: $SIGN_IDENTITY"
 codesign --force --sign "$SIGN_IDENTITY" --identifier com.dadiani.halen "$APP_DIR" >/dev/null

@@ -24,21 +24,8 @@ struct HalenCenterView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(red: 0.36, green: 0.42, blue: 0.95),
-                                     Color(red: 0.62, green: 0.33, blue: 0.92)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 30, height: 30)
-                Image(systemName: "text.cursor")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
-            }
+            brandMark
+                .frame(width: 30, height: 30)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Halen")
@@ -53,6 +40,32 @@ struct HalenCenterView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private var brandMark: some View {
+        if let logo = NSImage(named: "HalenLogo") {
+            Image(nsImage: logo)
+                .resizable()
+                .interpolation(.high)
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        } else {
+            // Fallback if the icon assets aren't bundled yet.
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(red: 0, green: 0.30, blue: 0.99),
+                                 Color(red: 0.00, green: 0.43, blue: 1.00)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    Image(systemName: "text.cursor")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                )
+        }
     }
 
     private var statusText: String {
