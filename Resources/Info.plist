@@ -26,5 +26,9 @@
     <string>Halen captures audio when you press \u{2325}\u{2318}Space so it can transcribe your speech locally and insert it at your cursor. Audio never leaves this Mac.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Halen uses Apple's on-device speech recognition to convert your dictation to text. Recognition is offline; nothing is sent to the cloud.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Halen reads your upcoming events to suggest breaks (Burnout Copilot) and prepare briefings before meetings (Meeting Prep). Calendar data is read locally only.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Halen reads your upcoming events to suggest breaks (Burnout Copilot) and prepare briefings before meetings (Meeting Prep). Calendar data is read locally only.</string>
 </dict>
 </plist>

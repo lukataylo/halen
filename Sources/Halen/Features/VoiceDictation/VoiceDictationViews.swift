@@ -14,11 +14,11 @@ struct VoiceListeningIndicator: View {
             // Recording-dot indicator
             ZStack {
                 Circle()
-                    .fill(Color(red: 1.0, green: 0.55, blue: 0.20).opacity(0.4))
+                    .fill(Color(red: 0.0, green: 0.30, blue: 0.99).opacity(0.4))
                     .scaleEffect(pulse ? 1.7 : 1.0)
                     .opacity(pulse ? 0 : 1)
                 Circle()
-                    .fill(Color(red: 1.0, green: 0.55, blue: 0.20))
+                    .fill(Color(red: 0.0, green: 0.30, blue: 0.99))
                     .frame(width: 9, height: 9)
             }
             .frame(width: 20, height: 20)
@@ -31,7 +31,7 @@ struct VoiceListeningIndicator: View {
             // Stop = commit transcript
             CircleIconButton(
                 systemImage: "stop.fill",
-                tint: Color(red: 1.0, green: 0.55, blue: 0.20),
+                tint: Color(red: 0.0, green: 0.30, blue: 0.99),
                 action: onStop
             )
 
@@ -67,7 +67,7 @@ struct VoiceListeningIndicator: View {
 struct VoiceWaveformView: View {
     let levels: [Float]
     private let barCount = 28
-    private let accent = Color(red: 1.0, green: 0.55, blue: 0.20)
+    private let accent = Color(red: 0.0, green: 0.30, blue: 0.99)
 
     var body: some View {
         GeometryReader { geo in

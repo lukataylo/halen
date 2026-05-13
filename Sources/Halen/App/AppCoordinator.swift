@@ -89,6 +89,8 @@ final class AppCoordinator {
         registry.register(SentimentGuard(services: services))
         registry.register(VoiceDictation(services: services))
         registry.register(SnippetExpander(services: services))
+        registry.register(BurnoutCopilot(services: services))
+        registry.register(MeetingPrep(services: services))
     }
 
     private func startEventLogger() {
