@@ -17,13 +17,14 @@ enum PermissionStatus {
 final class AppCoordinator {
     let state = AppState()
     let eventBus = EventBus()
-    let inference: InferenceClient = StubInferenceClient()
+    let inference: InferenceClient = OllamaInferenceClient()
     let typoStore = TypoStore()
+    let registry = PluginRegistry()
 
-    private var permissionPollTask: Task<Void, Never>?
     private var caretObserver: CaretObserver?
     private var overlay: OverlayController?
-    private var typoFixer: TypoFixer?
+
+    private var permissionPollTask: Task<Void, Never>?
     private var eventLogTask: Task<Void, Never>?
 
     func start() {
@@ -39,10 +40,8 @@ final class AppCoordinator {
             return
         }
 
-        // Surfaces the system prompt that links to Privacy & Security → Accessibility.
         AXPermissions.promptForTrust()
 
-        // Poll until granted. TCC has no notification mechanism for toggle changes.
         permissionPollTask = Task { @MainActor [weak self] in
             while let self, !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
@@ -61,28 +60,32 @@ final class AppCoordinator {
         Log.info("Halen stopping")
         permissionPollTask?.cancel()
         eventLogTask?.cancel()
-        typoFixer?.stop()
         caretObserver?.stop()
         overlay?.stop()
-    }
-
-    private func refreshPermissionStatus() {
-        state.permissionStatus = AXPermissions.isTrusted() ? .granted : .denied
+        // Plugins are stopped individually via registry.toggle, but on app quit
+        // we let the process exit handle final teardown.
     }
 
     private func startObservers() {
-        Log.info("Starting caret observer + overlay + typo fixer")
+        Log.info("Starting observers and plugin registry")
+
         let observer = CaretObserver(eventBus: eventBus)
         observer.start()
         caretObserver = observer
 
-        let overlay = OverlayController(eventBus: eventBus)
-        overlay.start()
-        self.overlay = overlay
+        let overlayCtrl = OverlayController(eventBus: eventBus)
+        overlayCtrl.start()
+        overlay = overlayCtrl
 
-        let fixer = TypoFixer(eventBus: eventBus, store: typoStore, caretObserver: observer)
-        fixer.start()
-        typoFixer = fixer
+        let services = HalenServices(
+            eventBus: eventBus,
+            inference: inference,
+            caretObserver: observer,
+            appSupportDir: HalenServices.defaultAppSupportDir()
+        )
+
+        // Register first-party plugins. Subagent-built features get added here.
+        registry.register(TypoFixer(services: services, store: typoStore))
     }
 
     private func startEventLogger() {

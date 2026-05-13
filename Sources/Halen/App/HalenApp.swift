@@ -6,13 +6,13 @@ struct HalenApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenubarMenuView(
+            HalenCenterView(
                 state: appDelegate.coordinator.state,
-                typoStore: appDelegate.coordinator.typoStore
+                registry: appDelegate.coordinator.registry
             )
         } label: {
             Image(systemName: "text.cursor")
         }
-        .menuBarExtraStyle(.menu)
+        .menuBarExtraStyle(.window)
     }
 }

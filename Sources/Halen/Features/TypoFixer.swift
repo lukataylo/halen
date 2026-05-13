@@ -1,20 +1,23 @@
 import Foundation
 
-/// Watches `text.pause` events. Two responsibilities, one module so the two are easy to
-/// coordinate (self-edit suppression):
+/// Watches `text.pause` events and does two things:
+///   1. **Learn** — diff the snapshot against the previous one in the same app.
+///      Direct substitutions and delete-then-retype patterns are both recognised
+///      as corrections.
+///   2. **Apply** — when the user types a separator after a known typo, replace
+///      it via AX write-back.
 ///
-///   1. **Learn**: when the diff between consecutive snapshots in the same app looks
-///      like the user just corrected one word for another, record it in `TypoStore`.
-///      After two observations of the same `typo → correction` pair, the correction
-///      becomes active.
-///   2. **Apply**: when the user just typed a separator after a word that's in the
-///      store's active set, replace the word via AX write-back.
-///
-/// Multi-step corrections (delete-then-retype, with a pause in between) are handled by
-/// tracking pending deletions per-app and pairing them with subsequent insertions at the
-/// same position within a 30s window.
+/// Self-edits (corrections we just wrote) are suppressed in a 3s window. Reverts
+/// (user undoing an auto-fix within 60s) demote the dictionary entry — the safety
+/// net for context-dependent corrections.
 @MainActor
-final class TypoFixer {
+final class TypoFixer: HalenPlugin {
+    let id = "com.halen.typo-fixer"
+    let name = "Typo Fixer"
+    let summary = "Auto-replaces your known typos and learns new corrections as you make them."
+    let icon = "character.cursor.ibeam"
+    let category: PluginCategory = .writing
+
     private let eventBus: EventBus
     private let store: TypoStore
     private weak var caretObserver: CaretObserver?
@@ -29,15 +32,6 @@ final class TypoFixer {
     }
     private var pendingDeletions: [String: PendingDeletion] = [:]
 
-    /// Two windows tracking our own writes:
-    ///
-    ///   - `recentSelfEdits` (3s): suppresses the immediate "we just wrote X→Y, the
-    ///     resulting text.pause is our doing" false learning signal.
-    ///   - `recentAutoFixes` (60s): when the user backspaces and retypes our
-    ///     correction back to the original within this window, treat it as a revert
-    ///     and `demote()` the dictionary entry — particularly important for
-    ///     context-dependent entries like form↔from where the auto-fix is sometimes
-    ///     wrong and the user shouldn't have to suffer it twice.
     private struct SelfEdit {
         let typo: String
         let correction: String
@@ -46,13 +40,14 @@ final class TypoFixer {
     private var recentSelfEdits: [SelfEdit] = []
     private var recentAutoFixes: [SelfEdit] = []
 
-    init(eventBus: EventBus, store: TypoStore, caretObserver: CaretObserver) {
-        self.eventBus = eventBus
+    init(services: HalenServices, store: TypoStore) {
+        self.eventBus = services.eventBus
         self.store = store
-        self.caretObserver = caretObserver
+        self.caretObserver = services.caretObserver
     }
 
     func start() {
+        guard task == nil else { return }
         task = Task { @MainActor [eventBus, weak self] in
             for await event in eventBus.subscribe() {
                 guard let self else { return }
@@ -60,7 +55,6 @@ final class TypoFixer {
                 case .textPaused(let p):
                     self.handle(text: p.text, caretOffset: p.caretOffset, app: p.appBundleId)
                 case .appFocused(let p):
-                    // Reset per-app state so cross-app focus changes don't produce phantom diffs.
                     self.lastSnapshot.removeValue(forKey: p.appBundleId)
                     self.pendingDeletions.removeValue(forKey: p.appBundleId)
                 default:
@@ -70,7 +64,12 @@ final class TypoFixer {
         }
     }
 
-    func stop() { task?.cancel() }
+    func stop() {
+        task?.cancel()
+        task = nil
+        lastSnapshot.removeAll()
+        pendingDeletions.removeAll()
+    }
 
     private func handle(text: String, caretOffset: Int, app: String) {
         let ns = text as NSString
@@ -122,7 +121,6 @@ final class TypoFixer {
 
         let now = Date()
 
-        // Don't relearn from our own writes (3s window).
         recentSelfEdits.removeAll { now.timeIntervalSince($0.timestamp) > 3 }
         if recentSelfEdits.contains(where: {
             $0.typo.lowercased() == typo.lowercased() && $0.correction == correction
@@ -130,9 +128,6 @@ final class TypoFixer {
             return
         }
 
-        // Revert detection (60s window): if the user just undid an auto-fix we made,
-        // demote the dictionary entry rather than recording a (wrong) new correction
-        // in the opposite direction.
         recentAutoFixes.removeAll { now.timeIntervalSince($0.timestamp) > 60 }
         if let idx = recentAutoFixes.firstIndex(where: {
             $0.typo.lowercased() == correction.lowercased() &&
@@ -149,13 +144,12 @@ final class TypoFixer {
         store.observe(typo: typo, correction: correction)
     }
 
-    // MARK: - Applying known corrections
+    // MARK: - Applying
 
     private func applyKnownCorrection(text ns: NSString, caretOffset: Int) {
         let length = ns.length
         guard caretOffset > 0, caretOffset <= length else { return }
 
-        // Trigger only when the character just before the caret is a separator.
         guard let last = character(ns, at: caretOffset - 1),
               last.isWhitespace || last.isPunctuation else {
             return
