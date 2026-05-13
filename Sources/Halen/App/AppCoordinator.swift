@@ -18,6 +18,7 @@ final class AppCoordinator {
     let state = AppState()
     let eventBus = EventBus()
     let inference: InferenceClient = StubInferenceClient()
+    let typoStore = TypoStore()
 
     private var permissionPollTask: Task<Void, Never>?
     private var caretObserver: CaretObserver?
@@ -79,7 +80,7 @@ final class AppCoordinator {
         overlay.start()
         self.overlay = overlay
 
-        let fixer = TypoFixer(eventBus: eventBus, caretObserver: observer)
+        let fixer = TypoFixer(eventBus: eventBus, store: typoStore, caretObserver: observer)
         fixer.start()
         typoFixer = fixer
     }

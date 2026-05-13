@@ -1,33 +1,46 @@
 import Foundation
 
-/// Demo feature for M1 verification: when `text.pause` fires and the user just typed
-/// a whitespace or punctuation character right after a known typo, replace the typo
-/// with its correction via AX write-back.
+/// Watches `text.pause` events. Two responsibilities, one module so the two are easy to
+/// coordinate (self-edit suppression):
 ///
-/// This is intentionally a static dictionary, not a model. M2 swaps the dictionary
-/// for an Ollama / Gemma 4 call but keeps the same trigger / replace plumbing.
+///   1. **Learn**: when the diff between consecutive snapshots in the same app looks
+///      like the user just corrected one word for another, record it in `TypoStore`.
+///      After two observations of the same `typo → correction` pair, the correction
+///      becomes active.
+///   2. **Apply**: when the user just typed a separator after a word that's in the
+///      store's active set, replace the word via AX write-back.
+///
+/// Multi-step corrections (delete-then-retype, with a pause in between) are handled by
+/// tracking pending deletions per-app and pairing them with subsequent insertions at the
+/// same position within a 30s window.
 @MainActor
 final class TypoFixer {
     private let eventBus: EventBus
+    private let store: TypoStore
     private weak var caretObserver: CaretObserver?
     private var task: Task<Void, Never>?
 
-    /// Lowercase typo → replacement. Case is preserved when the typo started with a capital.
-    private let dictionary: [String: String] = [
-        "teh": "the",
-        "wnat": "want",
-        "adn": "and",
-        "recieve": "receive",
-        "seperate": "separate",
-        "definately": "definitely",
-        "occured": "occurred",
-        "thier": "their",
-        "alot": "a lot",
-        "halendemo": "HALEN AUTO-REPLACE WORKING",
-    ]
+    private var lastSnapshot: [String: NSString] = [:]
 
-    init(eventBus: EventBus, caretObserver: CaretObserver) {
+    private struct PendingDeletion {
+        let deletedWord: String
+        let position: Int
+        let timestamp: Date
+    }
+    private var pendingDeletions: [String: PendingDeletion] = [:]
+
+    /// Recent corrections we wrote ourselves. Suppress learning if the next text.pause
+    /// reflects our own edit.
+    private struct SelfEdit {
+        let typo: String
+        let correction: String
+        let timestamp: Date
+    }
+    private var recentSelfEdits: [SelfEdit] = []
+
+    init(eventBus: EventBus, store: TypoStore, caretObserver: CaretObserver) {
         self.eventBus = eventBus
+        self.store = store
         self.caretObserver = caretObserver
     }
 
@@ -35,8 +48,15 @@ final class TypoFixer {
         task = Task { @MainActor [eventBus, weak self] in
             for await event in eventBus.subscribe() {
                 guard let self else { return }
-                if case .textPaused(let p) = event {
-                    self.tryFix(text: p.text, caretOffset: p.caretOffset)
+                switch event {
+                case .textPaused(let p):
+                    self.handle(text: p.text, caretOffset: p.caretOffset, app: p.appBundleId)
+                case .appFocused(let p):
+                    // Reset per-app state so cross-app focus changes don't produce phantom diffs.
+                    self.lastSnapshot.removeValue(forKey: p.appBundleId)
+                    self.pendingDeletions.removeValue(forKey: p.appBundleId)
+                default:
+                    break
                 }
             }
         }
@@ -44,47 +64,105 @@ final class TypoFixer {
 
     func stop() { task?.cancel() }
 
-    private func tryFix(text: String, caretOffset: Int) {
+    private func handle(text: String, caretOffset: Int, app: String) {
         let ns = text as NSString
-        let length = ns.length
-        guard caretOffset > 0, caretOffset <= length else { return }
+        defer { lastSnapshot[app] = ns }
 
-        // Trigger only when the char just before the caret is a separator
-        // (whitespace or punctuation). That's the canonical "user just finished
-        // typing a word" signal, same as iOS / Grammarly.
-        guard let lastChar = character(in: ns, at: caretOffset - 1),
-              lastChar.isWhitespace || lastChar.isPunctuation else {
+        if let previous = lastSnapshot[app] {
+            learn(app: app, old: previous, new: ns)
+        }
+
+        applyKnownCorrection(text: ns, caretOffset: caretOffset)
+    }
+
+    // MARK: - Learning
+
+    private func learn(app: String, old: NSString, new: NSString) {
+        guard let diff = computeDiff(old: old, new: new) else { return }
+
+        if diff.isSubstitution {
+            tryRecordCorrection(typo: diff.oldText, correction: diff.newText)
+            pendingDeletions.removeValue(forKey: app)
             return
         }
 
-        // Walk back over the separator(s) to the end of the previous word.
+        if diff.isPureDeletion, looksLikeWord(diff.oldText) {
+            pendingDeletions[app] = PendingDeletion(
+                deletedWord: diff.oldText,
+                position: diff.positionInOld,
+                timestamp: Date()
+            )
+            return
+        }
+
+        if diff.isPureInsertion, looksLikeWord(diff.newText),
+           let pending = pendingDeletions[app],
+           Date().timeIntervalSince(pending.timestamp) < 30,
+           diff.positionInNew == pending.position {
+            tryRecordCorrection(typo: pending.deletedWord, correction: diff.newText)
+            pendingDeletions.removeValue(forKey: app)
+        }
+    }
+
+    private func tryRecordCorrection(typo: String, correction: String) {
+        guard looksLikeWord(typo), looksLikeWord(correction) else { return }
+        guard typo.lowercased() != correction.lowercased() else { return }
+        guard abs(typo.count - correction.count) <= 3 else { return }
+
+        let distance = levenshtein(typo.lowercased(), correction.lowercased())
+        guard distance > 0, distance <= 3 else { return }
+
+        // Suppress if this matches a fix we just made ourselves.
+        let now = Date()
+        recentSelfEdits.removeAll { now.timeIntervalSince($0.timestamp) > 3 }
+        if recentSelfEdits.contains(where: {
+            $0.typo.lowercased() == typo.lowercased() && $0.correction == correction
+        }) {
+            return
+        }
+
+        Log.info("TypoFixer learned: \"\(typo)\" → \"\(correction)\" (dist=\(distance))")
+        store.observe(typo: typo, correction: correction)
+    }
+
+    // MARK: - Applying known corrections
+
+    private func applyKnownCorrection(text ns: NSString, caretOffset: Int) {
+        let length = ns.length
+        guard caretOffset > 0, caretOffset <= length else { return }
+
+        // Trigger only when the character just before the caret is a separator.
+        guard let last = character(ns, at: caretOffset - 1),
+              last.isWhitespace || last.isPunctuation else {
+            return
+        }
+
         var end = caretOffset - 1
-        while end > 0, let ch = character(in: ns, at: end - 1),
+        while end > 0, let ch = character(ns, at: end - 1),
               ch.isWhitespace || ch.isPunctuation {
             end -= 1
         }
-        // Then walk back over word characters to find its start.
         var start = end
-        while start > 0, let ch = character(in: ns, at: start - 1),
+        while start > 0, let ch = character(ns, at: start - 1),
               !ch.isWhitespace, !ch.isPunctuation {
             start -= 1
         }
         guard start < end else { return }
 
         let word = ns.substring(with: NSRange(location: start, length: end - start))
-        guard let replacement = dictionary[word.lowercased()] else { return }
+        guard let correction = store.activeCorrection(for: word) else { return }
+        let cased = matchCase(of: word, in: correction)
 
-        let cased = matchCase(of: word, in: replacement)
         let range = NSRange(location: start, length: end - start)
+        Log.info("TypoFixer applied: \"\(word)\" → \"\(cased)\"")
 
-        Log.info("TypoFixer: \"\(word)\" → \"\(cased)\" at \(NSStringFromRange(range))")
+        recentSelfEdits.append(SelfEdit(typo: word, correction: cased, timestamp: Date()))
         caretObserver?.replaceRange(range, with: cased)
     }
 
-    private func character(in ns: NSString, at index: Int) -> Character? {
+    private func character(_ ns: NSString, at index: Int) -> Character? {
         guard index >= 0, index < ns.length else { return nil }
-        let code = ns.character(at: index)
-        guard let scalar = Unicode.Scalar(code) else { return nil }
+        guard let scalar = Unicode.Scalar(ns.character(at: index)) else { return nil }
         return Character(scalar)
     }
 

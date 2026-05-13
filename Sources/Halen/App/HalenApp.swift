@@ -6,7 +6,10 @@ struct HalenApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenubarMenuView(state: appDelegate.coordinator.state)
+            MenubarMenuView(
+                state: appDelegate.coordinator.state,
+                typoStore: appDelegate.coordinator.typoStore
+            )
         } label: {
             Image(systemName: "text.cursor")
         }
