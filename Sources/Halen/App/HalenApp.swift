@@ -25,6 +25,8 @@ struct HalenApp: App {
             ?? NSImage(systemSymbolName: "text.cursor", accessibilityDescription: "Halen")
             ?? NSImage()
         image.isTemplate = true
+        // Cap at macOS menubar standard so it sits the same height as adjacent items.
+        image.size = NSSize(width: 16, height: 16)
         return image
     }()
 }
