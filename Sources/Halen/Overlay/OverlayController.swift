@@ -1,18 +1,19 @@
 import AppKit
 import SwiftUI
 
-/// Shows a small blue dot next to the caret of the focused text field. The dot follows
-/// `caret.moved` events from `CaretObserver`. Hides itself if no caret event fires for
-/// a couple of seconds (i.e., the user is not in a text field).
-///
-/// The window is a non-activating, click-through panel at floating level so it appears
-/// above all app windows but never steals focus or swallows clicks.
+/// Shows a small Halen-logo indicator next to the caret of the focused text
+/// field. Follows `caret.moved` events; hides itself after a couple of seconds
+/// of caret inactivity. User can turn it off via Settings → Cursor overlay.
 @MainActor
 final class OverlayController {
     private let eventBus: EventBus
     private var window: NSPanel?
     private var subscribeTask: Task<Void, Never>?
     private var hideTask: Task<Void, Never>?
+    private var defaultsObserver: NSObjectProtocol?
+
+    /// UserDefaults key. Read on every `show()` so the toggle takes effect live.
+    static let showDotKey = "halen.showOverlayDot"
 
     init(eventBus: EventBus) {
         self.eventBus = eventBus
@@ -26,7 +27,7 @@ final class OverlayController {
             backing: .buffered,
             defer: false
         )
-        panel.level = .statusBar  // above .floating so it sits over menubar-adjacent surfaces too
+        panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
@@ -34,7 +35,7 @@ final class OverlayController {
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
         panel.isMovable = false
         panel.hidesOnDeactivate = false
-        panel.contentView = NSHostingView(rootView: OverlayDot())
+        panel.contentView = NSHostingView(rootView: HalenCaretIndicator())
 
         window = panel
 
@@ -47,20 +48,42 @@ final class OverlayController {
                 }
             }
         }
+
+        // Hide instantly if the user disables the indicator in Settings.
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if !Self.indicatorEnabled {
+                    self.window?.orderOut(nil)
+                }
+            }
+        }
     }
 
     func stop() {
         subscribeTask?.cancel()
         hideTask?.cancel()
+        if let observer = defaultsObserver {
+            NotificationCenter.default.removeObserver(observer)
+            defaultsObserver = nil
+        }
         window?.orderOut(nil)
         window = nil
     }
 
-    private func show(at caretOrigin: CGPoint, caretHeight: Double) {
-        guard let window else { return }
+    static var indicatorEnabled: Bool {
+        UserDefaults.standard.object(forKey: showDotKey) as? Bool ?? true
+    }
 
-        // Place dot just to the right of the caret, vertically centered on it.
-        let dotSize: CGFloat = 12
+    private func show(at caretOrigin: CGPoint, caretHeight: Double) {
+        guard Self.indicatorEnabled, let window else { return }
+
+        // Place the indicator just to the right of the caret, vertically centered on it.
+        let dotSize: CGFloat = 16
         let frame = NSRect(
             x: caretOrigin.x + 6,
             y: caretOrigin.y + (caretHeight - dotSize) / 2,
@@ -79,13 +102,31 @@ final class OverlayController {
     }
 }
 
-private struct OverlayDot: View {
+/// Small Halen-logo character, tinted cobalt blue. Falls back to a coloured
+/// circle if the template asset isn't bundled (e.g. during dev runs before
+/// the icons are generated).
+private struct HalenCaretIndicator: View {
+    private static let cobalt = Color(red: 0.0, green: 0.30, blue: 0.99)
+
     var body: some View {
-        Circle()
-            .fill(Color.blue)
-            .overlay(
-                Circle().stroke(.white.opacity(0.9), lineWidth: 1.5)
-            )
-            .shadow(color: .black.opacity(0.25), radius: 2, x: 0, y: 1)
+        Group {
+            if let img = Self.templateImage {
+                Image(nsImage: img)
+                    .resizable()
+                    .interpolation(.high)
+                    .foregroundStyle(Self.cobalt)
+            } else {
+                Circle()
+                    .fill(Self.cobalt)
+                    .padding(2)
+            }
+        }
+        .shadow(color: Self.cobalt.opacity(0.35), radius: 2, x: 0, y: 1)
     }
+
+    private static let templateImage: NSImage? = {
+        guard let img = NSImage(named: "HalenMenubar") else { return nil }
+        img.isTemplate = true
+        return img
+    }()
 }

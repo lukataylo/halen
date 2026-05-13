@@ -11,6 +11,7 @@ struct SettingsView: View {
 
     @State private var ollamaStatus: OllamaStatus = .checking
     @State private var pollTask: Task<Void, Never>?
+    @AppStorage(OverlayController.showDotKey) private var showCaretIndicator: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,6 +20,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 10) {
                     accessibilityCard
+                    overlayCard
                     aiCard
                     aboutCard
                 }
@@ -82,6 +84,57 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    private var overlayCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                cardLabel("Cursor overlay")
+                HStack(alignment: .center, spacing: 12) {
+                    overlayPreview
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Halen indicator near cursor")
+                            .font(.system(.callout, weight: .medium))
+                        Text("A small Halen mark appears beside your caret while you type. Turn off if it gets in the way.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 6)
+                    Toggle("", isOn: $showCaretIndicator)
+                        .toggleStyle(.switch)
+                        .controlSize(.regular)
+                        .labelsHidden()
+                }
+            }
+        }
+    }
+
+    private var overlayPreview: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(.background.opacity(0.6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(.separator.opacity(0.4), lineWidth: 0.5)
+                )
+            if let img = NSImage(named: "HalenMenubar") {
+                let templated: NSImage = {
+                    img.isTemplate = true
+                    return img
+                }()
+                Image(nsImage: templated)
+                    .resizable()
+                    .interpolation(.high)
+                    .foregroundStyle(Color(red: 0, green: 0.30, blue: 0.99))
+                    .frame(width: 18, height: 18)
+            } else {
+                Circle()
+                    .fill(Color(red: 0, green: 0.30, blue: 0.99))
+                    .frame(width: 12, height: 12)
+            }
+        }
+        .frame(width: 40, height: 40)
     }
 
     private var aiCard: some View {
