@@ -212,6 +212,11 @@ final class BurnoutCopilot: HalenPlugin {
                 parts.append("\(state.nextFourHourEvents) meetings in the next 4h")
             }
         }
+        if parts.isEmpty {
+            // Force-evaluate from the detail view's demo button: nothing has
+            // tripped, but show something so the popup still demonstrates.
+            return "Demo trigger. A real suggestion fires when 2 of 3 signals trip — give it time or rack up some Slack minutes first."
+        }
         return parts.joined(separator: " · ")
     }
 

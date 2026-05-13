@@ -2,85 +2,111 @@
   <img src="docs/hero.png" alt="Halen — take control. Keep it local." />
 </p>
 
-# Halen
+<h1 align="center">Halen</h1>
 
-Local-first, cursor-following writing agent for macOS. Auto-fixes typos near your
-caret in any text field; later milestones add tone/stress logging and a plugin
-architecture so other features (calendar nudges, screen-time, …) can subscribe to
-the same event stream.
+<p align="center">
+  <strong>Local-first writing agent for macOS.</strong><br>
+  No cloud. No upload. Just you, your data, your rules.<br>
+  <a href="https://halen.dev">halen.dev</a>
+</p>
 
-Inference is local. Default model: **Gemma 4 E4B** (instruction-tuned), with E2B
-as the small-tier fallback for fast typo paths. MLX runtime; wired up in M2.
+---
 
-## Status
+Halen is a menubar app that watches the text near your cursor and runs a set of small, focused **plugins** against it. Every plugin runs locally — typo correction is a static dictionary; everything else goes through your own [Gemma 4](https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/) instance via [Ollama](https://ollama.com). The text never leaves your Mac.
 
-Milestone | Scope | State
----|---|---
-M1 | Menubar shell, Accessibility permission, caret observer, overlay window, event bus, inference protocol | In progress
-M2 | MLX + Gemma 4 inference host, `typo-fixer` feature | Not started
-M3 | `tone-logger` feature, local SQLite timeseries | Not started
-M4 | Extract JSON-RPC plugin API; port features to it; ship a first out-of-process plugin | Not started
+## What's in the box
 
-## Requirements
+Six plugins ship with Halen out of the box. Each one is a small Swift module conforming to `HalenPlugin`; the marketplace dropdown lets you toggle them on/off and dive into per-plugin settings.
 
-- macOS 14+ (Sonoma)
+| Plugin | Category | What it does |
+|---|---|---|
+| **Typo Fixer** | Writing | Replaces your known typos inline as you type. Seeded with a personal dictionary of 32 frequent slips; learns new ones automatically from your edits. Backspace + retype to "undo" a bad correction — it demotes the entry forever. |
+| **Sentiment Guard** | Writing | When you finish a sentence in any text field, Gemma 4 E4B classifies the tone against a set of rules you control (5 built-in + add your own). Hostile or irritated? Halen shows a popover asking whether to send anyway or have Gemma rephrase to your clipboard. |
+| **Voice Dictation** | Voice | Press ⌥⌘Space anywhere. A live waveform pill follows your cursor while you speak. Apple's on-device speech recognition transcribes locally; the text lands at the caret on stop. |
+| **Snippet Expander** | Productivity | Type `;sig` or `;today` or `;summary` followed by a space — Halen swaps it for static text, computed values, or a Gemma-generated rewrite of whatever you wrote above. Add your own with custom Gemma prompts. |
+| **Burnout Copilot** | Focus | Watches three signals — time in distraction apps, recent tone trend, calendar density — and pops a *"Take 10?"* suggestion when 2 of 3 trip. One click creates a calendar break and triggers your Focus Shortcut. |
+| **Meeting Prep** | Scheduling | 15 minutes before your next event, Gemma 4 reads the calendar entry and drops a 5-bullet briefing on your clipboard. A notification fires; the briefing also lives in the plugin's recent-briefings list. |
+
+## How it works
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                     HALEN MENUBAR APP                          │
+│                                                                │
+│  CaretObserver ──┐                                             │
+│  (AX events)     │                                             │
+│                  ▼                                             │
+│              EventBus ──► text.pause, caret.moved, ...         │
+│                  │                                             │
+│           ┌──────┴──────┬──────┬──────┬──────┬──────┐          │
+│           ▼             ▼      ▼      ▼      ▼      ▼          │
+│       TypoFixer    Sentiment Snippet Voice  Burnout Meeting    │
+│           │          Guard   Expand. Dict.  Copilot Prep       │
+│           │             │      │      │       │      │         │
+│           └─────┬───────┴──────┴──────┴───────┴──────┘         │
+│                 ▼                                              │
+│         InferenceClient ──► Ollama on localhost:11434          │
+│                              (gemma4:e2b / e4b / 26b)          │
+└────────────────────────────────────────────────────────────────┘
+```
+
+- **Host (this app)** owns macOS Accessibility caret tracking, the event bus, the inference HTTP client, persistent storage, and the SwiftUI menubar UI.
+- **Plugins** subscribe to events on the bus, optionally call inference, and write back to the focused text field via AX. They're in-host Swift modules today; the contract is already shaped to lift them out-of-process to JSON-RPC later (`text.pause` event names line up with future method names).
+- **Inference** goes to your local Ollama daemon. Plugins request a *tier* (`small` → `gemma4:e2b`, `medium` → `gemma4:e4b`, `large` → `gemma4:26b`) — the host picks the model.
+
+Full architecture and per-plugin internals: see [`docs/wiki/`](docs/wiki/).
+
+## Quickstart
+
+**Prerequisites**
+- macOS 14 Sonoma or later
 - Xcode command-line tools (`xcode-select --install`)
-- Swift 5.10+ (ships with Xcode 15.3+; Swift 6 also fine)
+- [Ollama](https://ollama.com) running with at least `gemma4:e4b`:
+  ```bash
+  ollama pull gemma4:e4b
+  ollama pull gemma4:e2b   # smaller / faster — used by Sentiment classification
+  ```
 
-## Build & run
-
+**Build and launch**
 ```bash
+git clone https://github.com/lukataylo/halen.git
+cd halen
 ./scripts/run-dev.sh
 ```
 
-This builds the binary, assembles `build/Halen.app` (ad-hoc signed so the TCC
-identity is stable), and launches the binary inside the bundle so stdout/stderr
-stream to your terminal.
+The script builds the SPM target, wraps it in `build/Halen.app`, signs with your Apple Development cert (so TCC permissions persist across rebuilds), and launches.
 
-The first launch will trigger a system prompt asking you to grant Accessibility
-permission. Click through, then:
+**Grant permissions**
+1. **Accessibility** — Halen prompts on first launch. Add `build/Halen.app` to System Settings → Privacy & Security → Accessibility. *Without this, no plugin can see or modify text.*
+2. **Microphone + Speech Recognition** — requested the first time you use Voice Dictation.
+3. **Calendar + Notifications** — requested by Burnout Copilot and Meeting Prep when you open them.
 
-1. Open **System Settings → Privacy & Security → Accessibility**
-2. Click **+**, navigate to `build/Halen.app`, add it
-3. Toggle it on
+## Privacy
 
-The app polls every 2 seconds; the menubar status will flip from "not granted"
-to "granted" once you toggle it. The terminal will log `Accessibility granted —
-would start observers here (task 3)`.
+Everything that processes your text — typo matching, tone classification, snippet expansion, dictation — runs **locally on your machine**. The only network traffic Halen generates is HTTP to `localhost:11434` (your local Ollama daemon). No telemetry, no analytics, no error reporting calls. The `docs/wiki/privacy.md` page goes through this in detail.
 
-To rebuild without launching:
+## Demo
 
-```bash
-./scripts/build-app.sh
-```
+A scripted **1-minute demo** is in [`docs/DEMO.md`](docs/DEMO.md). Beat-by-beat: typo correction → sentiment popover → text expansion → meeting prep.
 
-## Layout
+## Repository layout
 
 ```
-Package.swift
-Resources/Info.plist
-scripts/
-  build-app.sh       # SPM build + .app bundle assembly
-  run-dev.sh         # build + launch with logs in terminal
 Sources/Halen/
-  App/               # SwiftUI App, AppDelegate, AppCoordinator, MenuBarExtra UI
-  Accessibility/     # AX permission helpers (caret observer lands in M1 task 3)
-  Events/            # in-process pub/sub + event payload types (JSON-serializable)
-  Inference/         # InferenceClient protocol, ModelTier, stub impl
-  Overlay/           # caret-following NSWindow (M1 task 4)
-  Support/           # logging
+├── App/                 # SwiftUI App, AppCoordinator, marketplace UI, settings
+├── Plugins/             # HalenPlugin protocol, PluginRegistry, HalenServices
+├── Features/            # the six bundled plugins, one folder each
+├── Accessibility/       # AX permission flow, caret/focused-element observer
+├── Inference/           # InferenceClient protocol, Ollama HTTP client, tiers
+├── Events/              # in-process EventBus + Codable event payloads
+├── Overlay/             # caret-following indicator window
+└── Support/             # Log, string diff, Levenshtein, windowing helpers
+
+Resources/               # AppIcon.icns, menubar template, source SVG
+docs/                    # README hero, site assets, landing page, wiki
+scripts/                 # build-app.sh, run-dev.sh, generate-icons.swift
 ```
 
-## Architecture notes
+## License
 
-- **Host vs plugins**: the menubar app owns AX capture, inference, persistence,
-  overlay rendering. Features (typo-fixer, tone-logger) currently live in-host
-  as Swift modules. In M4 they're extracted into out-of-process plugins talking
-  JSON-RPC over a Unix socket. Event names (`text.pause`, `caret.moved`, …) are
-  already chosen to be the future wire-format method names.
-- **Inference**: single MLX runtime in the host, queued. Plugins request a
-  *tier* (`small` / `medium` / `large`); the host picks the model. Default
-  mapping: small → `google/gemma-4-E2B-it`, medium → `google/gemma-4-E4B-it`,
-  large → `google/gemma-4-26B-A4B-it`.
-- **Triggers**: event-driven (pause, save, focus change) — not continuous
-  inference — to keep battery and thermals sane.
+Apache 2.0 — same as Gemma 4. See `LICENSE` *(coming soon)*.

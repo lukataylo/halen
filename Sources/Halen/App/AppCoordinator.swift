@@ -60,10 +60,13 @@ final class AppCoordinator {
         Log.info("Halen stopping")
         permissionPollTask?.cancel()
         eventLogTask?.cancel()
+        // Stop plugins explicitly so background tasks, hotkeys, and panels
+        // unwind cleanly before the process exits.
+        for plugin in registry.plugins {
+            plugin.stop()
+        }
         caretObserver?.stop()
         overlay?.stop()
-        // Plugins are stopped individually via registry.toggle, but on app quit
-        // we let the process exit handle final teardown.
     }
 
     private func startObservers() {
