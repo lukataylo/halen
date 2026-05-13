@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/hero.png" alt="Halen — take control. Keep it local." />
+</p>
+
 # Halen
 
 Local-first, cursor-following writing agent for macOS. Auto-fixes typos near your
