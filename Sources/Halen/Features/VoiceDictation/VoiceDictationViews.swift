@@ -50,13 +50,14 @@ struct VoiceDictationDetailView: View {
     @Bindable var state: VoiceDictationState
 
     var body: some View {
-        VStack(spacing: 10) {
-            hotkeyCard
-            permissionsCard
-            engineCard
-            Spacer(minLength: 0)
+        ScrollView {
+            VStack(spacing: 10) {
+                hotkeyCard
+                permissionsCard
+                engineCard
+            }
+            .padding(12)
         }
-        .padding(12)
         .onAppear { state.refreshPermissions() }
     }
 

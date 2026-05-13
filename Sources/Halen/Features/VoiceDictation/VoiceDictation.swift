@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Speech
 import AVFoundation
+import Carbon.HIToolbox
 
 /// Global-hotkey-driven dictation. ⌥⌘Space toggles recording. While listening, a
 /// floating indicator pulses near the caret. On stop, the transcription (local,
@@ -22,7 +23,7 @@ final class VoiceDictation: HalenPlugin {
 
     private let services: HalenServices
     private var eventTask: Task<Void, Never>?
-    private var hotkeyMonitor: Any?
+    private let hotkey = HotkeyRegistrar()
     private var recorder: VoiceDictationRecorder?
     private var listeningPanel: NSPanel?
 
@@ -74,25 +75,18 @@ final class VoiceDictation: HalenPlugin {
     // MARK: - Hotkey
 
     private func registerHotkey() {
-        // Monitor (not consume) is fine — \u{2325}\u{2318}Space isn't a common system shortcut.
-        // Halen already has Accessibility permission, which lets the global monitor see keystrokes.
-        hotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self else { return }
-            let want: NSEvent.ModifierFlags = [.command, .option]
-            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            // Space keyCode = 49
-            guard event.keyCode == 49, modifiers == want else { return }
-            Task { @MainActor [weak self] in
-                self?.toggleRecording()
-            }
+        let cmdOpt = UInt32(cmdKey | optionKey)
+        let space = UInt32(kVK_Space)
+        let ok = hotkey.register(keyCode: space, modifiers: cmdOpt) { [weak self] in
+            self?.toggleRecording()
+        }
+        if !ok {
+            Log.warn("VoiceDictation: failed to register ⌥⌘Space — another app may own it")
         }
     }
 
     private func unregisterHotkey() {
-        if let monitor = hotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            hotkeyMonitor = nil
-        }
+        hotkey.unregister()
     }
 
     // MARK: - Recording lifecycle

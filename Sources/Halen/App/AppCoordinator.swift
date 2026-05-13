@@ -88,6 +88,7 @@ final class AppCoordinator {
         registry.register(TypoFixer(services: services, store: typoStore))
         registry.register(SentimentGuard(services: services))
         registry.register(VoiceDictation(services: services))
+        registry.register(SnippetExpander(services: services))
     }
 
     private func startEventLogger() {
