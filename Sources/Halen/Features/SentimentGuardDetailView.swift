@@ -3,6 +3,7 @@ import SwiftUI
 struct SentimentGuardDetailView: View {
     @Bindable var rulesStore: SentimentRulesStore
     let approvedCount: Int
+    let flaggedCount: Int
     let onClearApproved: () -> Void
 
     @State private var showAddRule = false
@@ -142,23 +143,49 @@ struct SentimentGuardDetailView: View {
 
     private var statsCard: some View {
         GlassCard {
-            VStack(alignment: .leading, spacing: 8) {
-                cardLabel("Approved messages")
-                HStack(alignment: .lastTextBaseline) {
-                    Text("\(approvedCount)")
-                        .font(.system(size: 28, weight: .semibold, design: .rounded))
-                    Text("you've waved through")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .padding(.bottom, 4)
+            VStack(alignment: .leading, spacing: 10) {
+                cardLabel("Activity")
+                HStack(spacing: 0) {
+                    StatPillar(
+                        value: flaggedCount,
+                        label: "Flagged",
+                        tint: Color(red: 0.97, green: 0.58, blue: 0.20)
+                    )
+                    StatDivider()
+                    StatPillar(
+                        value: approvedCount,
+                        label: "Approved",
+                        tint: Color(red: 0.20, green: 0.78, blue: 0.45)
+                    )
+                    StatDivider()
+                    StatPillar(
+                        value: enabledRulesCount,
+                        label: "Active rules",
+                        tint: Color(red: 0.36, green: 0.50, blue: 0.95)
+                    )
                 }
-                Button("Clear approvals", action: onClearApproved)
-                    .buttonStyle(.borderless)
-                    .controlSize(.small)
-                    .foregroundStyle(approvedCount == 0 ? Color.secondary.opacity(0.5) : Color.red)
-                    .disabled(approvedCount == 0)
+                .padding(.vertical, 4)
+                Button {
+                    onClearApproved()
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 10))
+                        Text("Clear approvals")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .foregroundStyle(approvedCount == 0 ? Color.secondary.opacity(0.5) : Color.red)
+                .disabled(approvedCount == 0)
             }
         }
+    }
+
+    private var enabledRulesCount: Int {
+        rulesStore.enabledRules.count
     }
 
     // MARK: - Model card
@@ -190,6 +217,36 @@ struct SentimentGuardDetailView: View {
             .font(.system(size: 10, weight: .semibold))
             .tracking(0.5)
             .foregroundStyle(.secondary)
+    }
+}
+
+// MARK: - Stat pillar
+
+private struct StatPillar: View {
+    let value: Int
+    let label: String
+    let tint: Color
+
+    var body: some View {
+        VStack(spacing: 3) {
+            Text("\(value)")
+                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                .foregroundStyle(tint)
+                .contentTransition(.numericText())
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(0.5)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct StatDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.08))
+            .frame(width: 1, height: 28)
     }
 }
 

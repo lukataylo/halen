@@ -72,12 +72,14 @@ struct PluginCategoryBadge: View {
     }
 }
 
-/// A glass-styled card used by detail views.
+/// A glass-styled card used by detail views. Always full-width so cards align
+/// vertically regardless of intrinsic content size.
 struct GlassCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         content()
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)

@@ -28,6 +28,8 @@ final class SentimentGuard: HalenPlugin {
     private var classifiedHashes: [String: String] = [:]
     /// Hashes the user explicitly approved as fine. Persisted.
     private var approvedHashes: Set<String> = []
+    /// Number of times we surfaced a popover this session (any rule). In-memory only.
+    private(set) var flaggedThisSession: Int = 0
     /// Most recent caret rect from `caret.moved` events; used to anchor the popover.
     private var lastCaretRect: CGRect?
     private var activePanel: NSPanel?
@@ -45,6 +47,7 @@ final class SentimentGuard: HalenPlugin {
             SentimentGuardDetailView(
                 rulesStore: rulesStore,
                 approvedCount: approvedHashes.count,
+                flaggedCount: flaggedThisSession,
                 onClearApproved: { [weak self] in
                     self?.approvedHashes.removeAll()
                     self?.saveApproved()
@@ -138,6 +141,7 @@ final class SentimentGuard: HalenPlugin {
 
     private func showPopup(text: String, rule: SentimentRule, hash: String) {
         let label = rule.label.lowercased()
+        flaggedThisSession += 1
         activePanel?.orderOut(nil)
         dismissTask?.cancel()
 
