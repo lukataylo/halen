@@ -4,31 +4,46 @@ import Observation
 /// The plugin marketplace / control center shown when the user clicks the menubar icon.
 /// Native materials, category-grouped plugin cards, per-plugin toggles, footer with
 /// permission and quit actions.
+enum CenterNav: Equatable {
+    case marketplace
+    case plugin(String)
+    case settings
+}
+
 struct HalenCenterView: View {
     @Bindable var state: AppState
     let registry: PluginRegistry
-    @State private var selectedPluginId: String?
+    @State private var nav: CenterNav = .marketplace
 
     var body: some View {
         ZStack {
-            if let pluginId = selectedPluginId,
-               let plugin = registry.plugins.first(where: { $0.id == pluginId }) {
-                PluginDetailContainer(plugin: plugin) {
-                    withAnimation(.spring(duration: 0.25)) {
-                        selectedPluginId = nil
-                    }
-                } content: {
-                    plugin.makeDetailView()
-                }
-                .transition(.move(edge: .trailing).combined(with: .opacity))
-            } else {
+            switch nav {
+            case .marketplace:
                 listScreen
                     .transition(.move(edge: .leading).combined(with: .opacity))
+            case .plugin(let id):
+                if let plugin = registry.plugins.first(where: { $0.id == id }) {
+                    PluginDetailContainer(plugin: plugin, onBack: { back() }) {
+                        plugin.makeDetailView()
+                    }
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            case .settings:
+                SettingsView(state: state, onBack: { back() })
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
         .frame(width: 380)
         .frame(minHeight: 280, maxHeight: 560)
         .background(.regularMaterial)
+    }
+
+    private func push(_ target: CenterNav) {
+        withAnimation(.spring(duration: 0.25)) { nav = target }
+    }
+
+    private func back() {
+        withAnimation(.spring(duration: 0.25)) { nav = .marketplace }
     }
 
     private var listScreen: some View {
@@ -58,6 +73,17 @@ struct HalenCenterView: View {
             }
 
             Spacer()
+
+            Button {
+                push(.settings)
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -165,9 +191,7 @@ struct HalenCenterView: View {
                                 set: { _ in registry.toggle(plugin.id) }
                             ),
                             onTapBody: {
-                                withAnimation(.spring(duration: 0.25)) {
-                                    selectedPluginId = plugin.id
-                                }
+                                push(.plugin(plugin.id))
                             }
                         )
                     }
