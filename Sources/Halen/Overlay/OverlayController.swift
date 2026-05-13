@@ -102,19 +102,19 @@ final class OverlayController {
     }
 }
 
-/// Small Halen-logo character, tinted cobalt blue. Falls back to a coloured
-/// circle if the template asset isn't bundled (e.g. during dev runs before
-/// the icons are generated).
+/// Small solid cobalt-blue Halen mark used as the caret indicator. Source is
+/// `HalenIndicator.png` (rendered from `Resources/HalenSolid.svg`), already
+/// the right colour — no SwiftUI tinting needed. Falls back to a coloured
+/// circle if the asset isn't bundled.
 private struct HalenCaretIndicator: View {
     private static let cobalt = Color(red: 0.0, green: 0.30, blue: 0.99)
 
     var body: some View {
         Group {
-            if let img = Self.templateImage {
+            if let img = NSImage(named: "HalenIndicator") {
                 Image(nsImage: img)
                     .resizable()
                     .interpolation(.high)
-                    .foregroundStyle(Self.cobalt)
             } else {
                 Circle()
                     .fill(Self.cobalt)
@@ -123,10 +123,4 @@ private struct HalenCaretIndicator: View {
         }
         .shadow(color: Self.cobalt.opacity(0.35), radius: 2, x: 0, y: 1)
     }
-
-    private static let templateImage: NSImage? = {
-        guard let img = NSImage(named: "HalenMenubar") else { return nil }
-        img.isTemplate = true
-        return img
-    }()
 }

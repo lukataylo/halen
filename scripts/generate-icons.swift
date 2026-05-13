@@ -104,6 +104,16 @@ for (px, suffix) in [(32, ""), (64, "@2x"), (96, "@3x")] {
     print("✓ HalenLogo\(suffix).png")
 }
 
+// MARK: - Caret indicator (solid cobalt-blue mark on transparent; rendered at small size)
+let solidSrc = URL(fileURLWithPath: "/Users/lukadadiani/Documents/halen/Resources/HalenSolid.svg")
+if FileManager.default.fileExists(atPath: solidSrc.path) {
+    for (px, suffix) in [(16, ""), (32, "@2x"), (48, "@3x")] {
+        let img = render(solidSrc, size: NSSize(width: px, height: px), background: nil, inset: 0.04)
+        try writePNG(img, to: resourcesDir.appending(path: "HalenIndicator\(suffix).png"))
+        print("✓ HalenIndicator\(suffix).png")
+    }
+}
+
 // MARK: - Build .icns via iconutil
 let icnsURL = resourcesDir.appending(path: "AppIcon.icns")
 let process = Process()

@@ -39,7 +39,8 @@ if [[ -d "$ROOT/Resources/Menubar" ]]; then
     cp "$ROOT/Resources/Menubar/HalenMenubar@2x.png" "$RESOURCES/HalenMenubar@2x.png" 2>/dev/null || true
     cp "$ROOT/Resources/Menubar/HalenMenubar@3x.png" "$RESOURCES/HalenMenubar@3x.png" 2>/dev/null || true
 fi
-for variant in HalenLogo.png HalenLogo@2x.png HalenLogo@3x.png; do
+for variant in HalenLogo.png HalenLogo@2x.png HalenLogo@3x.png \
+               HalenIndicator.png HalenIndicator@2x.png HalenIndicator@3x.png; do
     if [[ -f "$ROOT/Resources/$variant" ]]; then
         cp "$ROOT/Resources/$variant" "$RESOURCES/$variant"
     fi

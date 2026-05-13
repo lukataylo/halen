@@ -118,15 +118,10 @@ struct SettingsView: View {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .strokeBorder(.separator.opacity(0.4), lineWidth: 0.5)
                 )
-            if let img = NSImage(named: "HalenMenubar") {
-                let templated: NSImage = {
-                    img.isTemplate = true
-                    return img
-                }()
-                Image(nsImage: templated)
+            if let img = NSImage(named: "HalenIndicator") {
+                Image(nsImage: img)
                     .resizable()
                     .interpolation(.high)
-                    .foregroundStyle(Color(red: 0, green: 0.30, blue: 0.99))
                     .frame(width: 18, height: 18)
             } else {
                 Circle()
