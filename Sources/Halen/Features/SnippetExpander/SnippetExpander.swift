@@ -134,43 +134,85 @@ final class SnippetExpander: HalenPlugin {
     }
 
     private func expandAI(snippet: Snippet, at tokenRange: NSRange, fullText ns: NSString) {
-        // Step 1: replace the trigger with a placeholder so the user sees something happening.
-        let placeholder = "[…]"
-        applyReplacement(placeholder, at: tokenRange, trigger: snippet.trigger)
-        let placeholderRange = NSRange(location: tokenRange.location, length: (placeholder as NSString).length)
+        let replacesPrior = snippet.replacesPrior == true
 
-        // Grab the ~500 chars immediately before the trigger as the prior context.
+        // Compute the range we'll replace and the prior text we'll feed the model.
+        // When replacesPrior is true, we replace the entire prior paragraph + the
+        // trigger; otherwise we only replace the trigger and the prior text is
+        // appended-to (e.g. ;summary).
         let priorEnd = tokenRange.location
-        let priorStart = max(0, priorEnd - 500)
-        let priorText = priorEnd > priorStart
-            ? ns.substring(with: NSRange(location: priorStart, length: priorEnd - priorStart))
+        let paragraphStart = replacesPrior
+            ? paragraphStartLocation(in: ns, before: priorEnd)
+            : max(0, priorEnd - 500)
+        let priorText = priorEnd > paragraphStart
+            ? ns.substring(with: NSRange(location: paragraphStart, length: priorEnd - paragraphStart))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             : ""
+
+        // The range we'll mutate.
+        let replaceRange: NSRange
+        if replacesPrior {
+            replaceRange = NSRange(location: paragraphStart, length: NSMaxRange(tokenRange) - paragraphStart)
+        } else {
+            replaceRange = tokenRange
+        }
+
+        guard !priorText.isEmpty || !replacesPrior else {
+            // No prior text to rewrite — nothing useful to do. Leave the trigger
+            // intact so the user notices.
+            return
+        }
+
+        // Step 1: show a placeholder so something visibly happens immediately.
+        let placeholder = "[…]"
+        applyReplacement(placeholder, at: replaceRange, trigger: snippet.trigger)
+        let placeholderRange = NSRange(
+            location: replaceRange.location,
+            length: (placeholder as NSString).length
+        )
 
         let prompt = """
         \(snippet.value)
 
-        Text:
+        Paragraph:
         \(priorText)
         """
-        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 300, temperature: 0.4)
+        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 500, temperature: 0.4)
 
         Task { @MainActor [services, weak self] in
             do {
                 let response = try await services.inference.complete(request)
                 let cleaned = response.text
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
                 guard !cleaned.isEmpty else {
-                    self?.applyReplacement(snippet.trigger, at: placeholderRange, trigger: snippet.trigger)
+                    self?.applyReplacement(replacesPrior ? priorText : snippet.trigger,
+                                            at: placeholderRange,
+                                            trigger: snippet.trigger)
                     return
                 }
                 Log.info("SnippetExpander: AI snippet \(snippet.trigger) completed (\(response.latencyMs)ms)")
                 self?.applyReplacement(cleaned, at: placeholderRange, trigger: snippet.trigger)
             } catch {
                 Log.warn("SnippetExpander: AI snippet \(snippet.trigger) failed: \(error)")
-                self?.applyReplacement(snippet.trigger, at: placeholderRange, trigger: snippet.trigger)
+                self?.applyReplacement(replacesPrior ? priorText : snippet.trigger,
+                                        at: placeholderRange,
+                                        trigger: snippet.trigger)
             }
         }
+    }
+
+    /// Returns the UTF-16 offset just after the most recent newline before
+    /// `location`, or 0 if there isn't one. Treats the prior paragraph as
+    /// everything since the last hard break.
+    private func paragraphStartLocation(in ns: NSString, before location: Int) -> Int {
+        var idx = location
+        while idx > 0 {
+            let ch = ns.character(at: idx - 1)
+            if ch == 10 /* \n */ { return idx }
+            idx -= 1
+        }
+        return 0
     }
 
     private func applyReplacement(_ replacement: String, at range: NSRange, trigger: String) {

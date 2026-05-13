@@ -14,6 +14,14 @@ struct Snippet: Codable, Identifiable, Equatable, Sendable {
     var displayName: String
     var builtin: Bool
 
+    /// AI snippets only: when true, the prior paragraph (back to the nearest
+    /// newline) is replaced wholesale by the model output. When false / nil,
+    /// the trigger token is replaced and the prior text stays intact.
+    /// Examples:
+    ///   - `;formal`   → replacesPrior = true (rewrite the paragraph)
+    ///   - `;summary`  → replacesPrior = false (append bullets after)
+    var replacesPrior: Bool?
+
     enum Kind: String, Codable, Sendable {
         case staticText
         case dynamic

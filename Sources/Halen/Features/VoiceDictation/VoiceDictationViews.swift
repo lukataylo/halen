@@ -136,7 +136,7 @@ struct VoiceDictationDetailView: View {
                 HStack(spacing: 6) {
                     KeyCap(label: "\u{2325}")
                     KeyCap(label: "\u{2318}")
-                    KeyCap(label: "Space")
+                    KeyCap(label: "H")
                     Spacer()
                 }
                 Text("Press to start. Press again to stop and insert the transcript at your cursor.")

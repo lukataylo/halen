@@ -22,15 +22,20 @@ final class SnippetStore {
                 displayName: "Today's date", builtin: true),
         Snippet(trigger: ";time",     kind: .dynamic,    value: "time",
                 displayName: "Current time", builtin: true),
+        // Appends after the trigger — keeps the original text in place.
         Snippet(trigger: ";summary",  kind: .ai,
                 value: "Summarise the following text in three concise bullet points. Output only the bullets, no preamble.",
-                displayName: "Summarise prior text", builtin: true),
+                displayName: "Summarise prior text", builtin: true, replacesPrior: false),
+        // Replaces the paragraph the user just wrote with a rewrite.
         Snippet(trigger: ";rephrase", kind: .ai,
-                value: "Rewrite the following paragraph more concisely while keeping its meaning. Output only the rewrite, no preamble.",
-                displayName: "Rephrase prior paragraph", builtin: true),
+                value: "Rewrite the following paragraph more concisely while keeping its meaning. Output only the rewrite, no preamble, no quotes.",
+                displayName: "Rephrase prior paragraph", builtin: true, replacesPrior: true),
         Snippet(trigger: ";formal",   kind: .ai,
-                value: "Rewrite the following paragraph in a more formal, professional tone. Output only the rewrite.",
-                displayName: "Make prior paragraph formal", builtin: true),
+                value: "Rewrite the following paragraph in a more formal, professional tone. Output only the rewrite, no preamble, no quotes.",
+                displayName: "Make prior paragraph formal", builtin: true, replacesPrior: true),
+        Snippet(trigger: ";casual",   kind: .ai,
+                value: "Rewrite the following paragraph in a friendlier, more casual tone. Output only the rewrite, no preamble, no quotes.",
+                displayName: "Make prior paragraph casual", builtin: true, replacesPrior: true),
     ]
 
     // MARK: - Lookup
@@ -115,14 +120,14 @@ final class SnippetStore {
         }
     }
 
+    /// Refresh built-in snippets on every launch so prompt tweaks, new
+    /// triggers (e.g. ;casual), and the replacesPrior flag propagate without
+    /// requiring users to wipe their snippets.json. User-added (builtin=false)
+    /// entries are preserved untouched.
     private func ensureBuiltins() {
-        let existing = Set(snippets.map(\.trigger))
-        var changed = false
-        for s in Self.builtins where !existing.contains(s.trigger) {
-            snippets.append(s)
-            changed = true
-        }
-        if changed { save() }
+        let custom = snippets.filter { !$0.builtin }
+        snippets = Self.builtins + custom
+        save()
     }
 
     private func save() {

@@ -17,7 +17,7 @@ import Carbon.HIToolbox
 final class VoiceDictation: HalenPlugin {
     let id = "com.halen.voice-dictation"
     let name = "Voice Dictation"
-    let summary = "Press \u{2325}\u{2318}Space, speak, press again — text appears at your cursor."
+    let summary = "Press \u{2325}\u{2318}H, speak, press again — text appears at your cursor."
     let icon = "mic.fill"
     let category: PluginCategory = .voice
 
@@ -76,12 +76,12 @@ final class VoiceDictation: HalenPlugin {
 
     private func registerHotkey() {
         let cmdOpt = UInt32(cmdKey | optionKey)
-        let space = UInt32(kVK_Space)
-        let ok = hotkey.register(keyCode: space, modifiers: cmdOpt) { [weak self] in
+        let h = UInt32(kVK_ANSI_H)
+        let ok = hotkey.register(keyCode: h, modifiers: cmdOpt) { [weak self] in
             self?.toggleRecording()
         }
         if !ok {
-            Log.warn("VoiceDictation: failed to register ⌥⌘Space — another app may own it")
+            Log.warn("VoiceDictation: failed to register ⌥⌘H — another app may own it")
         }
     }
 
