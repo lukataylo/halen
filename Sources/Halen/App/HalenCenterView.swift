@@ -7,8 +7,31 @@ import Observation
 struct HalenCenterView: View {
     @Bindable var state: AppState
     let registry: PluginRegistry
+    @State private var selectedPluginId: String?
 
     var body: some View {
+        ZStack {
+            if let pluginId = selectedPluginId,
+               let plugin = registry.plugins.first(where: { $0.id == pluginId }) {
+                PluginDetailContainer(plugin: plugin) {
+                    withAnimation(.spring(duration: 0.25)) {
+                        selectedPluginId = nil
+                    }
+                } content: {
+                    plugin.makeDetailView()
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                listScreen
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+        .frame(width: 380)
+        .frame(minHeight: 280, maxHeight: 560)
+        .background(.regularMaterial)
+    }
+
+    private var listScreen: some View {
         VStack(spacing: 0) {
             header
             Divider()
@@ -16,8 +39,6 @@ struct HalenCenterView: View {
             Divider()
             footer
         }
-        .frame(width: 380)
-        .frame(minHeight: 280, maxHeight: 560)
     }
 
     // MARK: - Header
@@ -142,7 +163,12 @@ struct HalenCenterView: View {
                             isEnabled: Binding(
                                 get: { registry.isEnabled(plugin.id) },
                                 set: { _ in registry.toggle(plugin.id) }
-                            )
+                            ),
+                            onTapBody: {
+                                withAnimation(.spring(duration: 0.25)) {
+                                    selectedPluginId = plugin.id
+                                }
+                            }
                         )
                     }
                 }
@@ -195,23 +221,32 @@ struct HalenCenterView: View {
 struct PluginRow: View {
     let plugin: any HalenPlugin
     @Binding var isEnabled: Bool
+    var onTapBody: () -> Void
     @State private var isHovering = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 11) {
-            iconBadge
+            Button(action: onTapBody) {
+                HStack(alignment: .center, spacing: 11) {
+                    iconBadge
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(plugin.name)
-                    .font(.system(.body, weight: .medium))
-                Text(plugin.summary)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(plugin.name)
+                            .font(.system(.body, weight: .medium))
+                        Text(plugin.summary)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
             }
-
-            Spacer(minLength: 8)
+            .buttonStyle(.plain)
 
             Toggle("", isOn: $isEnabled)
                 .toggleStyle(.switch)
@@ -225,7 +260,6 @@ struct PluginRow: View {
                 .fill(isHovering ? Color.primary.opacity(0.06) : Color.clear)
                 .padding(.horizontal, 6)
         )
-        .contentShape(Rectangle())
         .onHover { isHovering = $0 }
     }
 

@@ -37,6 +37,18 @@ final class SentimentGuard: HalenPlugin {
         loadApproved()
     }
 
+    func makeDetailView() -> AnyView {
+        AnyView(
+            SentimentGuardDetailView(
+                approvedCount: approvedHashes.count,
+                onClearApproved: { [weak self] in
+                    self?.approvedHashes.removeAll()
+                    self?.saveApproved()
+                }
+            )
+        )
+    }
+
     func start() {
         guard task == nil else { return }
         task = Task { @MainActor [services, weak self] in

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// Every Halen feature ships as a `HalenPlugin`. In M4 these will be hoisted into
 /// out-of-process processes talking JSON-RPC; for now they live in-host as Swift
@@ -30,6 +31,44 @@ protocol HalenPlugin: AnyObject {
 
     func start()
     func stop()
+
+    /// Optional detail / settings view shown when the user taps the plugin in the
+    /// marketplace. Default is a generic "no settings" placeholder. Plugins with
+    /// real configuration (TypoFixer's dictionary, SentimentGuard's approved set)
+    /// override this.
+    @MainActor
+    func makeDetailView() -> AnyView
+}
+
+extension HalenPlugin {
+    func makeDetailView() -> AnyView {
+        AnyView(EmptyPluginDetailView(plugin: self))
+    }
+}
+
+/// Default detail content for plugins without a custom view. Reads naturally as
+/// "this plugin has nothing to configure" without looking broken or empty.
+struct EmptyPluginDetailView: View {
+    let plugin: any HalenPlugin
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: plugin.icon)
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(.secondary)
+            Text("Nothing to configure")
+                .font(.system(.callout, weight: .medium))
+            Text("\(plugin.name) runs automatically when enabled. There are no per-plugin settings yet.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 24)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 36)
+    }
 }
 
 enum PluginCategory: String, CaseIterable, Sendable {

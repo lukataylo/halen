@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// Watches `text.pause` events and does two things:
 ///   1. **Learn** — diff the snapshot against the previous one in the same app.
@@ -44,6 +45,10 @@ final class TypoFixer: HalenPlugin {
         self.eventBus = services.eventBus
         self.store = store
         self.caretObserver = services.caretObserver
+    }
+
+    func makeDetailView() -> AnyView {
+        AnyView(TypoFixerDetailView(store: store))
     }
 
     func start() {

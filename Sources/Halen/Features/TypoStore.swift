@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// Persistent dictionary of (lowercased-typo → correction) entries with observation counts.
 /// A correction is "active" (auto-applied) once it has been observed at least `activeThreshold`
@@ -6,6 +7,7 @@ import Foundation
 /// changed their mind about the spelling).
 ///
 /// File: `~/Library/Application Support/Halen/typos.json`. Editable by hand.
+@Observable
 @MainActor
 final class TypoStore {
     struct Entry: Codable, Equatable {
@@ -65,6 +67,36 @@ final class TypoStore {
         entries.removeAll()
         save()
         Log.info("TypoStore reset")
+    }
+
+    /// User-driven addition from the management UI. The new entry is active immediately.
+    func addUserEntry(typo: String, correction: String) {
+        let key = typo.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = correction.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty, !value.isEmpty else { return }
+        let now = Date()
+        entries[key] = Entry(
+            correction: value,
+            observations: activeThreshold,
+            firstSeen: entries[key]?.firstSeen ?? now,
+            lastSeen: now
+        )
+        save()
+        Log.info("TypoStore: user added \"\(key)\" → \"\(value)\"")
+    }
+
+    /// User-driven removal from the management UI.
+    func remove(typo: String) {
+        let key = typo.lowercased()
+        if entries.removeValue(forKey: key) != nil {
+            save()
+            Log.info("TypoStore: user removed \"\(key)\"")
+        }
+    }
+
+    /// Sorted view of entries, freshest first. Drives the management list.
+    var sortedEntries: [(key: String, entry: Entry)] {
+        entries.map { ($0.key, $0.value) }.sorted { $0.entry.lastSeen > $1.entry.lastSeen }
     }
 
     /// Remove an entry — used by `TypoFixer` when the user immediately reverts an
