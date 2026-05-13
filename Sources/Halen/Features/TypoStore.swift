@@ -25,7 +25,7 @@ final class TypoStore {
 
     init() {
         load()
-        seedDemoEntryIfEmpty()
+        ensureSeedEntries()
     }
 
     /// Returns the correction if the entry exists and has been confirmed (observations ≥ threshold).
@@ -67,6 +67,17 @@ final class TypoStore {
         Log.info("TypoStore reset")
     }
 
+    /// Remove an entry — used by `TypoFixer` when the user immediately reverts an
+    /// auto-fix, indicating the correction was wrong (typically a context-dependent
+    /// homophone like form↔from).
+    func demote(typo: String) {
+        let key = typo.lowercased()
+        if entries.removeValue(forKey: key) != nil {
+            save()
+            Log.info("TypoStore demoted \"\(key)\"")
+        }
+    }
+
     // MARK: - Persistence
 
     private struct FilePayload: Codable {
@@ -104,34 +115,52 @@ final class TypoStore {
         }
     }
 
-    /// On first launch (empty store) seed the owner's known frequent typos so auto-fix
-    /// works immediately. The user can edit `typos.json` to add, remove, or tweak entries.
-    /// New typos picked up via auto-learn are merged in at runtime.
-    private func seedDemoEntryIfEmpty() {
-        guard entries.isEmpty else { return }
+    /// Merge `personalSeed` into the store. Existing entries (either seeded earlier
+    /// or auto-learned) are left untouched — only missing keys are added. Runs every
+    /// launch so new entries added to `personalSeed` ship without requiring a reset.
+    /// Removing an entry from `personalSeed` doesn't delete it from the user's store;
+    /// they should edit `typos.json` directly for that.
+    private func ensureSeedEntries() {
+        var addedKeys: [String] = []
         let now = Date()
-        for (typo, correction) in Self.personalSeed {
+
+        for (typo, correction) in Self.personalSeed where entries[typo] == nil {
             entries[typo] = Entry(
                 correction: correction,
                 observations: activeThreshold,  // active immediately, no warm-up
                 firstSeen: now,
                 lastSeen: now
             )
+            addedKeys.append(typo)
         }
-        // Plus a smoke-test entry so the dev can quickly confirm auto-fix is wired up.
-        entries["halendemo"] = Entry(
-            correction: "HALEN AUTO-LEARN ACTIVE",
-            observations: activeThreshold,
-            firstSeen: now,
-            lastSeen: now
-        )
-        save()
-        Log.info("TypoStore seeded \(entries.count) entries")
+
+        if entries["halendemo"] == nil {
+            entries["halendemo"] = Entry(
+                correction: "HALEN AUTO-LEARN ACTIVE",
+                observations: activeThreshold,
+                firstSeen: now,
+                lastSeen: now
+            )
+            addedKeys.append("halendemo")
+        }
+
+        if !addedKeys.isEmpty {
+            save()
+            Log.info("TypoStore seeded \(addedKeys.count) new entries; total \(entries.count)")
+        } else {
+            Log.info("TypoStore loaded \(entries.count) entries (seed up to date)")
+        }
     }
 
-    /// The user's known frequent typos. Transposed-adjacent-letter patterns dominate;
-    /// also scrambled-vowels and missing-letter cases. Edit the JSON file on disk for
-    /// further customization — the seed only applies when the file is empty/absent.
+    /// The user's known frequent typos. Edit `typos.json` directly for runtime changes;
+    /// the seed only adds keys that aren't already present.
+    ///
+    /// NOTE on context-dependent entries (`form`, `sweet`, `creative`, `complements`,
+    /// `hardboard`): these are real words with legitimate uses, not typos. Auto-fix
+    /// will misfire on legitimate usages. The `TypoFixer` revert-on-undo mechanism
+    /// removes an entry the first time the user backspaces and retypes the original
+    /// within 60s of an auto-fix, so misfires are self-correcting after one occurrence.
+    /// The proper fix is the M2 LLM context check.
     private static let personalSeed: [String: String] = [
         // Transposed adjacent letters
         "udnerstand": "understand",
@@ -150,9 +179,34 @@ final class TypoStore {
         "conditoianls": "conditionals",
         "conssitency": "consistency",
 
+        "alot": "a lot",
+
         // Missing letters
         "acess": "access",
         "avaition": "aviation",
         "frist": "first",
+
+        // Homophones / sound-alikes (context-dependent — see note above)
+        "loosing": "losing",
+        "complements": "compliments",
+        "form": "from",
+        "sweet": "suite",
+
+        // Word substitutions (adjacent concept slipped in; context-dependent)
+        "creative": "create",
+        "hardboard": "artboard",
+        "precendent": "precedent",
+
+        // Run-on / missing-space compounds
+        "littlebit": "a little bit",
+        "msyelf": "myself",
+        // "alot": "a lot" already in original seed above
+
+        // Extra/double letters mid-word
+        "scenrarios": "scenarios",
+        "reportingd": "reporting",
+        "whhats": "whats",
+        "tyring": "trying",
+        "desperatley": "desperately",
     ]
 }

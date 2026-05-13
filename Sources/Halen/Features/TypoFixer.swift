@@ -29,14 +29,22 @@ final class TypoFixer {
     }
     private var pendingDeletions: [String: PendingDeletion] = [:]
 
-    /// Recent corrections we wrote ourselves. Suppress learning if the next text.pause
-    /// reflects our own edit.
+    /// Two windows tracking our own writes:
+    ///
+    ///   - `recentSelfEdits` (3s): suppresses the immediate "we just wrote X→Y, the
+    ///     resulting text.pause is our doing" false learning signal.
+    ///   - `recentAutoFixes` (60s): when the user backspaces and retypes our
+    ///     correction back to the original within this window, treat it as a revert
+    ///     and `demote()` the dictionary entry — particularly important for
+    ///     context-dependent entries like form↔from where the auto-fix is sometimes
+    ///     wrong and the user shouldn't have to suffer it twice.
     private struct SelfEdit {
         let typo: String
         let correction: String
         let timestamp: Date
     }
     private var recentSelfEdits: [SelfEdit] = []
+    private var recentAutoFixes: [SelfEdit] = []
 
     init(eventBus: EventBus, store: TypoStore, caretObserver: CaretObserver) {
         self.eventBus = eventBus
@@ -112,12 +120,28 @@ final class TypoFixer {
         let distance = levenshtein(typo.lowercased(), correction.lowercased())
         guard distance > 0, distance <= 3 else { return }
 
-        // Suppress if this matches a fix we just made ourselves.
         let now = Date()
+
+        // Don't relearn from our own writes (3s window).
         recentSelfEdits.removeAll { now.timeIntervalSince($0.timestamp) > 3 }
         if recentSelfEdits.contains(where: {
             $0.typo.lowercased() == typo.lowercased() && $0.correction == correction
         }) {
+            return
+        }
+
+        // Revert detection (60s window): if the user just undid an auto-fix we made,
+        // demote the dictionary entry rather than recording a (wrong) new correction
+        // in the opposite direction.
+        recentAutoFixes.removeAll { now.timeIntervalSince($0.timestamp) > 60 }
+        if let idx = recentAutoFixes.firstIndex(where: {
+            $0.typo.lowercased() == correction.lowercased() &&
+            $0.correction.lowercased() == typo.lowercased()
+        }) {
+            let reverted = recentAutoFixes[idx]
+            Log.info("TypoFixer: user reverted auto-fix \"\(reverted.typo)\" → \"\(reverted.correction)\" — demoting entry")
+            store.demote(typo: reverted.typo)
+            recentAutoFixes.remove(at: idx)
             return
         }
 
@@ -156,7 +180,9 @@ final class TypoFixer {
         let range = NSRange(location: start, length: end - start)
         Log.info("TypoFixer applied: \"\(word)\" → \"\(cased)\"")
 
-        recentSelfEdits.append(SelfEdit(typo: word, correction: cased, timestamp: Date()))
+        let now = Date()
+        recentSelfEdits.append(SelfEdit(typo: word, correction: cased, timestamp: now))
+        recentAutoFixes.append(SelfEdit(typo: word, correction: cased, timestamp: now))
         caretObserver?.replaceRange(range, with: cased)
     }
 
