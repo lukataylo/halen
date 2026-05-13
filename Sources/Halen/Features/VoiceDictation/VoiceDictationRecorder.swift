@@ -13,6 +13,8 @@ final class VoiceDictationRecorder {
     var onTranscript: ((String) -> Void)?
     var onError: ((Error) -> Void)?
     var onStateChange: ((VoiceDictationState.Engine) -> Void)?
+    /// Emits a normalised 0…1 audio level every audio-buffer tick (~20 Hz).
+    var onLevel: ((Float) -> Void)?
 
     private let audioEngine = AVAudioEngine()
     private let recognizer = SFSpeechRecognizer()
@@ -62,8 +64,9 @@ final class VoiceDictationRecorder {
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
         inputNode.removeTap(onBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak req] buffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak req, weak self] buffer, _ in
             req?.append(buffer)
+            self?.emitLevel(from: buffer)
         }
 
         do {
@@ -120,6 +123,28 @@ final class VoiceDictationRecorder {
             audioEngine.stop()
         }
         audioEngine.inputNode.removeTap(onBus: 0)
+    }
+
+    /// Compute RMS amplitude of the buffer, convert to a normalised 0…1 level
+    /// (dB-scaled so quiet rooms register as low but speech registers high).
+    private func emitLevel(from buffer: AVAudioPCMBuffer) {
+        guard let channelData = buffer.floatChannelData?.pointee else { return }
+        let frameLength = Int(buffer.frameLength)
+        guard frameLength > 0 else { return }
+
+        var sumSquares: Float = 0
+        for i in 0..<frameLength {
+            let sample = channelData[i]
+            sumSquares += sample * sample
+        }
+        let rms = sqrt(sumSquares / Float(frameLength))
+        // RMS is typically tiny; convert to dB and normalise -60 → 0 dB to 0 → 1.
+        let db = 20 * log10(max(0.0001, rms))
+        let normalised = max(0, min(1, (db + 60) / 60))
+
+        DispatchQueue.main.async { [weak self] in
+            self?.onLevel?(normalised)
+        }
     }
 }
 

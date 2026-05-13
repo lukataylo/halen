@@ -102,6 +102,7 @@ final class VoiceDictation: HalenPlugin {
     private func beginRecording() {
         guard !isRecording else { return }
         state.refreshPermissions()
+        state.resetLevels()
 
         let recorder = VoiceDictationRecorder()
         recorder.onTranscript = { [weak self] text in
@@ -120,6 +121,11 @@ final class VoiceDictation: HalenPlugin {
         recorder.onStateChange = { [weak self] engineState in
             Task { @MainActor [weak self] in
                 self?.state.engine = engineState
+            }
+        }
+        recorder.onLevel = { [weak self] level in
+            Task { @MainActor [weak self] in
+                self?.state.pushLevel(level)
             }
         }
         self.recorder = recorder
@@ -162,8 +168,10 @@ final class VoiceDictation: HalenPlugin {
 
     private func showListeningIndicator() {
         if listeningPanel != nil { return }
+        let width: CGFloat = 300
+        let height: CGFloat = 52
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 220, height: 52),
+            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -172,19 +180,25 @@ final class VoiceDictation: HalenPlugin {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
-        panel.ignoresMouseEvents = true
+        panel.ignoresMouseEvents = false  // need clicks for Stop/Cancel buttons
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
-        panel.contentView = NSHostingView(rootView: VoiceListeningIndicator())
+        panel.contentView = NSHostingView(
+            rootView: VoiceListeningIndicator(
+                state: state,
+                onStop:   { [weak self] in self?.finishRecording(commit: true) },
+                onCancel: { [weak self] in self?.finishRecording(commit: false) }
+            )
+        )
 
         let frame: NSRect
         if let caret = lastCaretRect, caret.width > 0 || caret.height > 0 {
             let x = max(20, caret.minX)
             let y = max(20, caret.minY - 70)
-            frame = NSRect(x: x, y: y, width: 220, height: 52)
+            frame = NSRect(x: x, y: y, width: width, height: height)
         } else if let screen = NSScreen.main {
-            frame = NSRect(x: screen.frame.maxX - 240, y: 80, width: 220, height: 52)
+            frame = NSRect(x: screen.frame.maxX - width - 20, y: 80, width: width, height: height)
         } else {
-            frame = NSRect(x: 200, y: 200, width: 220, height: 52)
+            frame = NSRect(x: 200, y: 200, width: width, height: height)
         }
         panel.setFrame(frame, display: true)
         panel.orderFrontRegardless()
@@ -208,6 +222,23 @@ final class VoiceDictationState {
     var micPermission: PermissionState = .notDetermined
     var speechPermission: PermissionState = .notDetermined
     var lastTranscript: String?
+
+    /// Rolling window of recent audio levels (0…1). Drives the live visualiser
+    /// in the listening pill.
+    static let levelHistorySize = 32
+    var audioLevels: [Float] = Array(repeating: 0, count: 32)
+
+    func pushLevel(_ level: Float) {
+        let clamped = max(0, min(1, level))
+        if audioLevels.count >= Self.levelHistorySize {
+            audioLevels.removeFirst(audioLevels.count - Self.levelHistorySize + 1)
+        }
+        audioLevels.append(clamped)
+    }
+
+    func resetLevels() {
+        audioLevels = Array(repeating: 0, count: Self.levelHistorySize)
+    }
 
     func refreshPermissions() {
         micPermission = MicPermission.current
