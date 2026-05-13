@@ -20,6 +20,7 @@ final class SentimentGuard: HalenPlugin {
     let category: PluginCategory = .writing
 
     private let services: HalenServices
+    let rulesStore: SentimentRulesStore
     private var task: Task<Void, Never>?
 
     /// Hashes we've already classified this session (any label). Avoids re-running
@@ -34,12 +35,15 @@ final class SentimentGuard: HalenPlugin {
 
     init(services: HalenServices) {
         self.services = services
+        let storageDir = services.storageDirectory(for: "com.halen.sentiment-guard")
+        self.rulesStore = SentimentRulesStore(fileURL: storageDir.appending(path: "rules.json"))
         loadApproved()
     }
 
     func makeDetailView() -> AnyView {
         AnyView(
             SentimentGuardDetailView(
+                rulesStore: rulesStore,
                 approvedCount: approvedHashes.count,
                 onClearApproved: { [weak self] in
                     self?.approvedHashes.removeAll()
@@ -89,13 +93,23 @@ final class SentimentGuard: HalenPlugin {
         if approvedHashes.contains(hash) { return }
         if classifiedHashes[hash] != nil { return }
 
+        let enabled = rulesStore.enabledRules
+        guard !enabled.isEmpty else { return }
+
+        let categoriesBlock = enabled
+            .map { "- \($0.label.lowercased()): \($0.prompt)" }
+            .joined(separator: "\n")
         let prompt = """
-        Classify the tone of the following text as exactly one of: neutral, friendly, professional, irritated, hostile. Reply with only the label, lowercase, no punctuation.
+        You are a tone classifier. Categorise the tone of the following text as one of these labels:
+        \(categoriesBlock)
+        - neutral: the text doesn't strongly match any of the above
+
+        Reply with ONLY the matching label, lowercase, no punctuation, no preamble.
 
         Text: \"\"\"\(windowed)\"\"\"
         """
 
-        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 8, temperature: 0.1)
+        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 16, temperature: 0.1)
 
         do {
             let response = try await services.inference.complete(request)
@@ -103,8 +117,8 @@ final class SentimentGuard: HalenPlugin {
             classifiedHashes[hash] = label
             Log.info("SentimentGuard: \(label) (\(response.latencyMs)ms)")
 
-            if label == "irritated" || label == "hostile" {
-                showPopup(text: windowed, label: label, hash: hash)
+            if let matched = enabled.first(where: { $0.label.lowercased() == label }) {
+                showPopup(text: windowed, rule: matched, hash: hash)
             }
         } catch {
             Log.warn("SentimentGuard: inference failed: \(error)")
@@ -122,7 +136,8 @@ final class SentimentGuard: HalenPlugin {
 
     // MARK: - Popup
 
-    private func showPopup(text: String, label: String, hash: String) {
+    private func showPopup(text: String, rule: SentimentRule, hash: String) {
+        let label = rule.label.lowercased()
         activePanel?.orderOut(nil)
         dismissTask?.cancel()
 
@@ -142,6 +157,7 @@ final class SentimentGuard: HalenPlugin {
         let view = SentimentGuardPopup(
             text: text,
             label: label,
+            tone: rule.colorName,
             onDismiss: { [weak self] in self?.closePanel() },
             onApprove: { [weak self] in
                 self?.approve(hash: hash)
@@ -242,6 +258,7 @@ final class SentimentGuard: HalenPlugin {
 private struct SentimentGuardPopup: View {
     let text: String
     let label: String
+    let tone: String
     let onDismiss: () -> Void
     let onApprove: () -> Void
     let onRephrase: () -> Void
@@ -299,11 +316,7 @@ private struct SentimentGuardPopup: View {
     }
 
     private var toneColor: Color {
-        switch label {
-        case "hostile":   return .red
-        case "irritated": return .orange
-        default:          return .secondary
-        }
+        sentimentRuleColor(tone)
     }
 
     private var preview: String {

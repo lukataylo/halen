@@ -84,9 +84,10 @@ final class AppCoordinator {
             appSupportDir: HalenServices.defaultAppSupportDir()
         )
 
-        // Register first-party plugins. Subagent-built features get added here.
+        // Register first-party plugins.
         registry.register(TypoFixer(services: services, store: typoStore))
         registry.register(SentimentGuard(services: services))
+        registry.register(VoiceDictation(services: services))
     }
 
     private func startEventLogger() {
