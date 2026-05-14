@@ -21,6 +21,9 @@ final class VoiceDictationRecorder {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var bestTranscript: String = ""
+    /// Latch so the final transcript is emitted at most once — `stop()`'s
+    /// fallback and the recogniser's `isFinal` callback can otherwise both fire.
+    private var hasDelivered = false
 
     func start() {
         SFSpeechRecognizer.requestAuthorization { [weak self] status in
@@ -84,7 +87,7 @@ final class VoiceDictationRecorder {
                 self.bestTranscript = result.bestTranscription.formattedString
                 if result.isFinal {
                     DispatchQueue.main.async {
-                        self.onTranscript?(self.bestTranscript)
+                        self.deliver(self.bestTranscript)
                     }
                 }
             }
@@ -102,20 +105,29 @@ final class VoiceDictationRecorder {
 
     /// Stop capture. If `commit`, ends the audio stream so the recogniser emits a
     /// final transcript (`onTranscript` will be called). If not, just tears down.
+    /// Must be called on the main queue.
     func stop(commit: Bool) {
         cleanupAudio()
         if commit {
+            onStateChange?(.transcribing)
             request?.endAudio()
-            // If there's a partial we never get a final for (rare), emit what we have.
-            if recognitionTask?.state != .running {
-                if !bestTranscript.isEmpty {
-                    onTranscript?(bestTranscript)
-                }
+            // If there's a partial we never get a final for (rare), emit what we
+            // have. `deliver`'s latch keeps this from double-firing with `isFinal`.
+            if recognitionTask?.state != .running, !bestTranscript.isEmpty {
+                deliver(bestTranscript)
             }
         } else {
             recognitionTask?.cancel()
         }
         request = nil
+    }
+
+    /// Emit the final transcript at most once. Both call sites run on the main
+    /// queue, so the `hasDelivered` latch needs no further synchronisation.
+    private func deliver(_ transcript: String) {
+        guard !hasDelivered else { return }
+        hasDelivered = true
+        onTranscript?(transcript)
     }
 
     private func cleanupAudio() {

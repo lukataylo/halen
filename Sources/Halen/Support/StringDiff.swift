@@ -42,6 +42,10 @@ func computeDiff(old: NSString, new: NSString) -> StringDiff? {
         suffix -= 1
     }
 
+    // Prefix and suffix are word-snapped independently, so their regions can
+    // overlap; clamp so prefix + suffix never exceeds either string's length.
+    suffix = min(suffix, oldLen - prefix, newLen - prefix)
+
     let oldDiffLen = max(0, oldLen - prefix - suffix)
     let newDiffLen = max(0, newLen - prefix - suffix)
     let oldText = oldDiffLen > 0 ? old.substring(with: NSRange(location: prefix, length: oldDiffLen)) : ""

@@ -33,9 +33,9 @@ func axReadSelectedRange(_ element: AXUIElement) -> CFRange? {
 func axReadCaretBounds(_ element: AXUIElement) -> CGRect? {
     guard let selection = axReadSelectedRange(element) else { return nil }
     var zeroLen = CFRange(location: selection.location, length: 0)
-    let axRange: AXValue = withUnsafePointer(to: &zeroLen) { ptr in
-        AXValueCreate(.cfRange, UnsafeRawPointer(ptr))!
-    }
+    guard let axRange: AXValue = withUnsafePointer(to: &zeroLen, { ptr in
+        AXValueCreate(.cfRange, UnsafeRawPointer(ptr))
+    }) else { return nil }
 
     var boundsRef: CFTypeRef?
     let r = AXUIElementCopyParameterizedAttributeValue(

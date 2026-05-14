@@ -18,8 +18,12 @@ final class MeetingPrep: HalenPlugin {
     private let services: HalenServices
     private let store = EKEventStore()
     private var pollTask: Task<Void, Never>?
+    private var setupTask: Task<Void, Never>?
     let state = MeetingPrepState()
 
+    /// Keys of occurrences already briefed. Keyed per-occurrence (event id +
+    /// start time), not raw `eventIdentifier` — that's shared across all
+    /// instances of a recurring event, so briefing one would suppress them all.
     private var processedIds: Set<String> = []
     private var processedURL: URL { services.storageDirectory(for: id).appending(path: "processed.json") }
 
@@ -30,8 +34,9 @@ final class MeetingPrep: HalenPlugin {
 
     func start() {
         guard pollTask == nil else { return }
-        Task { @MainActor [weak self] in
+        setupTask = Task { @MainActor [weak self] in
             await self?.requestPermissions()
+            guard !Task.isCancelled else { return }
             self?.refreshNextEvent()
         }
         pollTask = Task { @MainActor [weak self] in
@@ -46,6 +51,8 @@ final class MeetingPrep: HalenPlugin {
     func stop() {
         pollTask?.cancel()
         pollTask = nil
+        setupTask?.cancel()
+        setupTask = nil
     }
 
     func makeDetailView() -> AnyView {
@@ -114,9 +121,17 @@ final class MeetingPrep: HalenPlugin {
             guard let start = event.startDate else { continue }
             let minutesAway = start.timeIntervalSince(now) / 60
             guard minutesAway >= 13, minutesAway <= 17 else { continue }
-            guard !processedIds.contains(event.eventIdentifier ?? "") else { continue }
+            guard let key = occurrenceKey(for: event), !processedIds.contains(key) else { continue }
             await brief(event: event)
         }
+    }
+
+    /// Per-occurrence key: `eventIdentifier` alone is shared across every
+    /// instance of a recurring event, so it must be combined with the start time.
+    private func occurrenceKey(for event: EKEvent) -> String? {
+        guard let id = event.eventIdentifier else { return nil }
+        guard let start = event.startDate else { return id }
+        return "\(id)@\(Int(start.timeIntervalSince1970))"
     }
 
     private func generateNow() async {
@@ -139,10 +154,10 @@ final class MeetingPrep: HalenPlugin {
             return
         }
         state.generation = .generating(title: next.title ?? "Untitled")
-        await brief(event: next, force: true)
+        await brief(event: next)
     }
 
-    private func brief(event: EKEvent, force: Bool = false) async {
+    private func brief(event: EKEvent) async {
         let title = event.title ?? "Untitled"
         let attendees = (event.attendees ?? [])
             .compactMap { $0.name }
@@ -159,7 +174,7 @@ final class MeetingPrep: HalenPlugin {
         Description: \(description.isEmpty ? "(none)" : description)
         """
 
-        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 400, temperature: 0.4)
+        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 400, temperature: 0.4, taskKind: .generation)
         do {
             let response = try await services.inference.complete(request)
             let briefing = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -182,8 +197,10 @@ final class MeetingPrep: HalenPlugin {
             if state.recentBriefings.count > 3 { state.recentBriefings.removeLast() }
             state.generation = .success(title: title)
 
-            if !force, let id = event.eventIdentifier {
-                processedIds.insert(id)
+            // Mark this specific occurrence briefed — whether it came from the
+            // poll or an explicit "Generate now" — so it isn't briefed twice.
+            if let key = occurrenceKey(for: event) {
+                processedIds.insert(key)
                 saveProcessed()
             }
             Log.info("MeetingPrep: briefed \"\(title)\" (\(response.latencyMs)ms)")

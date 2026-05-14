@@ -128,7 +128,8 @@ final class TypoFixer: HalenPlugin {
 
         recentSelfEdits.removeAll { now.timeIntervalSince($0.timestamp) > 3 }
         if recentSelfEdits.contains(where: {
-            $0.typo.lowercased() == typo.lowercased() && $0.correction == correction
+            $0.typo.lowercased() == typo.lowercased() &&
+            $0.correction.lowercased() == correction.lowercased()
         }) {
             return
         }
@@ -176,10 +177,18 @@ final class TypoFixer: HalenPlugin {
         guard let correction = store.activeCorrection(for: word) else { return }
         let cased = matchCase(of: word, in: correction)
 
+        // Don't re-correct a word we just produced. The auto-fix write triggers
+        // its own `text.pause`; without this guard we'd re-examine the corrected
+        // word and risk an A→B→A loop or a redundant selection write.
+        let now = Date()
+        recentAutoFixes.removeAll { now.timeIntervalSince($0.timestamp) > 60 }
+        if recentAutoFixes.contains(where: { $0.correction.lowercased() == word.lowercased() }) {
+            return
+        }
+
         let range = NSRange(location: start, length: end - start)
         Log.info("TypoFixer applied: \"\(word)\" → \"\(cased)\"")
 
-        let now = Date()
         recentSelfEdits.append(SelfEdit(typo: word, correction: cased, timestamp: now))
         recentAutoFixes.append(SelfEdit(typo: word, correction: cased, timestamp: now))
         caretObserver?.replaceRange(range, with: cased)

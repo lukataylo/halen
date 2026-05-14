@@ -24,8 +24,10 @@ final class SentimentGuard: HalenPlugin {
     private var task: Task<Void, Never>?
 
     /// Hashes we've already classified this session (any label). Avoids re-running
-    /// Gemma on the same text every time the user pauses.
+    /// Gemma on the same text every time the user pauses. Capped so it can't grow
+    /// without bound over a long session.
     private var classifiedHashes: [String: String] = [:]
+    private static let maxClassifiedHashes = 256
     /// Hashes the user explicitly approved as fine. Persisted.
     private var approvedHashes: Set<String> = []
     /// Number of times we surfaced a popover this session (any rule). In-memory only.
@@ -112,12 +114,15 @@ final class SentimentGuard: HalenPlugin {
         Text: \"\"\"\(windowed)\"\"\"
         """
 
-        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 16, temperature: 0.1)
+        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 16, temperature: 0.1, taskKind: .classification)
 
         do {
             let response = try await services.inference.complete(request)
             let label = normalizeLabel(response.text)
             classifiedHashes[hash] = label
+            if classifiedHashes.count > Self.maxClassifiedHashes, let evict = classifiedHashes.keys.first {
+                classifiedHashes.removeValue(forKey: evict)
+            }
             Log.info("SentimentGuard: \(label) (\(response.latencyMs)ms)")
 
             if let matched = enabled.first(where: { $0.label.lowercased() == label }) {
@@ -217,7 +222,7 @@ final class SentimentGuard: HalenPlugin {
 
             Message: \"\"\"\(originalText)\"\"\"
             """
-            let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 400, temperature: 0.5)
+            let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 400, temperature: 0.5, taskKind: .generation)
             do {
                 let response = try await services.inference.complete(request)
                 let rewritten = response.text

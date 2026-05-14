@@ -118,6 +118,14 @@ final class CaretObserver {
             return
         }
 
+        // Attach the run-loop source *before* registering notifications so the
+        // observer is live to deliver them the moment they fire.
+        CFRunLoopAddSource(
+            CFRunLoopGetMain(),
+            AXObserverGetRunLoopSource(observer),
+            .defaultMode
+        )
+
         let refcon = Unmanaged.passUnretained(self).toOpaque()
         let appResult = AXObserverAddNotification(
             observer, appElement,
@@ -127,12 +135,6 @@ final class CaretObserver {
         if appResult != .success {
             Log.debug("AXObserverAddNotification(focused-ui-changed) status=\(appResult.rawValue) for \(app.localizedName ?? "?")")
         }
-
-        CFRunLoopAddSource(
-            CFRunLoopGetMain(),
-            AXObserverGetRunLoopSource(observer),
-            .defaultMode
-        )
 
         self.observer = observer
         self.appElement = appElement
@@ -186,6 +188,12 @@ final class CaretObserver {
 
         emitCaretMoved(element: element)
         emitTextSnapshot(reason: "focus")
+        // The element's AX value often lags the document actually loading — e.g.
+        // opening a note in TextEdit, where the focus snapshot reads "" before the
+        // content lands in the AX tree. Re-snapshot shortly after so text-driven
+        // plugins (SentimentGuard, BurnoutCopilot) see the real content without
+        // waiting for the user's first keystroke.
+        scheduleDebouncedEmit(reason: "focus-settle")
     }
 
     // MARK: - Notification handling

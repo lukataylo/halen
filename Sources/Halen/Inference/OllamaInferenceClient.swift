@@ -12,6 +12,8 @@ import Foundation
 final class OllamaInferenceClient: InferenceClient {
     private let baseURL: URL
     private let session: URLSession
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
 
     init(baseURL: URL = URL(string: "http://localhost:11434")!) {
         self.baseURL = baseURL
@@ -45,7 +47,7 @@ final class OllamaInferenceClient: InferenceClient {
         var urlRequest = URLRequest(url: baseURL.appending(path: "api/chat"))
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        urlRequest.httpBody = try JSONEncoder().encode(body)
+        urlRequest.httpBody = try encoder.encode(body)
 
         let (data, response) = try await session.data(for: urlRequest)
         guard let http = response as? HTTPURLResponse else {
@@ -56,7 +58,12 @@ final class OllamaInferenceClient: InferenceClient {
             throw OllamaError.badStatus(http.statusCode, body: bodyText)
         }
 
-        let chat = try JSONDecoder().decode(ChatResponse.self, from: data)
+        let chat = try decoder.decode(ChatResponse.self, from: data)
+        // An empty body is a failure, not a valid completion — throw so the
+        // router falls through to the next backend instead of returning "".
+        guard !chat.message.content.isEmpty else {
+            throw OllamaError.emptyResponse
+        }
         let latency = Int(Date().timeIntervalSince(start) * 1000)
         return InferenceResponse(
             text: chat.message.content,
@@ -77,11 +84,13 @@ final class OllamaInferenceClient: InferenceClient {
 enum OllamaError: Error, CustomStringConvertible {
     case noHTTPResponse
     case badStatus(Int, body: String)
+    case emptyResponse
 
     var description: String {
         switch self {
         case .noHTTPResponse: return "Ollama: no HTTP response"
         case .badStatus(let code, let body): return "Ollama HTTP \(code): \(body.prefix(200))"
+        case .emptyResponse: return "Ollama: empty completion body"
         }
     }
 }

@@ -3,11 +3,12 @@ import SwiftUI
 import Speech
 import AVFoundation
 import Carbon.HIToolbox
+import ApplicationServices
 
-/// Global-hotkey-driven dictation. ⌥⌘Space toggles recording. While listening, a
+/// Global-hotkey-driven dictation. ⌥⌘H toggles recording. While listening, a
 /// floating indicator pulses near the caret. On stop, the transcription (local,
-/// on-device via Apple's `SFSpeechRecognizer`) is inserted at the current caret
-/// via the AX write-back path.
+/// on-device via Apple's `SFSpeechRecognizer`) is inserted into the text field
+/// that was focused when recording began, at the caret position captured then.
 ///
 /// Why SFSpeechRecognizer instead of Gemma 4 audio: Apple's on-device recogniser
 /// is purpose-built for this, runs offline on Apple Silicon, and ships with a
@@ -29,6 +30,11 @@ final class VoiceDictation: HalenPlugin {
 
     private var lastCaretRect: CGRect?
     private var lastCaretOffset: Int = 0
+    /// The field + caret captured at `beginRecording()`. The transcript callback
+    /// fires seconds later, so we must write back to where recording *started*,
+    /// not wherever focus happens to be when it finishes.
+    private var capturedElement: AXUIElement?
+    private var capturedOffset: Int = 0
     @ObservationIgnored private var isRecording = false
     private(set) var state = VoiceDictationState()
 
@@ -56,7 +62,7 @@ final class VoiceDictation: HalenPlugin {
             }
         }
         state.refreshPermissions()
-        Log.info("VoiceDictation started (hotkey: \u{2325}\u{2318}Space)")
+        Log.info("VoiceDictation started (hotkey: \u{2325}\u{2318}H)")
     }
 
     func stop() {
@@ -104,6 +110,11 @@ final class VoiceDictation: HalenPlugin {
         state.refreshPermissions()
         state.resetLevels()
 
+        // Capture the field + caret NOW — the transcript callback fires seconds
+        // later, by which point focus or the caret may have moved.
+        capturedElement = services.caretObserver.currentElement
+        capturedOffset = capturedElement.flatMap { axReadSelectedRange($0)?.location } ?? lastCaretOffset
+
         let recorder = VoiceDictationRecorder()
         recorder.onTranscript = { [weak self] text in
             Task { @MainActor [weak self] in
@@ -112,10 +123,13 @@ final class VoiceDictation: HalenPlugin {
         }
         recorder.onError = { [weak self] error in
             Task { @MainActor [weak self] in
+                guard let self else { return }
                 Log.warn("VoiceDictation: \(error.localizedDescription)")
-                self?.state.engine = .idle
-                self?.hideListeningIndicator()
-                self?.isRecording = false
+                self.recorder?.stop(commit: false)
+                self.recorder = nil
+                self.state.engine = .idle
+                self.hideListeningIndicator()
+                self.isRecording = false
             }
         }
         recorder.onStateChange = { [weak self] engineState in
@@ -152,16 +166,22 @@ final class VoiceDictation: HalenPlugin {
             state.engine = .idle
             hideListeningIndicator()
             recorder = nil
+            capturedElement = nil
         }
         guard !trimmed.isEmpty else {
             Log.info("VoiceDictation: empty transcript, nothing to insert")
             return
         }
-        let range = NSRange(location: lastCaretOffset, length: 0)
+        let range = NSRange(location: capturedOffset, length: 0)
         let payload = trimmed + " "
-        services.caretObserver.replaceRange(range, with: payload)
+        let wrote: Bool
+        if let element = capturedElement {
+            wrote = services.caretObserver.replaceRange(range, with: payload, in: element)
+        } else {
+            wrote = services.caretObserver.replaceRange(range, with: payload)
+        }
         state.lastTranscript = trimmed
-        Log.info("VoiceDictation inserted \(trimmed.count) chars at offset \(lastCaretOffset)")
+        Log.info("VoiceDictation inserted \(trimmed.count) chars at offset \(capturedOffset) wrote=\(wrote)")
     }
 
     // MARK: - Listening indicator

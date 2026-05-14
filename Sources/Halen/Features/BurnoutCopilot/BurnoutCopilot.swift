@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Foundation
+import CryptoKit
 
 /// Watches three signals — distraction-app time, recent writing tone, calendar
 /// density — and surfaces a "Take 10?" popup when ≥2 of 3 trip thresholds.
@@ -17,7 +18,14 @@ final class BurnoutCopilot: HalenPlugin {
     private let services: HalenServices
     private var eventTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
+    private var setupTask: Task<Void, Never>?
     private var activePanel: NSPanel?
+
+    /// Windowed-text hashes already classified this session — avoids re-running
+    /// Gemma (and re-recording the same tone sample) on every keystroke pause.
+    /// Capped so it can't grow without bound in a long session.
+    private var classifiedHashes: Set<String> = []
+    private static let maxClassifiedHashes = 256
 
     let state = BurnoutState()
     private let distraction = DistractionTimeTracker()
@@ -36,8 +44,9 @@ final class BurnoutCopilot: HalenPlugin {
 
     func start() {
         guard eventTask == nil else { return }
-        Task { @MainActor [calendar, weak self] in
+        setupTask = Task { @MainActor [calendar, weak self] in
             await calendar.requestAccess()
+            guard !Task.isCancelled else { return }
             self?.refreshSnapshot()
         }
         subscribeToEvents()
@@ -50,6 +59,8 @@ final class BurnoutCopilot: HalenPlugin {
         eventTask = nil
         heartbeatTask?.cancel()
         heartbeatTask = nil
+        setupTask?.cancel()
+        setupTask = nil
         activePanel?.orderOut(nil)
         activePanel = nil
     }
@@ -100,12 +111,19 @@ final class BurnoutCopilot: HalenPlugin {
     private func classifyTone(_ text: String, caretOffset: Int) async {
         let (windowed, _) = windowAroundCaret(text: text, offset: caretOffset, radius: 400)
         guard windowed.count > 40 else { return }
+
+        // Skip text we've already classified this session — the user pausing
+        // repeatedly on the same paragraph shouldn't stack tone samples or burn
+        // Gemma round-trips.
+        let hash = sha256Hex(windowed)
+        guard !classifiedHashes.contains(hash) else { return }
+
         let prompt = """
         Is the tone of the following text irritated, sharp, or hostile? Reply with only "yes" or "no", lowercase.
 
         Text: \"\"\"\(windowed)\"\"\"
         """
-        let request = InferenceRequest(prompt: prompt, tier: .small, maxTokens: 4, temperature: 0.1)
+        let request = InferenceRequest(prompt: prompt, tier: .small, maxTokens: 4, temperature: 0.1, taskKind: .classification)
         do {
             let response = try await services.inference.complete(request)
             let answer = response.text
@@ -113,12 +131,20 @@ final class BurnoutCopilot: HalenPlugin {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .trimmingCharacters(in: CharacterSet(charactersIn: ".\""))
             let isSharp = answer.hasPrefix("yes")
+            classifiedHashes.insert(hash)
+            if classifiedHashes.count > Self.maxClassifiedHashes, let evict = classifiedHashes.first {
+                classifiedHashes.remove(evict)
+            }
             tone.record(isSharp ? .sharp : .calm)
             refreshSnapshot()
             evaluate()
         } catch {
             Log.debug("BurnoutCopilot tone classify failed: \(error.localizedDescription)")
         }
+    }
+
+    private func sha256Hex(_ text: String) -> String {
+        SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - Evaluation

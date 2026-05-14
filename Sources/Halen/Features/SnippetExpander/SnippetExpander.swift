@@ -185,7 +185,7 @@ final class SnippetExpander: HalenPlugin {
         Paragraph:
         \(priorText)
         """
-        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 500, temperature: 0.4)
+        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 500, temperature: 0.4, taskKind: .generation)
 
         Task { @MainActor [services, weak self] in
             // Tell the caret overlay we're working so the user sees a busy

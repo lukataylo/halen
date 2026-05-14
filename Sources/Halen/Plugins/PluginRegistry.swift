@@ -14,6 +14,10 @@ final class PluginRegistry {
 
     /// Add a plugin. Honors the previously-saved enabled state (default: enabled).
     func register(_ plugin: any HalenPlugin) {
+        guard !plugins.contains(where: { $0.id == plugin.id }) else {
+            Log.warn("PluginRegistry: \(plugin.id) already registered — skipping")
+            return
+        }
         plugins.append(plugin)
         let enabled = readPersistedEnabled(plugin.id)
         enabledStates[plugin.id] = enabled

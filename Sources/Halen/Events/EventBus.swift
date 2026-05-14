@@ -10,7 +10,10 @@ final class EventBus: @unchecked Sendable {
     private var continuations: [UUID: AsyncStream<Event>.Continuation] = [:]
 
     func subscribe() -> AsyncStream<Event> {
-        AsyncStream { continuation in
+        // Bounded buffer: a slow subscriber drops the oldest events rather than
+        // growing memory without limit (caret.moved fires on every keystroke;
+        // text.pause can carry several KB of text).
+        AsyncStream(Event.self, bufferingPolicy: .bufferingNewest(64)) { continuation in
             let id = UUID()
             lock.lock()
             continuations[id] = continuation
