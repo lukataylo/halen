@@ -107,6 +107,8 @@ final class AppCoordinator {
                     Log.info("evt text.pause app=\(p.appName) chars=\(p.text.count) offset=\(p.caretOffset) preview=\"\(preview)\"")
                 case .caretMoved(let p):
                     Log.debug("evt caret.moved \(Int(p.rect.x)),\(Int(p.rect.y)) \(Int(p.rect.width))x\(Int(p.rect.height))")
+                case .inferenceActivity(let p):
+                    Log.debug("evt inference.activity \(p.phase.rawValue) source=\(p.source)")
                 case .textSaved, .clipboardChanged:
                     break
                 }

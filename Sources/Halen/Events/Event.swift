@@ -11,14 +11,16 @@ enum Event: Sendable {
     case caretMoved(CaretMoved)
     case appFocused(AppFocused)
     case clipboardChanged(ClipboardChanged)
+    case inferenceActivity(InferenceActivity)
 
     var method: String {
         switch self {
-        case .textPaused:       return "text.pause"
-        case .textSaved:        return "text.save"
-        case .caretMoved:       return "caret.moved"
-        case .appFocused:       return "app.focused"
-        case .clipboardChanged: return "clipboard.changed"
+        case .textPaused:        return "text.pause"
+        case .textSaved:         return "text.save"
+        case .caretMoved:        return "caret.moved"
+        case .appFocused:        return "app.focused"
+        case .clipboardChanged:  return "clipboard.changed"
+        case .inferenceActivity: return "inference.activity"
         }
     }
 
@@ -51,6 +53,17 @@ enum Event: Sendable {
 
     struct ClipboardChanged: Sendable, Codable {
         let textPreview: String
+        let timestamp: Date
+    }
+
+    /// A plugin is running (or has finished) an async Gemma call. Lets the
+    /// caret overlay show a "working" state so the user knows something is
+    /// happening during the multi-second wait. Generic on purpose — any
+    /// Gemma-backed feature can publish it, keyed by `source`.
+    struct InferenceActivity: Sendable, Codable {
+        enum Phase: String, Sendable, Codable { case started, finished }
+        let phase: Phase
+        let source: String        // e.g. "snippet-expander" — for logs
         let timestamp: Date
     }
 

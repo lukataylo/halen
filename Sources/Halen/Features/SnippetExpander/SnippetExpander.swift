@@ -188,6 +188,15 @@ final class SnippetExpander: HalenPlugin {
         let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 500, temperature: 0.4)
 
         Task { @MainActor [services, weak self] in
+            // Tell the caret overlay we're working so the user sees a busy
+            // indicator during the multi-second Gemma call. `defer` guarantees
+            // the matching "finished" fires on every exit path below.
+            services.eventBus.publish(.inferenceActivity(.init(
+                phase: .started, source: "snippet-expander", timestamp: Date())))
+            defer {
+                services.eventBus.publish(.inferenceActivity(.init(
+                    phase: .finished, source: "snippet-expander", timestamp: Date())))
+            }
             do {
                 let response = try await services.inference.complete(request)
                 let cleaned = response.text
