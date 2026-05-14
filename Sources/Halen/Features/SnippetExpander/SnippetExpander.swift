@@ -179,6 +179,18 @@ final class SnippetExpander: HalenPlugin {
         )
         Log.info("SnippetExpander: \(snippet.trigger) placeholder write=\(placeholderWritten) priorTextLen=\(priorText.count) range=\(replaceRange.location),\(replaceRange.length)")
 
+        // Anchor the overlay's busy state to the placeholder's real on-screen
+        // bounds — more reliable than the overlay's racy last-known caret.
+        let overlayAnchor: Event.CaretRect? = {
+            guard let targetElement,
+                  let axRect = axReadBounds(targetElement, range: CFRange(
+                      location: placeholderRange.location, length: placeholderRange.length)) else {
+                return nil
+            }
+            let cocoa = axRectToCocoa(axRect)
+            return .init(x: cocoa.minX, y: cocoa.minY, width: cocoa.width, height: cocoa.height)
+        }()
+
         let prompt = """
         \(snippet.value)
 
@@ -187,12 +199,12 @@ final class SnippetExpander: HalenPlugin {
         """
         let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 500, temperature: 0.4, taskKind: .generation)
 
-        Task { @MainActor [services, weak self] in
+        Task { @MainActor [services, overlayAnchor, weak self] in
             // Tell the caret overlay we're working so the user sees a busy
             // indicator during the multi-second Gemma call. `defer` guarantees
             // the matching "finished" fires on every exit path below.
             services.eventBus.publish(.inferenceActivity(.init(
-                phase: .started, source: "snippet-expander", timestamp: Date())))
+                phase: .started, source: "snippet-expander", anchor: overlayAnchor, timestamp: Date())))
             defer {
                 services.eventBus.publish(.inferenceActivity(.init(
                     phase: .finished, source: "snippet-expander", timestamp: Date())))
@@ -202,27 +214,59 @@ final class SnippetExpander: HalenPlugin {
                 let cleaned = response.text
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
+                guard let self else { return }
+                // Re-find the placeholder before writing — the user may have
+                // edited the field during the multi-second call, shifting it.
+                guard let writeRange = self.locatePlaceholder(placeholder, expectedAt: placeholderRange, in: targetElement) else {
+                    Log.warn("SnippetExpander: \(snippet.trigger) placeholder gone from field — skipping write")
+                    return
+                }
                 guard !cleaned.isEmpty else {
                     Log.warn("SnippetExpander: \(snippet.trigger) returned empty body, restoring trigger")
-                    self?.applyReplacement(replacesPrior ? priorText : snippet.trigger,
-                                            at: placeholderRange,
-                                            trigger: snippet.trigger,
-                                            in: targetElement)
+                    self.applyReplacement(replacesPrior ? priorText : snippet.trigger,
+                                          at: writeRange, trigger: snippet.trigger, in: targetElement)
                     return
                 }
                 Log.info("SnippetExpander: \(snippet.trigger) completed (\(response.latencyMs)ms) responseLen=\(cleaned.count)")
-                let wrote = self?.applyReplacement(cleaned, at: placeholderRange, trigger: snippet.trigger, in: targetElement) ?? false
+                let wrote = self.applyReplacement(cleaned, at: writeRange, trigger: snippet.trigger, in: targetElement)
                 if !wrote {
-                    Log.warn("SnippetExpander: \(snippet.trigger) response AX write failed at range \(placeholderRange.location),\(placeholderRange.length) — target element stale or unsupported")
+                    Log.warn("SnippetExpander: \(snippet.trigger) response AX write failed at range \(writeRange.location),\(writeRange.length) — target element stale or unsupported")
                 }
             } catch {
                 Log.warn("SnippetExpander: AI snippet \(snippet.trigger) failed: \(error)")
-                self?.applyReplacement(replacesPrior ? priorText : snippet.trigger,
-                                        at: placeholderRange,
-                                        trigger: snippet.trigger,
-                                        in: targetElement)
+                guard let self,
+                      let writeRange = self.locatePlaceholder(placeholder, expectedAt: placeholderRange, in: targetElement) else { return }
+                self.applyReplacement(replacesPrior ? priorText : snippet.trigger,
+                                      at: writeRange, trigger: snippet.trigger, in: targetElement)
             }
         }
+    }
+
+    /// Re-find the `[…]` placeholder in the (possibly-edited) field. The Gemma
+    /// call is async and multi-second; if the user typed elsewhere in the field
+    /// meanwhile, the placeholder will have shifted. Returns its current range,
+    /// the original `expected` range if the field can't be read, or nil if the
+    /// placeholder is gone (the user deleted it — don't write anything).
+    private func locatePlaceholder(_ placeholder: String, expectedAt expected: NSRange,
+                                   in element: AXUIElement?) -> NSRange? {
+        guard let target = element ?? caretObserver?.currentElement,
+              let current = axReadString(target, kAXValueAttribute) else {
+            return expected
+        }
+        let ns = current as NSString
+        var searchFrom = 0
+        var best: NSRange?
+        while searchFrom < ns.length {
+            let found = ns.range(of: placeholder, options: [],
+                                 range: NSRange(location: searchFrom, length: ns.length - searchFrom))
+            guard found.location != NSNotFound else { break }
+            if best == nil ||
+                abs(found.location - expected.location) < abs(best!.location - expected.location) {
+                best = found
+            }
+            searchFrom = found.location + max(1, found.length)
+        }
+        return best
     }
 
     /// Returns the UTF-16 offset just after the most recent newline before

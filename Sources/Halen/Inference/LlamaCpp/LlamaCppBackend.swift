@@ -22,21 +22,49 @@ actor LlamaCppBackend: InferenceBackend {
     private var loadedContext: LlamaContext?
     private var loadFailed = false
 
+    /// The model + KV cache is ~1 GB resident. A menubar app runs all day, so
+    /// the context is evicted after a stretch of no requests and transparently
+    /// reloaded (a few seconds) on the next one.
+    private var idleUnloadTask: Task<Void, Never>?
+    private let idleUnloadInterval: TimeInterval = 5 * 60
+
     /// The bundled GGUF, copied into `Contents/Resources/Models/` by build-app.sh.
     static var modelURL: URL? {
         Bundle.main.url(forResource: "gemma-3-1b-it-Q4_K_M", withExtension: "gguf", subdirectory: "Models")
     }
 
     func availability() async -> BackendAvailability {
-        if loadFailed { return .unavailable(reason: "Bundled model failed to load") }
-        guard Self.modelURL != nil else {
-            return .unavailable(reason: "Bundled model missing from app bundle")
+        if loadFailed { return .unavailable(reason: "Built-in model failed to load") }
+        if loadedContext != nil { return .available }   // already loaded — proven good
+        guard let url = Self.modelURL else {
+            return .unavailable(reason: "Built-in model is missing from the app bundle")
+        }
+        guard Self.modelLooksValid(at: url) else {
+            return .unavailable(reason: "Built-in model file looks corrupt or incomplete")
         }
         return .available
     }
 
+    /// Cheap integrity probe: confirms the bundled GGUF exists, starts with the
+    /// `GGUF` magic, and is large enough to be a real 1B model rather than a
+    /// truncated or partial copy. It deliberately does NOT load the model —
+    /// that costs seconds and GBs of RAM. A well-formed but semantically corrupt
+    /// file is still only caught at load time, after which `loadFailed` latches
+    /// and `availability()` reports unavailable so the router stops routing here.
+    private static func modelLooksValid(at url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        guard let magic = try? handle.read(upToCount: 4), magic == Data("GGUF".utf8) else {
+            return false
+        }
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        return size >= 100_000_000   // any real 1B GGUF is hundreds of MB
+    }
+
     func complete(_ request: InferenceRequest) async throws -> InferenceResponse {
         let context = try ensureContext()
+        // Push the idle-eviction deadline out on every request, success or not.
+        defer { scheduleIdleUnload() }
         let start = Date()
         // Gemma instruction-tuned chat template.
         let prompt = "<start_of_turn>user\n\(request.prompt)<end_of_turn>\n<start_of_turn>model\n"
@@ -75,9 +103,31 @@ actor LlamaCppBackend: InferenceBackend {
             throw error
         }
     }
+
+    /// (Re)arm the idle-eviction timer. Each request resets it, so the model is
+    /// only released after `idleUnloadInterval` of genuine inactivity.
+    private func scheduleIdleUnload() {
+        idleUnloadTask?.cancel()
+        idleUnloadTask = Task { [weak self, idleUnloadInterval] in
+            try? await Task.sleep(for: .seconds(idleUnloadInterval))
+            guard !Task.isCancelled else { return }
+            await self?.unloadIfIdle()
+        }
+    }
+
+    /// Drop the warm context. `LlamaContext.deinit` frees the model, context and
+    /// batch; the next `complete()` transparently reloads. Safe to run even with
+    /// a `complete()` in flight — that call holds its own strong reference, so
+    /// the underlying context survives until it finishes.
+    private func unloadIfIdle() {
+        guard loadedContext != nil else { return }
+        loadedContext = nil
+        idleUnloadTask = nil
+        Log.info("LlamaCppBackend: released idle model context")
+    }
 }
 
-enum LlamaBackendError: Error, CustomStringConvertible {
+enum LlamaBackendError: Error, LocalizedError, CustomStringConvertible {
     case modelUnavailable
     case emptyResponse
 
@@ -87,4 +137,6 @@ enum LlamaBackendError: Error, CustomStringConvertible {
         case .emptyResponse:    return "Bundled model returned an empty completion"
         }
     }
+
+    var errorDescription: String? { description }
 }

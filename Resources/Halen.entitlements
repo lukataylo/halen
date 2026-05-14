@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Hardened Runtime entitlements for the Developer ID (non–App Store) build.
+      Notarization requires the Hardened Runtime; these re-enable the specific
+      protected resources Halen actually uses, and nothing more.
+    -->
+
+    <!-- Microphone — Voice Dictation captures audio via AVAudioEngine. -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+
+    <!-- Calendar (EventKit) — Burnout Copilot break events + Meeting Prep briefings. -->
+    <key>com.apple.security.personal-information.calendars</key>
+    <true/>
+
+    <!--
+      Deliberately NOT included:
+
+      * com.apple.security.cs.allow-jit
+        The bundled llama.xcframework embeds a *precompiled* Metal library
+        (there is no .metallib file in the framework and no runtime shader
+        compilation), so Metal init uses newLibraryWithData and needs no JIT.
+        If a hardened build ever fails Metal initialisation, add this key.
+
+      * com.apple.security.cs.disable-library-validation
+        scripts/build-app.sh re-signs llama.framework with the same Developer ID
+        as the app, so library validation already passes.
+
+      * com.apple.security.app-sandbox
+        This is the Developer ID build, not an App Store build. Halen's
+        Accessibility-driven features require a non-sandboxed process.
+    -->
+</dict>
+</plist>

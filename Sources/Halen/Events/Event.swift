@@ -64,6 +64,10 @@ enum Event: Sendable {
         enum Phase: String, Sendable, Codable { case started, finished }
         let phase: Phase
         let source: String        // e.g. "snippet-expander" — for logs
+        /// On-screen anchor for the work (e.g. the placeholder the result will
+        /// land in). When set, the overlay shows its busy state here instead of
+        /// at the last-known caret. nil for sources with no text anchor.
+        var anchor: CaretRect? = nil
         let timestamp: Date
     }
 

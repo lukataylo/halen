@@ -4,7 +4,7 @@ import ApplicationServices
 /// Observes the user's currently focused text field and emits events on the bus:
 ///   - `app.focused` when the frontmost app changes
 ///   - `caret.moved` when the caret or selection changes (with screen-space rect)
-///   - `text.pause` (debounced ~400ms) when typing stops or focus changes
+///   - `text.pause` (debounced ~600ms) when typing stops or focus changes
 ///
 /// Implementation notes:
 ///   - One `AXObserver` per frontmost app. Swap on `NSWorkspace.didActivateApplication`.
@@ -27,6 +27,22 @@ final class CaretObserver {
 
     init(eventBus: EventBus) {
         self.eventBus = eventBus
+    }
+
+    deinit {
+        // The AX C-callback (`axCallback`) holds an *unretained* pointer back to
+        // us. If this object is deallocated without `stop()` having run, a
+        // queued notification could still fire into freed memory. Tear the
+        // run-loop source down here as a safety net — CF teardown isn't
+        // actor-isolated, and removing a source from the main run loop is
+        // thread-safe regardless of which thread `deinit` runs on.
+        if let observer {
+            CFRunLoopRemoveSource(
+                CFRunLoopGetMain(),
+                AXObserverGetRunLoopSource(observer),
+                .defaultMode
+            )
+        }
     }
 
     func start() {
@@ -212,10 +228,16 @@ final class CaretObserver {
         }
     }
 
+    /// `text.pause` debounce. 600ms keeps snippet expansion and typo learning
+    /// responsive while noticeably cutting per-keystroke AX reads and fan-out
+    /// versus the old 400ms. Inference-driven plugins debounce *further* on top
+    /// of this (see SentimentGuard / BurnoutCopilot) so Gemma isn't run mid-type.
+    private static let pauseDebounce: Duration = .milliseconds(600)
+
     private func scheduleDebouncedEmit(reason: String) {
         debounceTask?.cancel()
         debounceTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(400))
+            try? await Task.sleep(for: Self.pauseDebounce)
             guard let self, !Task.isCancelled else { return }
             self.emitTextSnapshot(reason: "pause:\(reason)")
         }

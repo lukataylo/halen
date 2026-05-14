@@ -4,17 +4,35 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-CONFIG="${CONFIG:-debug}"
+# DIST=1 produces a notarization-ready build: release config, Developer ID
+# signing, Hardened Runtime, a secure timestamp, and the app entitlements.
+# Default (DIST unset) is a fast local dev build signed with the Apple
+# Development cert — no Hardened Runtime, and TCC permissions persist across
+# rebuilds. After a DIST build, run scripts/notarize.sh.
+DIST="${DIST:-0}"
+
+if [[ "$DIST" == "1" ]]; then
+    CONFIG="${CONFIG:-release}"
+    # The Developer ID Application certificate. Create it once at
+    # developer.apple.com (Certificates → +) and download it into the login
+    # keychain; codesign matches this as a substring. Override with
+    # SIGN_IDENTITY=... if you have more than one and the match is ambiguous.
+    SIGN_IDENTITY="${SIGN_IDENTITY:-Developer ID Application}"
+else
+    CONFIG="${CONFIG:-debug}"
+    # Stable across rebuilds so granted TCC (Accessibility, etc.) permissions
+    # stick. Override with SIGN_IDENTITY=- for ad-hoc.
+    SIGN_IDENTITY="${SIGN_IDENTITY:-Apple Development: luka dadiani (75R33YUT6M)}"
+fi
+
 APP_DIR="$ROOT/build/Halen.app"
 CONTENTS="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
+FRAMEWORKS="$CONTENTS/Frameworks"
+ENTITLEMENTS="$ROOT/Resources/Halen.entitlements"
 
-# Signing identity: defaults to the user's Apple Development cert (stable across
-# rebuilds — TCC permissions persist). Override with SIGN_IDENTITY=- for ad-hoc.
-SIGN_IDENTITY="${SIGN_IDENTITY:-Apple Development: luka dadiani (75R33YUT6M)}"
-
-echo "→ swift build -c $CONFIG"
+echo "→ swift build -c $CONFIG  (dist=$DIST)"
 swift build -c "$CONFIG"
 
 BIN_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
@@ -50,13 +68,13 @@ done
 # @rpath/llama.framework/...; without this the assembled bundle fails to launch
 # with a dyld "Library not loaded" error.
 LLAMA_FW_SRC="$ROOT/Vendor/llama.xcframework/macos-arm64/llama.framework"
-FRAMEWORKS="$CONTENTS/Frameworks"
 if [[ -d "$LLAMA_FW_SRC" ]]; then
     echo "→ embedding llama.framework"
     mkdir -p "$FRAMEWORKS"
     ditto "$LLAMA_FW_SRC" "$FRAMEWORKS/llama.framework"
     # The freshly-copied binary only has SwiftPM's @loader_path rpath; point it
-    # at Contents/Frameworks/ the conventional way.
+    # at Contents/Frameworks/ the conventional way. Must happen before signing —
+    # codesign seals the binary, so any later mutation invalidates the signature.
     install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS_DIR/halen"
 else
     echo "warning: $LLAMA_FW_SRC not found — run scripts/fetch-assets.sh" >&2
@@ -73,12 +91,34 @@ else
     echo "warning: $GGUF_SRC not found — run scripts/fetch-assets.sh" >&2
 fi
 
-echo "→ signing with: $SIGN_IDENTITY"
 # Sign nested code (the framework) before the app so the app seals a valid
 # signature. No --deep (deprecated; doesn't handle nested code correctly).
-if [[ -d "$FRAMEWORKS/llama.framework" ]]; then
-    codesign --force --sign "$SIGN_IDENTITY" "$FRAMEWORKS/llama.framework" >/dev/null
-fi
-codesign --force --sign "$SIGN_IDENTITY" --identifier com.dadiani.halen "$APP_DIR" >/dev/null
+echo "→ signing with: $SIGN_IDENTITY"
+if [[ "$DIST" == "1" ]]; then
+    # Every Mach-O in a notarized bundle must opt into the Hardened Runtime and
+    # carry a secure timestamp. The framework gets runtime + timestamp; the app
+    # additionally gets Halen's entitlements (mic, calendar). The framework does
+    # NOT get app entitlements — it has none of its own.
+    if [[ ! -f "$ENTITLEMENTS" ]]; then
+        echo "error: $ENTITLEMENTS not found — required for a DIST build" >&2
+        exit 1
+    fi
+    if [[ -d "$FRAMEWORKS/llama.framework" ]]; then
+        codesign --force --options runtime --timestamp \
+            --sign "$SIGN_IDENTITY" "$FRAMEWORKS/llama.framework"
+    fi
+    codesign --force --options runtime --timestamp \
+        --entitlements "$ENTITLEMENTS" \
+        --sign "$SIGN_IDENTITY" --identifier com.dadiani.halen "$APP_DIR"
 
-echo "✓ built $APP_DIR"
+    echo "→ verifying signature"
+    codesign --verify --strict --verbose=2 "$APP_DIR"
+    echo "✓ built + signed $APP_DIR"
+    echo "  next: scripts/notarize.sh   (Gatekeeper will reject it until then)"
+else
+    if [[ -d "$FRAMEWORKS/llama.framework" ]]; then
+        codesign --force --sign "$SIGN_IDENTITY" "$FRAMEWORKS/llama.framework" >/dev/null
+    fi
+    codesign --force --sign "$SIGN_IDENTITY" --identifier com.dadiani.halen "$APP_DIR" >/dev/null
+    echo "✓ built $APP_DIR"
+fi

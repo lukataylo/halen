@@ -66,6 +66,13 @@ final class VoiceDictationRecorder {
 
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
+        // `installTap` with a 0-channel / 0-sample-rate format (no input device,
+        // or the device hasn't spun up yet right after a permission grant)
+        // throws an uncatchable Objective-C exception — guard it as a Swift error.
+        guard format.channelCount > 0, format.sampleRate > 0 else {
+            onError?(VoiceDictationError.noAudioInput)
+            return
+        }
         inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak req, weak self] buffer, _ in
             req?.append(buffer)
@@ -164,12 +171,14 @@ enum VoiceDictationError: LocalizedError {
     case speechNotAuthorised
     case micNotAuthorised
     case recognizerUnavailable
+    case noAudioInput
 
     var errorDescription: String? {
         switch self {
         case .speechNotAuthorised:    return "Speech recognition is not authorised."
         case .micNotAuthorised:       return "Microphone access is not authorised."
         case .recognizerUnavailable:  return "Speech recogniser is unavailable (no on-device model?)"
+        case .noAudioInput:           return "No microphone input device is available."
         }
     }
 }

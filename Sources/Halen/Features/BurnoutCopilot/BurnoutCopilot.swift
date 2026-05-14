@@ -19,6 +19,11 @@ final class BurnoutCopilot: HalenPlugin {
     private var eventTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
     private var setupTask: Task<Void, Never>?
+    /// Tone classification is debounced *past* the EventBus `text.pause`
+    /// debounce, so Gemma isn't run on every keystroke pause — only once typing
+    /// has genuinely settled.
+    private var classifyToneTask: Task<Void, Never>?
+    private let typingSettleDelay: TimeInterval = 2.5
     private var activePanel: NSPanel?
 
     /// Windowed-text hashes already classified this session — avoids re-running
@@ -61,6 +66,8 @@ final class BurnoutCopilot: HalenPlugin {
         heartbeatTask = nil
         setupTask?.cancel()
         setupTask = nil
+        classifyToneTask?.cancel()
+        classifyToneTask = nil
         activePanel?.orderOut(nil)
         activePanel = nil
     }
@@ -87,7 +94,7 @@ final class BurnoutCopilot: HalenPlugin {
                     self.refreshSnapshot()
                     self.evaluate()
                 case .textPaused(let p) where p.text.count > self.toneMinLength:
-                    await self.classifyTone(p.text, caretOffset: p.caretOffset)
+                    self.scheduleClassifyTone(p.text, caretOffset: p.caretOffset)
                 default:
                     break
                 }
@@ -108,6 +115,18 @@ final class BurnoutCopilot: HalenPlugin {
 
     // MARK: - Tone classification
 
+    /// Debounce tone classification behind a genuine typing pause — each
+    /// `text.pause` resets the timer, so a Gemma round-trip only fires once the
+    /// user has actually stopped typing.
+    private func scheduleClassifyTone(_ text: String, caretOffset: Int) {
+        classifyToneTask?.cancel()
+        classifyToneTask = Task { @MainActor [weak self, delay = typingSettleDelay] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard let self, !Task.isCancelled else { return }
+            await self.classifyTone(text, caretOffset: caretOffset)
+        }
+    }
+
     private func classifyTone(_ text: String, caretOffset: Int) async {
         let (windowed, _) = windowAroundCaret(text: text, offset: caretOffset, radius: 400)
         guard windowed.count > 40 else { return }
@@ -123,7 +142,11 @@ final class BurnoutCopilot: HalenPlugin {
 
         Text: \"\"\"\(windowed)\"\"\"
         """
-        let request = InferenceRequest(prompt: prompt, tier: .small, maxTokens: 4, temperature: 0.1, taskKind: .classification)
+        // maxTokens 16, not 4: the bundled llama.cpp backend wraps the prompt in
+        // the Gemma chat template, which can emit a leading newline/space token
+        // before content. A 4-token budget can be spent before "yes"/"no" lands,
+        // yielding an empty completion and a silently-dropped tone sample.
+        let request = InferenceRequest(prompt: prompt, tier: .small, maxTokens: 16, temperature: 0.1, taskKind: .classification)
         do {
             let response = try await services.inference.complete(request)
             let answer = response.text

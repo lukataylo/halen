@@ -22,6 +22,11 @@ final class SentimentGuard: HalenPlugin {
     private let services: HalenServices
     let rulesStore: SentimentRulesStore
     private var task: Task<Void, Never>?
+    /// Classification is debounced *past* the EventBus `text.pause` debounce:
+    /// it only fires once typing has genuinely settled, so Gemma is never run
+    /// on every pause mid-sentence.
+    private var evaluateTask: Task<Void, Never>?
+    private let typingSettleDelay: TimeInterval = 2.5
 
     /// Hashes we've already classified this session (any label). Avoids re-running
     /// Gemma on the same text every time the user pauses. Capped so it can't grow
@@ -67,7 +72,7 @@ final class SentimentGuard: HalenPlugin {
                 case .caretMoved(let p):
                     self.lastCaretRect = CGRect(x: p.rect.x, y: p.rect.y, width: p.rect.width, height: p.rect.height)
                 case .textPaused(let p):
-                    await self.evaluate(text: p.text, caretOffset: p.caretOffset)
+                    self.scheduleEvaluate(text: p.text, caretOffset: p.caretOffset)
                 default:
                     break
                 }
@@ -78,12 +83,26 @@ final class SentimentGuard: HalenPlugin {
     func stop() {
         task?.cancel()
         task = nil
+        evaluateTask?.cancel()
+        evaluateTask = nil
         dismissTask?.cancel()
         activePanel?.orderOut(nil)
         activePanel = nil
     }
 
     // MARK: - Evaluation
+
+    /// Debounce classification behind a genuine typing pause. Each `text.pause`
+    /// resets the timer, so continuous typing never triggers a Gemma round-trip
+    /// — only a real lull does.
+    private func scheduleEvaluate(text: String, caretOffset: Int) {
+        evaluateTask?.cancel()
+        evaluateTask = Task { @MainActor [weak self, delay = typingSettleDelay] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard let self, !Task.isCancelled else { return }
+            await self.evaluate(text: text, caretOffset: caretOffset)
+        }
+    }
 
     private func evaluate(text: String, caretOffset: Int) async {
         guard text.count > 60 else { return }

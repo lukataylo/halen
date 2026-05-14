@@ -1,43 +1,47 @@
 import AppKit
 import SwiftUI
 
-/// Shows a small Halen-logo indicator next to the caret of the focused text
-/// field. Follows `caret.moved` events; hides itself after a couple of seconds
-/// of caret inactivity. User can turn it off via Settings → Cursor overlay.
+/// Two independent floating panels next to the focused text field:
 ///
-/// While a Gemma-backed plugin is mid-call it shows a "busy" loader — the logo
-/// glows and gains a rotating ring — driven by `inference.activity` events.
+///  - `caretPanel` — the always-on 16×16 Halen-logo caret indicator. Follows
+///    `caret.moved`, auto-hides after a couple of seconds of inactivity. This
+///    is deliberately the simplest possible structure (the SwiftUI logo *is*
+///    the panel's content view) — it is the proven original and the busy-state
+///    code must never touch it.
+///  - `busyPanel` — a 40×40 "AI working" loader shown only while a Gemma call
+///    is in flight (driven by `inference.activity`). A separate panel so its
+///    extra structure (a container with a centered logo + a rotating ring)
+///    can't regress the caret indicator.
 ///
-/// The panel is a fixed `panelSize` square; the SwiftUI logo is a fixed
-/// `logoSize` square centered inside it. The busy ring is a CoreAnimation
-/// sublayer that appears in the surrounding margin — the logo itself never
-/// changes size, and its SwiftUI view is never restructured.
+/// User can turn the whole thing off via Settings → Cursor overlay.
 @MainActor
 final class OverlayController {
     private let eventBus: EventBus
-    private var window: NSPanel?
-    private var containerView: NSView?
-    private var hostingView: NSHostingView<HalenCaretIndicator>?
+
+    private var caretPanel: NSPanel?
+    private var busyPanel: NSPanel?
+    private var busyContainer: NSView?
+    private var busyLogo: NSHostingView<HalenCaretIndicator>?
+    private var ringLayer: CAShapeLayer?
+
     private var subscribeTask: Task<Void, Never>?
     private var hideTask: Task<Void, Never>?
     private var defaultsObserver: NSObjectProtocol?
 
     /// In-flight inference calls. The loader stays up until this returns to 0.
     private var busyDepth = 0
-    /// Most recent caret rect — anchors the loader if it appears mid-flight.
+    /// Most recent caret rect — fallback anchor for the loader.
     private var lastCaretRect: Event.CaretRect?
-    /// The rotating ring sublayer added while busy.
-    private var ringLayer: CAShapeLayer?
+    /// Explicit anchor from the active inference source (e.g. a placeholder's
+    /// on-screen bounds). Preferred over `lastCaretRect` while busy.
+    private var busyAnchor: Event.CaretRect?
 
-    /// The visible Halen mark — fixed size, never scales.
-    private static let logoSize: CGFloat = 16
-    /// The panel/container square; the margin around the logo is the room the
-    /// busy ring needs.
-    private static let panelSize: CGFloat = 40
+    private static let dotSize: CGFloat = 16
+    private static let busySize: CGFloat = 40
     private static let glowKey = "halen.busy.glow"
     private static let cobalt = CGColor(red: 0.0, green: 0.30, blue: 0.99, alpha: 1.0)
 
-    /// UserDefaults key. Read on every `show()` so the toggle takes effect live.
+    /// UserDefaults key. Read on every `showCaret()` so the toggle takes effect live.
     static let showDotKey = "halen.showOverlayDot"
 
     init(eventBus: EventBus) {
@@ -45,36 +49,33 @@ final class OverlayController {
     }
 
     func start() {
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: Self.panelSize, height: Self.panelSize),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.level = .statusBar
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false
-        panel.ignoresMouseEvents = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-        panel.isMovable = false
-        panel.hidesOnDeactivate = false
+        // Caret indicator: the SwiftUI logo is the content view directly — no
+        // container, no offset subview. This is the proven original layout.
+        let caret = Self.makePanel(size: Self.dotSize)
+        caret.contentView = NSHostingView(rootView: HalenCaretIndicator())
+        caretPanel = caret
 
-        // Fixed-size container; the logo sits centered inside it so the busy
-        // ring has margin to draw into without ever resizing the logo.
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: Self.panelSize, height: Self.panelSize))
+        // Busy loader: a fixed 40×40 container with the 16×16 logo pinned dead
+        // centre via Auto Layout (so NSHostingView sizing quirks can't shift
+        // it) and room in the margin for the rotating ring sublayer.
+        let busy = Self.makePanel(size: Self.busySize)
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: Self.busySize, height: Self.busySize))
         container.wantsLayer = true
-        let inset = (Self.panelSize - Self.logoSize) / 2
-        let hosting = NSHostingView(rootView: HalenCaretIndicator())
-        hosting.frame = NSRect(x: inset, y: inset, width: Self.logoSize, height: Self.logoSize)
-        hosting.autoresizingMask = []
-        hosting.wantsLayer = true
-        container.addSubview(hosting)
-        panel.contentView = container
-
-        window = panel
-        containerView = container
-        hostingView = hosting
+        let logo = NSHostingView(rootView: HalenCaretIndicator())
+        logo.translatesAutoresizingMaskIntoConstraints = false
+        logo.sizingOptions = []
+        logo.wantsLayer = true
+        container.addSubview(logo)
+        NSLayoutConstraint.activate([
+            logo.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            logo.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            logo.widthAnchor.constraint(equalToConstant: Self.dotSize),
+            logo.heightAnchor.constraint(equalToConstant: Self.dotSize),
+        ])
+        busy.contentView = container
+        busyPanel = busy
+        busyContainer = container
+        busyLogo = logo
 
         subscribeTask = Task { @MainActor [eventBus, weak self] in
             for await event in eventBus.subscribe() {
@@ -84,11 +85,12 @@ final class OverlayController {
                     self.lastCaretRect = payload.rect
                     // While busy, hold position — let the loader sit where it is.
                     if self.busyDepth == 0 {
-                        self.show(at: payload.rect)
+                        self.showCaret(at: payload.rect)
                     }
                 case .inferenceActivity(let payload):
                     switch payload.phase {
                     case .started:
+                        if let anchor = payload.anchor { self.busyAnchor = anchor }
                         self.busyDepth += 1
                         if self.busyDepth == 1 { self.enterBusy() }
                     case .finished:
@@ -110,7 +112,8 @@ final class OverlayController {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 if !Self.indicatorEnabled {
-                    self.window?.orderOut(nil)
+                    self.caretPanel?.orderOut(nil)
+                    self.busyPanel?.orderOut(nil)
                 }
             }
         }
@@ -125,30 +128,47 @@ final class OverlayController {
         }
         busyDepth = 0
         removeGlow()
-        window?.orderOut(nil)
-        window = nil
+        caretPanel?.orderOut(nil)
+        busyPanel?.orderOut(nil)
+        caretPanel = nil
+        busyPanel = nil
     }
 
     static var indicatorEnabled: Bool {
         UserDefaults.standard.object(forKey: showDotKey) as? Bool ?? true
     }
 
-    /// Panel frame that places the centered logo just to the right of the caret,
-    /// vertically centered on it.
-    private func frame(for caret: Event.CaretRect) -> NSRect {
-        let inset = (Self.panelSize - Self.logoSize) / 2
-        return NSRect(
-            x: CGFloat(caret.x) + 6 - inset,
-            y: CGFloat(caret.y) + (CGFloat(caret.height) - Self.panelSize) / 2,
-            width: Self.panelSize,
-            height: Self.panelSize
+    private static func makePanel(size: CGFloat) -> NSPanel {
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: size, height: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
         )
+        panel.level = .statusBar
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.ignoresMouseEvents = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        panel.isMovable = false
+        panel.hidesOnDeactivate = false
+        return panel
     }
 
-    private func show(at caret: Event.CaretRect) {
-        guard Self.indicatorEnabled, let window else { return }
-        window.setFrame(frame(for: caret), display: true)
-        window.orderFrontRegardless()
+    // MARK: - Caret indicator (the proven original)
+
+    private func showCaret(at caret: Event.CaretRect) {
+        guard Self.indicatorEnabled, let panel = caretPanel else { return }
+        // Just right of the caret, vertically centered on it.
+        let frame = NSRect(
+            x: CGFloat(caret.x) + 6,
+            y: CGFloat(caret.y) + (CGFloat(caret.height) - Self.dotSize) / 2,
+            width: Self.dotSize,
+            height: Self.dotSize
+        )
+        panel.setFrame(frame, display: true)
+        panel.orderFrontRegardless()
         scheduleAutoHide()
     }
 
@@ -157,40 +177,55 @@ final class OverlayController {
         hideTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(2))
             guard let self, !Task.isCancelled else { return }
-            self.window?.orderOut(nil)
+            self.caretPanel?.orderOut(nil)
         }
     }
 
-    // MARK: - Busy loader
+    // MARK: - Busy loader (separate panel)
 
-    /// Enter the "AI working" state: pin the panel at the caret, keep it
-    /// visible, and add the glow + rotating ring around the (unchanged) logo.
+    /// Enter the "AI working" state: hand off from the caret indicator to the
+    /// loader panel, anchored at the inference source's location.
     private func enterBusy() {
-        guard Self.indicatorEnabled, let window else { return }
+        guard Self.indicatorEnabled, let busyPanel else { return }
         hideTask?.cancel()
-        if let caret = lastCaretRect {
-            window.setFrame(frame(for: caret), display: true)
+        caretPanel?.orderOut(nil)
+
+        if let anchor = busyAnchor ?? lastCaretRect {
+            // Position so the centered 16×16 logo lands where the caret
+            // indicator would have — just right of the anchor.
+            let inset = (Self.busySize - Self.dotSize) / 2
+            let frame = NSRect(
+                x: CGFloat(anchor.x) + 6 - inset,
+                y: CGFloat(anchor.y) + (CGFloat(anchor.height) - Self.dotSize) / 2 - inset,
+                width: Self.busySize,
+                height: Self.busySize
+            )
+            busyPanel.setFrame(frame, display: true)
         }
-        window.orderFrontRegardless()
+        busyPanel.orderFrontRegardless()
         addGlow()
     }
 
-    /// Leave the busy state: drop the glow + ring and resume the auto-hide.
+    /// Leave the busy state: hide the loader and hand back to the caret indicator.
     private func exitBusy() {
         removeGlow()
-        scheduleAutoHide()
+        busyAnchor = nil
+        busyPanel?.orderOut(nil)
+        if let caret = lastCaretRect {
+            showCaret(at: caret)
+        }
     }
 
     private func addGlow() {
-        guard let container = containerView, let containerLayer = container.layer else { return }
+        guard let container = busyContainer, let layer = container.layer else { return }
 
         // Rotating cobalt arc in the margin around the logo.
         let ring = CAShapeLayer()
         ring.frame = container.bounds
-        let diameter = Self.logoSize + 12
+        let diameter = Self.dotSize + 12
         let ringRect = CGRect(
-            x: (Self.panelSize - diameter) / 2,
-            y: (Self.panelSize - diameter) / 2,
+            x: (Self.busySize - diameter) / 2,
+            y: (Self.busySize - diameter) / 2,
             width: diameter,
             height: diameter
         )
@@ -207,11 +242,11 @@ final class OverlayController {
         spin.duration = 1.0
         spin.repeatCount = .infinity
         ring.add(spin, forKey: "spin")
-        containerLayer.addSublayer(ring)
+        layer.addSublayer(ring)
         ringLayer = ring
 
         // Breathing glow on the logo itself — opacity only, so its size is untouched.
-        if let logoLayer = hostingView?.layer {
+        if let logoLayer = busyLogo?.layer {
             let pulse = CABasicAnimation(keyPath: "opacity")
             pulse.fromValue = 0.55
             pulse.toValue = 1.0
@@ -226,7 +261,7 @@ final class OverlayController {
     private func removeGlow() {
         ringLayer?.removeFromSuperlayer()
         ringLayer = nil
-        hostingView?.layer?.removeAnimation(forKey: Self.glowKey)
+        busyLogo?.layer?.removeAnimation(forKey: Self.glowKey)
     }
 }
 

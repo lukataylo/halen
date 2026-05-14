@@ -106,11 +106,25 @@ actor RouterInferenceClient: InferenceClient {
     }
 }
 
-enum RouterError: Error, CustomStringConvertible {
+enum RouterError: Error, LocalizedError, CustomStringConvertible {
     case noBackendAvailable(ModelTier)
     case backendUnavailable(BackendKind)
     case allBackendsFailed(Error?)
 
+    /// User-facing — surfaced in plugin UIs (e.g. Meeting Prep) via
+    /// `error.localizedDescription`. Kept actionable, never a raw error dump.
+    var errorDescription: String? {
+        switch self {
+        case .noBackendAvailable:
+            return "No AI backend is available. Open Halen Settings to check the built-in model, or start Ollama."
+        case .backendUnavailable(let kind):
+            return "\(kind.displayName) is currently unavailable."
+        case .allBackendsFailed:
+            return "Halen couldn't reach any AI backend. The built-in model may have failed to load — open Settings to check."
+        }
+    }
+
+    /// Technical detail for logs (`Log.warn`), including the underlying error.
     var description: String {
         switch self {
         case .noBackendAvailable(let tier):
