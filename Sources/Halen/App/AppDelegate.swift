@@ -5,11 +5,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let coordinator = AppCoordinator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Developer self-test: `HALEN_SELFTEST=1 ./halen` exercises the bundled
+        // llama.cpp backend directly and exits, with no Accessibility dependency.
+        if ProcessInfo.processInfo.environment["HALEN_SELFTEST"] != nil {
+            Task { @MainActor in
+                await SelfTest.run()
+                NSApp.terminate(nil)
+            }
+            return
+        }
         NSApp.setActivationPolicy(.accessory)
         coordinator.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         coordinator.stop()
+    }
+}
+
+/// Minimal end-to-end check for the bundled inference path. Not part of the
+/// shipping UI — triggered only via the `HALEN_SELFTEST` env var.
+enum SelfTest {
+    static func run() async {
+        Log.info("SelfTest: starting")
+        let backend = LlamaCppBackend()
+        let availability = await backend.availability()
+        Log.info("SelfTest: bundled-llama availability = \(availability)")
+        guard case .available = availability else {
+            Log.error("SelfTest: bundled model unavailable — aborting")
+            return
+        }
+        let request = InferenceRequest(
+            prompt: "Reply with exactly one word: hello",
+            tier: .small,
+            maxTokens: 16,
+            temperature: 0.1,
+            taskKind: .classification
+        )
+        do {
+            let response = try await backend.complete(request)
+            Log.info("SelfTest: OK — modelId=\(response.modelId) latencyMs=\(response.latencyMs) text=\"\(response.text)\"")
+        } catch {
+            Log.error("SelfTest: complete() failed — \(error)")
+        }
     }
 }

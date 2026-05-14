@@ -10,7 +10,14 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Halen",
+            dependencies: ["llama"],
             path: "Sources/Halen"
+        ),
+        // Prebuilt llama.cpp (pinned tag in Vendor/LLAMA_CPP_VERSION). Produced
+        // by a macOS-only trim of llama.cpp's build-xcframework.sh.
+        .binaryTarget(
+            name: "llama",
+            path: "Vendor/llama.xcframework"
         ),
     ]
 )
