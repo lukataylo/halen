@@ -29,6 +29,12 @@ final class OllamaInferenceClient: InferenceClient {
             model: modelId,
             messages: [.init(role: "user", content: request.prompt)],
             stream: false,
+            // Gemma 4 is a thinking model. Every Halen use case (classify,
+            // summarise, rephrase, brief) wants the *output*, not chain-of-
+            // thought — and with thinking on, the reasoning tokens count
+            // against num_predict, so a long think can exhaust the budget and
+            // return an empty `content`. Disable it across the board.
+            think: false,
             options: .init(
                 temperature: request.temperature,
                 num_predict: request.maxTokens,
@@ -86,6 +92,7 @@ private struct ChatRequest: Encodable {
     let model: String
     let messages: [ChatMessage]
     let stream: Bool
+    let think: Bool
     let options: ChatOptions
 }
 
