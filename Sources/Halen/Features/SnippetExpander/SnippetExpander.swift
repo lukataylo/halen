@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import ApplicationServices
 
 /// Type `;tag` followed by a separator (space / punctuation) and Halen swaps it
 /// for the snippet's content. Static snippets are instant; AI snippets show a
@@ -163,13 +164,20 @@ final class SnippetExpander: HalenPlugin {
             return
         }
 
+        // Capture the field we're expanding in *now*. The Gemma response is
+        // async and can take several seconds; if the user alt-tabs away in the
+        // meantime we must still write back to this element, not whatever is
+        // focused when the response lands.
+        let targetElement = caretObserver?.currentElement
+
         // Step 1: show a placeholder so something visibly happens immediately.
         let placeholder = "[…]"
-        applyReplacement(placeholder, at: replaceRange, trigger: snippet.trigger)
+        let placeholderWritten = applyReplacement(placeholder, at: replaceRange, trigger: snippet.trigger, in: targetElement)
         let placeholderRange = NSRange(
             location: replaceRange.location,
             length: (placeholder as NSString).length
         )
+        Log.info("SnippetExpander: \(snippet.trigger) placeholder write=\(placeholderWritten) priorTextLen=\(priorText.count) range=\(replaceRange.location),\(replaceRange.length)")
 
         let prompt = """
         \(snippet.value)
@@ -186,18 +194,24 @@ final class SnippetExpander: HalenPlugin {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
                 guard !cleaned.isEmpty else {
+                    Log.warn("SnippetExpander: \(snippet.trigger) returned empty body, restoring trigger")
                     self?.applyReplacement(replacesPrior ? priorText : snippet.trigger,
                                             at: placeholderRange,
-                                            trigger: snippet.trigger)
+                                            trigger: snippet.trigger,
+                                            in: targetElement)
                     return
                 }
-                Log.info("SnippetExpander: AI snippet \(snippet.trigger) completed (\(response.latencyMs)ms)")
-                self?.applyReplacement(cleaned, at: placeholderRange, trigger: snippet.trigger)
+                Log.info("SnippetExpander: \(snippet.trigger) completed (\(response.latencyMs)ms) responseLen=\(cleaned.count)")
+                let wrote = self?.applyReplacement(cleaned, at: placeholderRange, trigger: snippet.trigger, in: targetElement) ?? false
+                if !wrote {
+                    Log.warn("SnippetExpander: \(snippet.trigger) response AX write failed at range \(placeholderRange.location),\(placeholderRange.length) — target element stale or unsupported")
+                }
             } catch {
                 Log.warn("SnippetExpander: AI snippet \(snippet.trigger) failed: \(error)")
                 self?.applyReplacement(replacesPrior ? priorText : snippet.trigger,
                                         at: placeholderRange,
-                                        trigger: snippet.trigger)
+                                        trigger: snippet.trigger,
+                                        in: targetElement)
             }
         }
     }
@@ -215,8 +229,16 @@ final class SnippetExpander: HalenPlugin {
         return 0
     }
 
-    private func applyReplacement(_ replacement: String, at range: NSRange, trigger: String) {
+    /// When `element` is supplied the write targets that specific field even if
+    /// focus has since moved (used for async AI responses). When nil it falls
+    /// back to whatever is currently focused (instant static/dynamic snippets).
+    @discardableResult
+    private func applyReplacement(_ replacement: String, at range: NSRange, trigger: String,
+                                  in element: AXUIElement? = nil) -> Bool {
         recentWrites.append(PendingWrite(trigger: trigger, timestamp: Date()))
-        caretObserver?.replaceRange(range, with: replacement)
+        if let element {
+            return caretObserver?.replaceRange(range, with: replacement, in: element) ?? false
+        }
+        return caretObserver?.replaceRange(range, with: replacement) ?? false
     }
 }

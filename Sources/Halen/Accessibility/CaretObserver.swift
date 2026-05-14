@@ -55,14 +55,25 @@ final class CaretObserver {
         tearDownObserver()
     }
 
+    /// The element currently focused. Callers can capture this and pass it back
+    /// to `replaceRange(_:with:in:)` later, so an async write (e.g. a Gemma
+    /// response that arrives after the user alt-tabbed away) still lands in the
+    /// field it was started from rather than whatever happens to be focused now.
+    var currentElement: AXUIElement? { focusedElement }
+
     /// Replace `range` (UTF-16 units) in the currently focused element with `replacement`.
-    /// Uses the AX "set selection then set selected-text" pattern, which most native AppKit
-    /// text fields honor. Returns false for apps that don't support AX writes
-    /// (most Electron / web text fields, terminals).
     @discardableResult
     func replaceRange(_ range: NSRange, with replacement: String) -> Bool {
         guard let element = focusedElement else { return false }
+        return replaceRange(range, with: replacement, in: element)
+    }
 
+    /// Replace `range` (UTF-16 units) in a specific `element` with `replacement`.
+    /// Uses the AX "set selection then set selected-text" pattern, which most native AppKit
+    /// text fields honor. Returns false for apps that don't support AX writes
+    /// (most Electron / web text fields, terminals) or if the element has gone stale.
+    @discardableResult
+    func replaceRange(_ range: NSRange, with replacement: String, in element: AXUIElement) -> Bool {
         var cfRange = CFRange(location: range.location, length: range.length)
         guard let rangeValue: AXValue = withUnsafePointer(to: &cfRange, { ptr in
             AXValueCreate(.cfRange, UnsafeRawPointer(ptr))
