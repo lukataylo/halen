@@ -120,7 +120,11 @@ actor LlamaContext {
         let capacity = utf8Count + (addBOS ? 1 : 0) + 1
         let tokens = UnsafeMutablePointer<llama_token>.allocate(capacity: capacity)
         defer { tokens.deallocate() }
-        let count = llama_tokenize(vocab, text, Int32(utf8Count), tokens, Int32(capacity), addBOS, false)
+        // parse_special: true — the prompt carries Gemma chat-template control
+        // tokens (`<start_of_turn>`, `<end_of_turn>`). Without this they tokenize
+        // as literal text, the model never sees a real turn boundary, never hits
+        // EOG, and loops the template forever.
+        let count = llama_tokenize(vocab, text, Int32(utf8Count), tokens, Int32(capacity), addBOS, true)
         guard count > 0 else { return [] }
         return (0..<Int(count)).map { tokens[$0] }
     }

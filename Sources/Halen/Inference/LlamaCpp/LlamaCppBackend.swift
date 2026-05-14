@@ -40,11 +40,14 @@ actor LlamaCppBackend: InferenceBackend {
         let start = Date()
         // Gemma instruction-tuned chat template.
         let prompt = "<start_of_turn>user\n\(request.prompt)<end_of_turn>\n<start_of_turn>model\n"
+        // `<end_of_turn>` is the real EOG token and stops generation on its own;
+        // the explicit stops are a guard in case the model emits a turn marker
+        // as plain text instead of the control token.
         let raw = await context.generate(
             prompt: prompt,
             maxTokens: request.maxTokens,
             temperature: request.temperature,
-            stop: request.stop
+            stop: request.stop + ["<end_of_turn>", "<start_of_turn>"]
         )
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw LlamaBackendError.emptyResponse }
