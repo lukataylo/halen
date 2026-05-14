@@ -1,15 +1,16 @@
 import SwiftUI
 import AppKit
 
-/// App-level settings: Accessibility permission status, live Ollama connection probe
-/// (so the user can see at a glance whether their local Gemma 4 daemon is reachable
-/// and which models are loaded), and About metadata. Sits on the same push-navigation
+/// App-level settings: Accessibility permission status, the inference backend
+/// picker (priority order + live availability of Apple Intelligence / Ollama /
+/// future local runtimes), and About metadata. Sits on the same push-navigation
 /// stack as plugin detail views.
 struct SettingsView: View {
     @Bindable var state: AppState
+    @Bindable var inferenceSettings: InferenceSettings
+    let router: RouterInferenceClient
     let onBack: () -> Void
 
-    @State private var ollamaStatus: OllamaStatus = .checking
     @State private var pollTask: Task<Void, Never>?
     @AppStorage(OverlayController.showDotKey) private var showCaretIndicator: Bool = true
 
@@ -136,10 +137,10 @@ struct SettingsView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    cardLabel("Local AI")
+                    cardLabel("Inference backends")
                     Spacer()
                     Button {
-                        Task { await refreshOllama() }
+                        Task { await router.refreshAvailability() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 10, weight: .medium))
@@ -148,38 +149,72 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                 }
 
-                HStack(spacing: 10) {
-                    statusDot(ollamaStatusKind)
-                    Text(ollamaStatusText)
-                        .font(.system(.callout))
-                    Spacer()
+                ForEach(Array(inferenceSettings.preferenceOrder.enumerated()), id: \.element) { index, kind in
+                    backendRow(kind: kind, index: index)
                 }
 
-                if case .connected(let models) = ollamaStatus, !models.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(models, id: \.self) { model in
-                            HStack(spacing: 6) {
-                                Image(systemName: "cpu")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.tertiary)
-                                Text(model)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                            }
-                        }
-                    }
-                    .padding(.top, 2)
-                }
-
-                if case .unavailable = ollamaStatus {
-                    Text("Start Ollama with `ollama serve` to enable Gemma-backed plugins like Sentiment Guard.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text("Halen tries backends in this order — the first available one handles each request. Reorder with the arrows.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    private func backendRow(kind: BackendKind, index: Int) -> some View {
+        let availability = inferenceSettings.availability[kind]
+        let statusKind: StatusKind
+        let detail: String
+        switch availability {
+        case .available:
+            statusKind = .ok
+            detail = "Available"
+        case .unavailable(let reason):
+            statusKind = .error
+            detail = reason
+        case nil:
+            statusKind = .warning
+            detail = "Checking…"
+        }
+        return HStack(spacing: 10) {
+            statusDot(statusKind)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(kind.displayName)
+                    .font(.system(.callout, weight: .medium))
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 6)
+            VStack(spacing: 2) {
+                Button {
+                    moveBackend(from: index, to: index - 1)
+                } label: {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .disabled(index == 0)
+                Button {
+                    moveBackend(from: index, to: index + 1)
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .disabled(index == inferenceSettings.preferenceOrder.count - 1)
+            }
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func moveBackend(from: Int, to: Int) {
+        guard to >= 0, to < inferenceSettings.preferenceOrder.count else { return }
+        var order = inferenceSettings.preferenceOrder
+        let item = order.remove(at: from)
+        order.insert(item, at: to)
+        inferenceSettings.preferenceOrder = order
     }
 
     private var aboutCard: some View {
@@ -253,60 +288,17 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Ollama probe
-
-    enum OllamaStatus: Equatable {
-        case checking
-        case connected(models: [String])
-        case unavailable
-    }
-
-    private var ollamaStatusKind: StatusKind {
-        switch ollamaStatus {
-        case .checking: return .warning
-        case .connected: return .ok
-        case .unavailable: return .error
-        }
-    }
-
-    private var ollamaStatusText: String {
-        switch ollamaStatus {
-        case .checking:    return "Checking localhost:11434…"
-        case .connected:   return "Connected to localhost:11434"
-        case .unavailable: return "Not reachable on localhost:11434"
-        }
-    }
+    // MARK: - Backend polling
 
     private func startPolling() {
+        // `onAppear` can fire more than once for the same view — cancel any
+        // existing loop so we don't leak a second infinite poll task.
+        pollTask?.cancel()
         pollTask = Task { @MainActor in
             while !Task.isCancelled {
-                await refreshOllama()
+                await router.refreshAvailability()
                 try? await Task.sleep(for: .seconds(10))
             }
-        }
-    }
-
-    private func refreshOllama() async {
-        var request = URLRequest(url: URL(string: "http://localhost:11434/api/tags")!)
-        request.timeoutInterval = 2
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                ollamaStatus = .unavailable
-                return
-            }
-            struct TagsResponse: Decodable {
-                struct Model: Decodable { let name: String }
-                let models: [Model]
-            }
-            let decoded = try JSONDecoder().decode(TagsResponse.self, from: data)
-            let gemmas = decoded.models
-                .map(\.name)
-                .filter { $0.lowercased().contains("gemma") }
-                .sorted()
-            ollamaStatus = .connected(models: gemmas)
-        } catch {
-            ollamaStatus = .unavailable
         }
     }
 }

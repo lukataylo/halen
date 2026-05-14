@@ -1,0 +1,124 @@
+import Foundation
+
+/// Routes each `InferenceRequest` to the best available backend, falling through
+/// the candidate chain on failure. Drops in behind the `InferenceClient` protocol
+/// at `AppCoordinator`, so plugins see no change.
+///
+/// Concurrency: per-backend `AsyncSemaphore(1)` serializes same-backend requests
+/// (two plugins hammering one Ollama daemon was causing 15s+ collisions) while
+/// different backends still run in parallel.
+actor RouterInferenceClient: InferenceClient {
+    private let backends: [InferenceBackend]
+    private let settings: InferenceSettings
+    private let gates: [BackendKind: AsyncSemaphore]
+
+    private var availabilityCache: [BackendKind: (value: BackendAvailability, at: Date)] = [:]
+    private let availabilityTTL: TimeInterval = 15
+
+    init(backends: [InferenceBackend], settings: InferenceSettings) {
+        self.backends = backends
+        self.settings = settings
+        var gates: [BackendKind: AsyncSemaphore] = [:]
+        for backend in backends {
+            gates[backend.kind] = AsyncSemaphore(value: 1)
+        }
+        self.gates = gates
+    }
+
+    func complete(_ request: InferenceRequest) async throws -> InferenceResponse {
+        let chain = await orderedCandidates(for: request)
+        guard !chain.isEmpty else { throw RouterError.noBackendAvailable(request.tier) }
+
+        var lastError: Error?
+        for backend in chain {
+            let availability = await cachedAvailability(backend)
+            guard availability.isAvailable else {
+                lastError = RouterError.backendUnavailable(backend.kind)
+                continue
+            }
+            do {
+                return try await run(request, on: backend)
+            } catch is CancellationError {
+                throw CancellationError()   // a cancelled plugin isn't a backend failure
+            } catch {
+                lastError = error
+                availabilityCache[backend.kind] = nil   // re-probe before trusting it again
+                Log.warn("Router: \(backend.kind.rawValue) failed (\(error)) — trying next backend")
+                continue
+            }
+        }
+        throw RouterError.allBackendsFailed(lastError)
+    }
+
+    /// Clear the availability cache and re-probe every backend now. Called by the
+    /// Settings backend picker's Refresh button and its periodic poll.
+    func refreshAvailability() async {
+        availabilityCache.removeAll()
+        for backend in backends {
+            _ = await cachedAvailability(backend)
+        }
+    }
+
+    // MARK: - Routing
+
+    private func orderedCandidates(for request: InferenceRequest) async -> [InferenceBackend] {
+        let preference = await settings.preferenceOrder
+        let eligible = backends.filter { $0.capability.servesTiers.contains(request.tier) }
+
+        // Lexicographic sort key (user preference, task-affinity, base priority) —
+        // no magic-number bands; preference always wins, then task fit, then the
+        // backend's own tie-breaker.
+        func sortKey(_ backend: InferenceBackend) -> (Int, Int, Int) {
+            let prefIndex = preference.firstIndex(of: backend.kind) ?? preference.count
+            let taskMismatch = backend.capability.strongAt.contains(request.taskKind) ? 0 : 1
+            return (prefIndex, taskMismatch, backend.capability.basePriority)
+        }
+        return eligible.sorted { sortKey($0) < sortKey($1) }
+    }
+
+    private func run(_ request: InferenceRequest, on backend: InferenceBackend) async throws -> InferenceResponse {
+        let gate = gates[backend.kind]!
+        // Throws `CancellationError` if cancelled while queued — no permit was
+        // acquired in that case, so there is nothing to release.
+        try await gate.wait()
+        do {
+            try Task.checkCancellation()   // cancelled after acquiring? bail before working
+            let response = try await backend.complete(request)
+            await gate.signal()
+            return response
+        } catch {
+            await gate.signal()
+            throw error
+        }
+    }
+
+    private func cachedAvailability(_ backend: InferenceBackend) async -> BackendAvailability {
+        if let cached = availabilityCache[backend.kind],
+           Date().timeIntervalSince(cached.at) < availabilityTTL {
+            return cached.value
+        }
+        let value = await backend.availability()
+        availabilityCache[backend.kind] = (value, Date())
+        let settings = self.settings
+        let kind = backend.kind
+        await MainActor.run { settings.availability[kind] = value }
+        return value
+    }
+}
+
+enum RouterError: Error, CustomStringConvertible {
+    case noBackendAvailable(ModelTier)
+    case backendUnavailable(BackendKind)
+    case allBackendsFailed(Error?)
+
+    var description: String {
+        switch self {
+        case .noBackendAvailable(let tier):
+            return "No inference backend can serve the \(tier.rawValue) tier"
+        case .backendUnavailable(let kind):
+            return "Backend \(kind.displayName) is unavailable"
+        case .allBackendsFailed(let underlying):
+            return "All inference backends failed" + (underlying.map { ": \($0)" } ?? "")
+        }
+    }
+}

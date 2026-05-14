@@ -9,7 +9,9 @@ struct HalenApp: App {
         MenuBarExtra {
             HalenCenterView(
                 state: appDelegate.coordinator.state,
-                registry: appDelegate.coordinator.registry
+                registry: appDelegate.coordinator.registry,
+                inferenceSettings: appDelegate.coordinator.inferenceSettings,
+                router: appDelegate.coordinator.inference
             )
         } label: {
             Image(nsImage: Self.menubarIcon)

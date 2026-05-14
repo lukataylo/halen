@@ -13,6 +13,8 @@ enum CenterNav: Equatable {
 struct HalenCenterView: View {
     @Bindable var state: AppState
     let registry: PluginRegistry
+    @Bindable var inferenceSettings: InferenceSettings
+    let router: RouterInferenceClient
     @State private var nav: CenterNav = .marketplace
 
     var body: some View {
@@ -29,8 +31,13 @@ struct HalenCenterView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             case .settings:
-                SettingsView(state: state, onBack: { back() })
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                SettingsView(
+                    state: state,
+                    inferenceSettings: inferenceSettings,
+                    router: router,
+                    onBack: { back() }
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
         .frame(width: 380)

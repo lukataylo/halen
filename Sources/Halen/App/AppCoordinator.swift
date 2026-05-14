@@ -17,7 +17,8 @@ enum PermissionStatus {
 final class AppCoordinator {
     let state = AppState()
     let eventBus = EventBus()
-    let inference: InferenceClient = OllamaInferenceClient()
+    let inferenceSettings = InferenceSettings()
+    let inference: RouterInferenceClient
     let typoStore = TypoStore()
     let registry = PluginRegistry()
 
@@ -26,6 +27,16 @@ final class AppCoordinator {
 
     private var permissionPollTask: Task<Void, Never>?
     private var eventLogTask: Task<Void, Never>?
+    /// Set once `stop()` runs, so a permission-poll tick that already passed its
+    /// cancellation check can't still spin up observers after shutdown.
+    private var isStopped = false
+
+    init() {
+        inference = RouterInferenceClient(
+            backends: InferenceBackends.makeAll(),
+            settings: inferenceSettings
+        )
+    }
 
     func start() {
         Log.info("Halen starting")
@@ -58,6 +69,7 @@ final class AppCoordinator {
 
     func stop() {
         Log.info("Halen stopping")
+        isStopped = true
         permissionPollTask?.cancel()
         eventLogTask?.cancel()
         // Stop plugins explicitly so background tasks, hotkeys, and panels
@@ -70,6 +82,7 @@ final class AppCoordinator {
     }
 
     private func startObservers() {
+        guard !isStopped else { return }
         Log.info("Starting observers and plugin registry")
 
         let observer = CaretObserver(eventBus: eventBus)

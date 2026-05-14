@@ -1,0 +1,70 @@
+import Foundation
+
+#if canImport(FoundationModels)
+import FoundationModels
+
+/// Apple's on-device model via the Foundation Models framework (macOS 26+).
+/// Zero install, zero bundled weight — but gated on Apple-Intelligence-capable
+/// hardware and the feature being enabled, so it's an *optional* backend the
+/// router falls through when unavailable.
+///
+/// Serves `.small` and `.medium`; the system model isn't sized for `.large`.
+@available(macOS 26, *)
+final class AppleFMBackend: InferenceBackend {
+    let kind: BackendKind = .appleFoundationModels
+    let capability = BackendCapability(
+        servesTiers: [.small, .medium],
+        strongAt: [.classification, .generation],
+        basePriority: 10
+    )
+
+    func availability() async -> BackendAvailability {
+        switch SystemLanguageModel.default.availability {
+        case .available:
+            return .available
+        case .unavailable(let reason):
+            return .unavailable(reason: Self.describe(reason))
+        @unknown default:
+            return .unavailable(reason: "Apple model unavailable")
+        }
+    }
+
+    func complete(_ request: InferenceRequest) async throws -> InferenceResponse {
+        let start = Date()
+        // Fresh session per request: plugin calls are stateless one-shots, so
+        // there's no conversation to preserve and this avoids context growth.
+        let session = LanguageModelSession()
+        let options = GenerationOptions(
+            temperature: request.temperature,
+            maximumResponseTokens: request.maxTokens
+        )
+        let response = try await session.respond(to: request.prompt, options: options)
+
+        // Foundation Models has no native stop-sequence param — truncate at the
+        // earliest match across all stop tokens (order-independent).
+        var text = response.content
+        if let earliest = request.stop
+            .filter({ !$0.isEmpty })
+            .compactMap({ text.range(of: $0)?.lowerBound })
+            .min() {
+            text = String(text[..<earliest])
+        }
+
+        let latency = Int(Date().timeIntervalSince(start) * 1000)
+        return InferenceResponse(text: text, modelId: "apple-fm/system", latencyMs: latency)
+    }
+
+    private static func describe(_ reason: SystemLanguageModel.Availability.UnavailableReason) -> String {
+        switch reason {
+        case .deviceNotEligible:
+            return "This Mac isn't eligible for Apple Intelligence"
+        case .appleIntelligenceNotEnabled:
+            return "Apple Intelligence is turned off in System Settings"
+        case .modelNotReady:
+            return "Apple's on-device model is still downloading"
+        @unknown default:
+            return "Apple model unavailable"
+        }
+    }
+}
+#endif
