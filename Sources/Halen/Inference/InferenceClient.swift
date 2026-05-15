@@ -9,20 +9,34 @@ enum InferenceTaskKind: String, Sendable, Codable {
 }
 
 struct InferenceRequest: Sendable {
-    var prompt: String
-    var tier: ModelTier
-    var maxTokens: Int = 256
-    var temperature: Double = 0.2
-    var stop: [String] = []
+    let prompt: String
+    let tier: ModelTier
+    let maxTokens: Int
+    let temperature: Double
+    let stop: [String]
     /// Defaults to `.generation` — the conservative choice, so the router only
     /// down-routes to a weak model when a caller explicitly opts into it.
-    var taskKind: InferenceTaskKind = .generation
+    let taskKind: InferenceTaskKind
+
+    init(prompt: String,
+         tier: ModelTier,
+         maxTokens: Int = 256,
+         temperature: Double = 0.2,
+         stop: [String] = [],
+         taskKind: InferenceTaskKind = .generation) {
+        self.prompt = prompt
+        self.tier = tier
+        self.maxTokens = maxTokens
+        self.temperature = temperature
+        self.stop = stop
+        self.taskKind = taskKind
+    }
 }
 
 struct InferenceResponse: Sendable {
-    var text: String
-    var modelId: String
-    var latencyMs: Int
+    let text: String
+    let modelId: String
+    let latencyMs: Int
 }
 
 protocol InferenceClient: Sendable {

@@ -14,11 +14,11 @@ struct VoiceListeningIndicator: View {
             // Recording-dot indicator
             ZStack {
                 Circle()
-                    .fill(Color(red: 0.0, green: 0.30, blue: 0.99).opacity(0.4))
+                    .fill(Color.halenCobalt.opacity(0.4))
                     .scaleEffect(pulse ? 1.7 : 1.0)
                     .opacity(pulse ? 0 : 1)
                 Circle()
-                    .fill(Color(red: 0.0, green: 0.30, blue: 0.99))
+                    .fill(Color.halenCobalt)
                     .frame(width: 9, height: 9)
             }
             .frame(width: 20, height: 20)
@@ -31,7 +31,7 @@ struct VoiceListeningIndicator: View {
             // Stop = commit transcript
             CircleIconButton(
                 systemImage: "stop.fill",
-                tint: Color(red: 0.0, green: 0.30, blue: 0.99),
+                tint: Color.halenCobalt,
                 action: onStop
             )
 
@@ -67,7 +67,7 @@ struct VoiceListeningIndicator: View {
 struct VoiceWaveformView: View {
     let levels: [Float]
     private let barCount = 28
-    private let accent = Color(red: 0.0, green: 0.30, blue: 0.99)
+    private let accent = Color.halenCobalt   // chart bars use the brand colour
 
     var body: some View {
         GeometryReader { geo in
@@ -194,13 +194,6 @@ struct VoiceDictationDetailView: View {
     }
 
     // MARK: - Bits
-
-    private func cardLabel(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(.system(size: 10, weight: .semibold))
-            .tracking(0.5)
-            .foregroundStyle(.secondary)
-    }
 
     private func permissionRow(label: String, state: PermissionState) -> some View {
         HStack(spacing: 8) {

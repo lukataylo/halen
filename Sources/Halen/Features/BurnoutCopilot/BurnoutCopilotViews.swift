@@ -12,7 +12,7 @@ struct BurnoutCopilotPopup: View {
             HStack(spacing: 10) {
                 Image(systemName: "brain.head.profile")
                     .font(.system(size: 22))
-                    .foregroundStyle(Color(red: 0.0, green: 0.30, blue: 0.99))
+                    .foregroundStyle(Color.halenCobalt)
                 Text("Take 10?")
                     .font(.system(.title3, weight: .semibold))
                 Spacer()
@@ -57,7 +57,7 @@ struct BurnoutCopilotPopup: View {
                 .fill(.regularMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color(red: 0.0, green: 0.30, blue: 0.99).opacity(0.3), lineWidth: 1)
+                        .strokeBorder(Color.halenCobalt.opacity(0.3), lineWidth: 1)
                 )
         )
     }
@@ -189,13 +189,6 @@ struct BurnoutCopilotDetailView: View {
     }
 
     // MARK: - Bits
-
-    private func cardLabel(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(.system(size: 10, weight: .semibold))
-            .tracking(0.5)
-            .foregroundStyle(.secondary)
-    }
 
     private func signalRow(label: String, detail: String, tripped: Bool, progress: Double) -> some View {
         VStack(alignment: .leading, spacing: 4) {

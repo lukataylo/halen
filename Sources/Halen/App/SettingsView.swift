@@ -126,7 +126,7 @@ struct SettingsView: View {
                     .frame(width: 18, height: 18)
             } else {
                 Circle()
-                    .fill(Color(red: 0, green: 0.30, blue: 0.99))
+                    .fill(Color.halenCobalt)
                     .frame(width: 12, height: 12)
             }
         }
@@ -253,13 +253,6 @@ struct SettingsView: View {
 
     // MARK: - Helpers
 
-    private func cardLabel(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(.system(size: 10, weight: .semibold))
-            .tracking(0.5)
-            .foregroundStyle(.secondary)
-    }
-
     private enum StatusKind { case ok, warning, error }
 
     private func statusDot(_ kind: StatusKind) -> some View {
@@ -297,7 +290,10 @@ struct SettingsView: View {
         pollTask = Task { @MainActor in
             while !Task.isCancelled {
                 await router.refreshAvailability()
-                try? await Task.sleep(for: .seconds(10))
+                // 30 s, not 10 — each refresh re-probes every backend, including
+                // a 1 s blocking call to localhost:11434 if Ollama isn't running.
+                // The user can hit the Refresh button for an immediate update.
+                try? await Task.sleep(for: .seconds(30))
             }
         }
     }

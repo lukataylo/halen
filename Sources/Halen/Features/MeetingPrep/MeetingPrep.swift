@@ -260,9 +260,23 @@ final class MeetingPrep: HalenPlugin {
         do {
             let data = try Data(contentsOf: processedURL)
             let list = try JSONDecoder().decode([String].self, from: data)
-            processedIds = Set(list)
+            // Prune anything older than 24 h. Each key is "<eventId>@<unix>";
+            // we never brief a past meeting, so old keys are dead weight that
+            // would otherwise grow the file forever.
+            let cutoff = Date().addingTimeInterval(-24 * 60 * 60).timeIntervalSince1970
+            processedIds = Set(list.filter { key in
+                guard let atIdx = key.lastIndex(of: "@"),
+                      let ts = Double(key[key.index(after: atIdx)...]) else {
+                    // Malformed key — keep it (paranoid; better than re-briefing).
+                    return true
+                }
+                return ts >= cutoff
+            })
         } catch {
-            // first launch
+            // First launch (file missing) or corrupt JSON — start clean. We
+            // could distinguish the two and back up the corrupt file, but
+            // re-briefing today's already-briefed meetings is the worst case
+            // and it self-heals as the day progresses.
         }
     }
 

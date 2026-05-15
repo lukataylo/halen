@@ -24,7 +24,13 @@ final class TypoFixer: HalenPlugin {
     private weak var caretObserver: CaretObserver?
     private var task: Task<Void, Never>?
 
+    /// Last known full-text snapshot per app, used to compute the diff that
+    /// powers correction-learning. Capped at `maxSnapshots` apps with MRU
+    /// eviction — without it, switching through dozens of apps would retain
+    /// 8 KB strings forever per app and grow unbounded over a session.
     private var lastSnapshot: [String: NSString] = [:]
+    private var snapshotOrder: [String] = []   // MRU at end
+    private static let maxSnapshots = 16
 
     private struct PendingDeletion {
         let deletedWord: String
@@ -57,11 +63,11 @@ final class TypoFixer: HalenPlugin {
             for await event in eventBus.subscribe() {
                 guard let self else { return }
                 switch event {
-                case .textPaused(let p):
-                    self.handle(text: p.text, caretOffset: p.caretOffset, app: p.appBundleId)
-                case .appFocused(let p):
-                    self.lastSnapshot.removeValue(forKey: p.appBundleId)
-                    self.pendingDeletions.removeValue(forKey: p.appBundleId)
+                case .textPaused(let payload):
+                    self.handle(text: payload.text, caretOffset: payload.caretOffset, app: payload.appBundleId)
+                case .appFocused(let payload):
+                    self.forgetSnapshot(for: payload.appBundleId)
+                    self.pendingDeletions.removeValue(forKey: payload.appBundleId)
                 default:
                     break
                 }
@@ -73,18 +79,38 @@ final class TypoFixer: HalenPlugin {
         task?.cancel()
         task = nil
         lastSnapshot.removeAll()
+        snapshotOrder.removeAll()
         pendingDeletions.removeAll()
     }
 
     private func handle(text: String, caretOffset: Int, app: String) {
         let ns = text as NSString
-        defer { lastSnapshot[app] = ns }
+        defer { recordSnapshot(ns, for: app) }
 
         if let previous = lastSnapshot[app] {
             learn(app: app, old: previous, new: ns)
         }
 
         applyKnownCorrection(text: ns, caretOffset: caretOffset)
+    }
+
+    /// Record `ns` as the latest snapshot for `app` and bump it to the MRU end.
+    /// Evicts the least-recently-touched app once we exceed `maxSnapshots`.
+    private func recordSnapshot(_ ns: NSString, for app: String) {
+        lastSnapshot[app] = ns
+        if let i = snapshotOrder.firstIndex(of: app) { snapshotOrder.remove(at: i) }
+        snapshotOrder.append(app)
+        while snapshotOrder.count > Self.maxSnapshots {
+            let evict = snapshotOrder.removeFirst()
+            lastSnapshot.removeValue(forKey: evict)
+        }
+    }
+
+    /// Drop the snapshot for `app` (e.g. on focus change) keeping the LRU
+    /// side-list consistent.
+    private func forgetSnapshot(for app: String) {
+        lastSnapshot.removeValue(forKey: app)
+        snapshotOrder.removeAll { $0 == app }
     }
 
     // MARK: - Learning
@@ -192,12 +218,6 @@ final class TypoFixer: HalenPlugin {
         recentSelfEdits.append(SelfEdit(typo: word, correction: cased, timestamp: now))
         recentAutoFixes.append(SelfEdit(typo: word, correction: cased, timestamp: now))
         caretObserver?.replaceRange(range, with: cased)
-    }
-
-    private func character(_ ns: NSString, at index: Int) -> Character? {
-        guard index >= 0, index < ns.length else { return nil }
-        guard let scalar = Unicode.Scalar(ns.character(at: index)) else { return nil }
-        return Character(scalar)
     }
 
     private func matchCase(of source: String, in replacement: String) -> String {

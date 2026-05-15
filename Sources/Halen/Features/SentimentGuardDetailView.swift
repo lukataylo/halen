@@ -212,12 +212,6 @@ struct SentimentGuardDetailView: View {
         }
     }
 
-    private func cardLabel(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(.system(size: 10, weight: .semibold))
-            .tracking(0.5)
-            .foregroundStyle(.secondary)
-    }
 }
 
 // MARK: - Stat pillar
@@ -314,16 +308,4 @@ private struct RuleRow: View {
     }
 }
 
-// MARK: - Shared color helper
-
-func sentimentRuleColor(_ name: String) -> Color {
-    switch name.lowercased() {
-    case "red":    return Color(red: 0.92, green: 0.27, blue: 0.27)
-    case "orange": return Color(red: 0.97, green: 0.58, blue: 0.20)
-    case "yellow": return Color(red: 0.93, green: 0.80, blue: 0.20)
-    case "blue":   return Color(red: 0.21, green: 0.51, blue: 0.92)
-    case "purple": return Color(red: 0.62, green: 0.36, blue: 0.92)
-    case "gray", "grey": return Color(white: 0.55)
-    default:       return Color.accentColor
-    }
-}
+// `sentimentRuleColor(_:)` lives in App/Theme/HalenTheme.swift.

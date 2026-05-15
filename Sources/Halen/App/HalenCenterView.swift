@@ -108,7 +108,7 @@ struct HalenCenterView: View {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [Color(red: 0, green: 0.30, blue: 0.99),
+                        colors: [Color.halenCobalt,
                                  Color(red: 0.00, green: 0.43, blue: 1.00)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing

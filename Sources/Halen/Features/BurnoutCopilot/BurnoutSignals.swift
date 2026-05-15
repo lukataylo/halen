@@ -76,7 +76,6 @@ final class ToneTrendTracker {
 
     private(set) var window: [Tone] = []
     private let capacity = 10
-    private let sharpThreshold = 3
 
     func record(_ tone: Tone) {
         window.append(tone)
@@ -86,7 +85,6 @@ final class ToneTrendTracker {
     }
 
     var sharpCount: Int { window.filter { $0 == .sharp }.count }
-    var trips: Bool { sharpCount >= sharpThreshold }
 }
 
 /// Signal C: calendar density via EventKit. Counts events in the next 4 hours

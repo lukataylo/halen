@@ -166,16 +166,6 @@ final class TypoStore {
             addedKeys.append(typo)
         }
 
-        if entries["halendemo"] == nil {
-            entries["halendemo"] = Entry(
-                correction: "HALEN AUTO-LEARN ACTIVE",
-                observations: activeThreshold,
-                firstSeen: now,
-                lastSeen: now
-            )
-            addedKeys.append("halendemo")
-        }
-
         if !addedKeys.isEmpty {
             save()
             Log.info("TypoStore seeded \(addedKeys.count) new entries; total \(entries.count)")

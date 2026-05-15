@@ -25,7 +25,10 @@ final class OllamaBackend: InferenceBackend {
 
     func availability() async -> BackendAvailability {
         var request = URLRequest(url: baseURL.appending(path: "api/tags"))
-        request.timeoutInterval = 2
+        // 1 s, not 2: a refused localhost connection returns immediately;
+        // only a hung daemon needs the timeout, and the router caches a
+        // negative result for 60 s so we don't probe on a tight loop.
+        request.timeoutInterval = 1
         do {
             let (_, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {

@@ -41,10 +41,10 @@ struct MeetingPrepDetailView: View {
                     .interpolation(.high)
                     .frame(width: badgeSize, height: badgeSize)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .shadow(color: Color(red: 0, green: 0.30, blue: 0.99).opacity(0.4), radius: 12, x: 0, y: 6)
+                    .shadow(color: Color.halenCobalt.opacity(0.4), radius: 12, x: 0, y: 6)
             } else {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(red: 0, green: 0.30, blue: 0.99))
+                    .fill(Color.halenCobalt)
                     .frame(width: badgeSize, height: badgeSize)
                     .overlay(
                         Image(systemName: "calendar.badge.clock")
@@ -99,7 +99,7 @@ struct MeetingPrepDetailView: View {
                     .padding(.horizontal, 12)
                 Text(relative(start))
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(red: 0, green: 0.30, blue: 0.99))
+                    .foregroundStyle(Color.halenCobalt)
             }
 
             if !state.nextEventAttendees.isEmpty {
@@ -258,7 +258,7 @@ struct MeetingPrepDetailView: View {
                 Button("Request", action: action)
                     .buttonStyle(.borderless)
                     .controlSize(.small)
-                    .foregroundStyle(Color(red: 0, green: 0.30, blue: 0.99))
+                    .foregroundStyle(Color.halenCobalt)
             } else {
                 Text("Pending")
                     .font(.system(size: 11))
@@ -321,13 +321,6 @@ struct MeetingPrepDetailView: View {
         }
     }
 
-    private func cardLabel(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(.system(size: 10, weight: .semibold))
-            .tracking(0.5)
-            .foregroundStyle(.secondary)
-    }
-
     private func relative(_ date: Date) -> String {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .full
@@ -335,144 +328,4 @@ struct MeetingPrepDetailView: View {
     }
 }
 
-// MARK: - HalenChatBubble
-
-/// Cobalt-blue chat bubble used by Meeting Prep (and reusable by other plugins).
-/// Avatar on the left, bubble content on the right. Bullets in the body get
-/// rendered as a clean list; loading state animates three dots in the bubble.
-struct HalenChatBubble: View {
-    let headline: String
-    let content: String?
-    let isLoading: Bool
-    let onCopy: (() -> Void)?
-
-    private let cobalt = Color(red: 0, green: 0.30, blue: 0.99)
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            avatar
-            bubble
-            Spacer(minLength: 0)
-        }
-    }
-
-    private var avatar: some View {
-        Group {
-            if let img = NSImage(named: "HalenLogo") {
-                Image(nsImage: img)
-                    .resizable()
-                    .interpolation(.high)
-            } else {
-                Rectangle().fill(cobalt)
-            }
-        }
-        .frame(width: 30, height: 30)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    private var bubble: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(headline)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.85))
-                .lineLimit(1)
-
-            if isLoading {
-                TypingDots(color: .white)
-                    .padding(.vertical, 6)
-            } else if let content, !content.isEmpty {
-                bullets(from: content)
-                if let onCopy {
-                    HStack {
-                        Spacer()
-                        Button(action: onCopy) {
-                            Label("Copy", systemImage: "doc.on.doc")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.9))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule().fill(.white.opacity(0.15))
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(
-            UnevenRoundedRectangle(
-                cornerRadii: .init(topLeading: 4, bottomLeading: 14, bottomTrailing: 14, topTrailing: 14)
-            )
-            .fill(cobalt)
-        )
-        .shadow(color: cobalt.opacity(0.30), radius: 10, x: 0, y: 4)
-    }
-
-    private func bullets(from text: String) -> some View {
-        let lines = text
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-            .map { stripBullet(from: $0) }
-
-        return VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                HStack(alignment: .top, spacing: 8) {
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 4, height: 4)
-                        .padding(.top, 7)
-                    Text(line)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-
-    private func stripBullet(from line: String) -> String {
-        var l = line
-        for prefix in ["- ", "* ", "• ", "•", "*", "-"] {
-            if l.hasPrefix(prefix) {
-                l = String(l.dropFirst(prefix.count))
-                break
-            }
-        }
-        return l.trimmingCharacters(in: .whitespaces)
-    }
-}
-
-// MARK: - TypingDots
-
-/// Three pulsing dots, iMessage-style.
-struct TypingDots: View {
-    let color: Color
-    @State private var animating = false
-
-    var body: some View {
-        HStack(spacing: 6) {
-            dot(delay: 0)
-            dot(delay: 0.18)
-            dot(delay: 0.36)
-        }
-        .onAppear { animating = true }
-    }
-
-    private func dot(delay: Double) -> some View {
-        Circle()
-            .fill(color)
-            .frame(width: 7, height: 7)
-            .opacity(animating ? 1.0 : 0.3)
-            .scaleEffect(animating ? 1.0 : 0.65)
-            .animation(
-                .easeInOut(duration: 0.6)
-                    .repeatForever()
-                    .delay(delay),
-                value: animating
-            )
-    }
-}
+// `HalenChatBubble` and `TypingDots` now live in App/Theme/HalenTheme.swift.

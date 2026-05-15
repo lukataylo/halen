@@ -37,8 +37,8 @@ final class SnippetExpander: HalenPlugin {
         task = Task { @MainActor [services, weak self] in
             for await event in services.eventBus.subscribe() {
                 guard let self else { return }
-                if case .textPaused(let p) = event {
-                    self.handle(text: p.text, caretOffset: p.caretOffset)
+                if case .textPaused(let payload) = event {
+                    self.handle(text: payload.text, caretOffset: payload.caretOffset)
                 }
             }
         }
@@ -95,12 +95,6 @@ final class SnippetExpander: HalenPlugin {
         guard let snippet = store.snippet(for: token) else { return }
         let tokenRange = NSRange(location: start, length: end - start)
         expand(snippet, at: tokenRange, fullText: ns)
-    }
-
-    private func character(_ ns: NSString, at index: Int) -> Character? {
-        guard index >= 0, index < ns.length else { return nil }
-        guard let scalar = Unicode.Scalar(ns.character(at: index)) else { return nil }
-        return Character(scalar)
     }
 
     // MARK: - Expansion

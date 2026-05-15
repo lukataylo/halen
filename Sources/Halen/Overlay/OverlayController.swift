@@ -25,7 +25,15 @@ final class OverlayController {
     private var ringLayer: CAShapeLayer?
 
     private var subscribeTask: Task<Void, Never>?
+    /// Single auto-hide task. Each `caret.moved` pushes `hideDeadline` out;
+    /// the running task picks it up on its next wake instead of being cancelled
+    /// and respawned per event.
     private var hideTask: Task<Void, Never>?
+    private var hideDeadline: Date?
+    /// Last frame we set on `caretPanel`. Used to skip redundant `setFrame`
+    /// calls when AX value-changed notifications fire without the cursor
+    /// actually moving (very common during typing).
+    private var lastCaretFrame: NSRect?
     private var defaultsObserver: NSObjectProtocol?
 
     /// In-flight inference calls. The loader stays up until this returns to 0.
@@ -39,7 +47,6 @@ final class OverlayController {
     private static let dotSize: CGFloat = 16
     private static let busySize: CGFloat = 40
     private static let glowKey = "halen.busy.glow"
-    private static let cobalt = CGColor(red: 0.0, green: 0.30, blue: 0.99, alpha: 1.0)
 
     /// UserDefaults key. Read on every `showCaret()` so the toggle takes effect live.
     static let showDotKey = "halen.showOverlayDot"
@@ -122,6 +129,9 @@ final class OverlayController {
     func stop() {
         subscribeTask?.cancel()
         hideTask?.cancel()
+        hideTask = nil
+        hideDeadline = nil
+        lastCaretFrame = nil
         if let observer = defaultsObserver {
             NotificationCenter.default.removeObserver(observer)
             defaultsObserver = nil
@@ -167,17 +177,37 @@ final class OverlayController {
             width: Self.dotSize,
             height: Self.dotSize
         )
-        panel.setFrame(frame, display: true)
+        // Skip the reframe + sync redraw if the cursor hasn't actually moved.
+        // `display: false` lets AppKit coalesce the next paint with the natural
+        // run-loop tick instead of forcing a synchronous draw on every keystroke.
+        if frame != lastCaretFrame {
+            panel.setFrame(frame, display: false)
+            lastCaretFrame = frame
+        }
         panel.orderFrontRegardless()
         scheduleAutoHide()
     }
 
     private func scheduleAutoHide() {
-        hideTask?.cancel()
+        // Push the deadline out. If a hide task is already running, it will
+        // observe the new deadline on its next wake and re-sleep — no need to
+        // cancel and respawn a fresh `Task` per `caret.moved` event.
+        let deadline = Date().addingTimeInterval(2)
+        hideDeadline = deadline
+        if hideTask != nil { return }
         hideTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(2))
-            guard let self, !Task.isCancelled else { return }
-            self.caretPanel?.orderOut(nil)
+            while !Task.isCancelled {
+                guard let self, let target = self.hideDeadline else { return }
+                let remaining = target.timeIntervalSinceNow
+                if remaining <= 0 {
+                    self.caretPanel?.orderOut(nil)
+                    self.lastCaretFrame = nil   // next show must re-set the frame
+                    self.hideTask = nil
+                    self.hideDeadline = nil
+                    return
+                }
+                try? await Task.sleep(for: .seconds(remaining))
+            }
         }
     }
 
@@ -187,8 +217,13 @@ final class OverlayController {
     /// loader panel, anchored at the inference source's location.
     private func enterBusy() {
         guard Self.indicatorEnabled, let busyPanel else { return }
+        // Cancel + clear so the next `scheduleAutoHide` after exitBusy spawns
+        // a fresh task instead of seeing the stale (cancelled) reference.
         hideTask?.cancel()
+        hideTask = nil
+        hideDeadline = nil
         caretPanel?.orderOut(nil)
+        lastCaretFrame = nil
 
         if let anchor = busyAnchor ?? lastCaretRect {
             // Position so the centered 16×16 logo lands where the caret
@@ -231,7 +266,7 @@ final class OverlayController {
         )
         ring.path = CGPath(ellipseIn: ringRect, transform: nil)
         ring.fillColor = NSColor.clear.cgColor
-        ring.strokeColor = Self.cobalt.copy(alpha: 0.55)
+        ring.strokeColor = CGColor.halenCobalt.copy(alpha: 0.55)
         ring.lineWidth = 2
         ring.lineCap = .round
         ring.strokeStart = 0.0
@@ -270,8 +305,6 @@ final class OverlayController {
 /// the right colour — no SwiftUI tinting needed. Falls back to a coloured
 /// circle if the asset isn't bundled.
 private struct HalenCaretIndicator: View {
-    private static let cobalt = Color(red: 0.0, green: 0.30, blue: 0.99)
-
     var body: some View {
         Group {
             if let img = NSImage(named: "HalenIndicator") {
@@ -280,10 +313,10 @@ private struct HalenCaretIndicator: View {
                     .interpolation(.high)
             } else {
                 Circle()
-                    .fill(Self.cobalt)
+                    .fill(Color.halenCobalt)
                     .padding(2)
             }
         }
-        .shadow(color: Self.cobalt.opacity(0.35), radius: 2, x: 0, y: 1)
+        .shadow(color: Color.halenCobalt.opacity(0.35), radius: 2, x: 0, y: 1)
     }
 }

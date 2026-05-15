@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 import Foundation
-import CryptoKit
 
 /// Watches three signals — distraction-app time, recent writing tone, calendar
 /// density — and surfaces a "Take 10?" popup when ≥2 of 3 trip thresholds.
@@ -19,18 +18,13 @@ final class BurnoutCopilot: HalenPlugin {
     private var eventTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
     private var setupTask: Task<Void, Never>?
-    /// Tone classification is debounced *past* the EventBus `text.pause`
-    /// debounce, so Gemma isn't run on every keystroke pause — only once typing
-    /// has genuinely settled.
-    private var classifyToneTask: Task<Void, Never>?
-    private let typingSettleDelay: TimeInterval = 2.5
     private var activePanel: NSPanel?
 
-    /// Windowed-text hashes already classified this session — avoids re-running
-    /// Gemma (and re-recording the same tone sample) on every keystroke pause.
-    /// Capped so it can't grow without bound in a long session.
-    private var classifiedHashes: Set<String> = []
-    private static let maxClassifiedHashes = 256
+    /// Owns the typing-settle debounce, paragraph extraction and dedup of
+    /// recently-seen paragraphs — the shared scaffolding SentimentGuard also
+    /// uses. Tone-tracking, the prompt, and the snapshot/evaluate orchestration
+    /// stay here.
+    private let toneClassifier = ParagraphClassifier(minLength: 40)
 
     let state = BurnoutState()
     private let distraction = DistractionTimeTracker()
@@ -66,8 +60,7 @@ final class BurnoutCopilot: HalenPlugin {
         heartbeatTask = nil
         setupTask?.cancel()
         setupTask = nil
-        classifyToneTask?.cancel()
-        classifyToneTask = nil
+        toneClassifier.cancel()
         activePanel?.orderOut(nil)
         activePanel = nil
     }
@@ -89,12 +82,12 @@ final class BurnoutCopilot: HalenPlugin {
             for await event in services.eventBus.subscribe() {
                 guard let self else { return }
                 switch event {
-                case .appFocused(let p):
-                    self.distraction.note(focused: p.appBundleId)
+                case .appFocused(let payload):
+                    self.distraction.note(focused: payload.appBundleId)
                     self.refreshSnapshot()
                     self.evaluate()
-                case .textPaused(let p) where p.text.count > self.toneMinLength:
-                    self.scheduleClassifyTone(p.text, caretOffset: p.caretOffset)
+                case .textPaused(let payload) where payload.text.count > self.toneMinLength:
+                    self.scheduleToneClassification(text: payload.text, caretOffset: payload.caretOffset)
                 default:
                     break
                 }
@@ -115,59 +108,46 @@ final class BurnoutCopilot: HalenPlugin {
 
     // MARK: - Tone classification
 
-    /// Debounce tone classification behind a genuine typing pause — each
-    /// `text.pause` resets the timer, so a Gemma round-trip only fires once the
-    /// user has actually stopped typing.
-    private func scheduleClassifyTone(_ text: String, caretOffset: Int) {
-        classifyToneTask?.cancel()
-        classifyToneTask = Task { @MainActor [weak self, delay = typingSettleDelay] in
-            try? await Task.sleep(for: .seconds(delay))
-            guard let self, !Task.isCancelled else { return }
-            await self.classifyTone(text, caretOffset: caretOffset)
-        }
+    /// Hand off to `ParagraphClassifier` — settle-debounce, paragraph extraction
+    /// and dedup all live there. The closure carries BurnoutCopilot's specific
+    /// step: a yes/no prompt to Gemma whose answer feeds the tone trend.
+    private func scheduleToneClassification(text: String, caretOffset: Int) {
+        toneClassifier.schedule(
+            text: text,
+            caretOffset: caretOffset,
+            classify: { [weak self] paragraph in
+                await self?.runToneClassification(paragraph: paragraph)
+            }
+        )
     }
 
-    private func classifyTone(_ text: String, caretOffset: Int) async {
-        let (windowed, _) = windowAroundCaret(text: text, offset: caretOffset, radius: 400)
-        guard windowed.count > 40 else { return }
-
-        // Skip text we've already classified this session — the user pausing
-        // repeatedly on the same paragraph shouldn't stack tone samples or burn
-        // Gemma round-trips.
-        let hash = sha256Hex(windowed)
-        guard !classifiedHashes.contains(hash) else { return }
-
+    /// The Gemma half: yes/no on whether `paragraph` reads as sharp/hostile.
+    /// Result feeds `tone.record(...)`, which `evaluate()` then turns into one
+    /// of the three "Take 10?" trip signals.
+    private func runToneClassification(paragraph: String) async {
         let prompt = """
         Is the tone of the following text irritated, sharp, or hostile? Reply with only "yes" or "no", lowercase.
 
-        Text: \"\"\"\(windowed)\"\"\"
+        Text: \"\"\"\(paragraph)\"\"\"
         """
         // maxTokens 16, not 4: the bundled llama.cpp backend wraps the prompt in
         // the Gemma chat template, which can emit a leading newline/space token
         // before content. A 4-token budget can be spent before "yes"/"no" lands,
         // yielding an empty completion and a silently-dropped tone sample.
-        let request = InferenceRequest(prompt: prompt, tier: .small, maxTokens: 16, temperature: 0.1, taskKind: .classification)
+        let request = InferenceRequest(prompt: prompt, tier: .small, maxTokens: 16,
+                                       temperature: 0.1, taskKind: .classification)
         do {
             let response = try await services.inference.complete(request)
             let answer = response.text
                 .lowercased()
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .trimmingCharacters(in: CharacterSet(charactersIn: ".\""))
-            let isSharp = answer.hasPrefix("yes")
-            classifiedHashes.insert(hash)
-            if classifiedHashes.count > Self.maxClassifiedHashes, let evict = classifiedHashes.first {
-                classifiedHashes.remove(evict)
-            }
-            tone.record(isSharp ? .sharp : .calm)
+            tone.record(answer.hasPrefix("yes") ? .sharp : .calm)
             refreshSnapshot()
             evaluate()
         } catch {
             Log.debug("BurnoutCopilot tone classify failed: \(error.localizedDescription)")
         }
-    }
-
-    private func sha256Hex(_ text: String) -> String {
-        SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - Evaluation
@@ -288,23 +268,26 @@ final class BurnoutCopilot: HalenPlugin {
 
 // MARK: - State
 
+/// Reactive snapshot for the BurnoutCopilot detail view. Only `BurnoutCopilot`
+/// (same file) writes; the view reads. `fileprivate(set)` enforces the one-
+/// writer rule without forcing a wrapper method per field.
 @MainActor
 @Observable
 final class BurnoutState {
-    var distractionMinutes: Int = 0
-    var distractionThreshold: Int = 90
-    var toneSamples: [ToneTrendTracker.Tone] = []
-    var toneSharpCount: Int = 0
-    var toneTripThreshold: Int = 3
-    var nextFourHourEvents: Int = 0
-    var hasBackToBackSoon: Bool = false
-    var calendarTripThreshold: Int = 3
-    var nextEventTitle: String?
-    var nextEventStart: Date?
-    var calendarHasAccess: Bool = false
+    fileprivate(set) var distractionMinutes: Int = 0
+    fileprivate(set) var distractionThreshold: Int = 90
+    fileprivate(set) var toneSamples: [ToneTrendTracker.Tone] = []
+    fileprivate(set) var toneSharpCount: Int = 0
+    fileprivate(set) var toneTripThreshold: Int = 3
+    fileprivate(set) var nextFourHourEvents: Int = 0
+    fileprivate(set) var hasBackToBackSoon: Bool = false
+    fileprivate(set) var calendarTripThreshold: Int = 3
+    fileprivate(set) var nextEventTitle: String?
+    fileprivate(set) var nextEventStart: Date?
+    fileprivate(set) var calendarHasAccess: Bool = false
 
-    var signalA = false
-    var signalB = false
-    var signalC = false
-    var lastEvaluated: Date?
+    fileprivate(set) var signalA = false
+    fileprivate(set) var signalB = false
+    fileprivate(set) var signalC = false
+    fileprivate(set) var lastEvaluated: Date?
 }

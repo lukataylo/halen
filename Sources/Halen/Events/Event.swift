@@ -7,19 +7,15 @@ import Foundation
 /// — the case maps to a method, the payload maps to `params`.
 enum Event: Sendable {
     case textPaused(TextPaused)
-    case textSaved(TextSaved)
     case caretMoved(CaretMoved)
     case appFocused(AppFocused)
-    case clipboardChanged(ClipboardChanged)
     case inferenceActivity(InferenceActivity)
 
     var method: String {
         switch self {
         case .textPaused:        return "text.pause"
-        case .textSaved:         return "text.save"
         case .caretMoved:        return "caret.moved"
         case .appFocused:        return "app.focused"
-        case .clipboardChanged:  return "clipboard.changed"
         case .inferenceActivity: return "inference.activity"
         }
     }
@@ -32,13 +28,6 @@ enum Event: Sendable {
         let timestamp: Date
     }
 
-    struct TextSaved: Sendable, Codable {
-        let appBundleId: String
-        let appName: String
-        let text: String
-        let timestamp: Date
-    }
-
     struct CaretMoved: Sendable, Codable {
         let appBundleId: String
         let rect: CaretRect
@@ -48,11 +37,6 @@ enum Event: Sendable {
     struct AppFocused: Sendable, Codable {
         let appBundleId: String
         let appName: String
-        let timestamp: Date
-    }
-
-    struct ClipboardChanged: Sendable, Codable {
-        let textPreview: String
         let timestamp: Date
     }
 

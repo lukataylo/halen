@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import CryptoKit
 import Foundation
 
 /// Watches `text.pause` events. When the text looks like a draft message (sentence-
@@ -20,19 +19,21 @@ final class SentimentGuard: HalenPlugin {
     let category: PluginCategory = .writing
 
     private let services: HalenServices
+    private weak var caretObserver: CaretObserver?
     let rulesStore: SentimentRulesStore
     private var task: Task<Void, Never>?
-    /// Classification is debounced *past* the EventBus `text.pause` debounce:
-    /// it only fires once typing has genuinely settled, so Gemma is never run
-    /// on every pause mid-sentence.
-    private var evaluateTask: Task<Void, Never>?
-    private let typingSettleDelay: TimeInterval = 2.5
 
-    /// Hashes we've already classified this session (any label). Avoids re-running
-    /// Gemma on the same text every time the user pauses. Capped so it can't grow
-    /// without bound over a long session.
-    private var classifiedHashes: [String: String] = [:]
-    private static let maxClassifiedHashes = 256
+    /// Owns the typing-settle debounce, paragraph extraction, and dedup of
+    /// recently-classified paragraphs. Plugin-specific concerns (cooldown,
+    /// approvedHashes, prompt, popup) stay here.
+    private let classifier = ParagraphClassifier()
+
+    /// Per-app cooldown set when the user dismisses the popup — "I've seen the
+    /// warning, stop nagging me in this app for a while." Also bumped on the
+    /// 12 s auto-dismiss (the user ignored the popup; treat it the same).
+    /// In-memory: a fresh launch starts with no cooldowns.
+    private var cooldownUntil: [String: Date] = [:]
+    private static let dismissCooldown: TimeInterval = 10 * 60
     /// Hashes the user explicitly approved as fine. Persisted.
     private var approvedHashes: Set<String> = []
     /// Number of times we surfaced a popover this session (any rule). In-memory only.
@@ -44,6 +45,7 @@ final class SentimentGuard: HalenPlugin {
 
     init(services: HalenServices) {
         self.services = services
+        self.caretObserver = services.caretObserver
         let storageDir = services.storageDirectory(for: "com.halen.sentiment-guard")
         self.rulesStore = SentimentRulesStore(fileURL: storageDir.appending(path: "rules.json"))
         loadApproved()
@@ -69,10 +71,13 @@ final class SentimentGuard: HalenPlugin {
             for await event in services.eventBus.subscribe() {
                 guard let self else { return }
                 switch event {
-                case .caretMoved(let p):
-                    self.lastCaretRect = CGRect(x: p.rect.x, y: p.rect.y, width: p.rect.width, height: p.rect.height)
-                case .textPaused(let p):
-                    self.scheduleEvaluate(text: p.text, caretOffset: p.caretOffset)
+                case .caretMoved(let payload):
+                    self.lastCaretRect = CGRect(x: payload.rect.x, y: payload.rect.y,
+                                                width: payload.rect.width, height: payload.rect.height)
+                case .textPaused(let payload):
+                    self.scheduleClassification(text: payload.text,
+                                                caretOffset: payload.caretOffset,
+                                                appBundleId: payload.appBundleId)
                 default:
                     break
                 }
@@ -83,8 +88,7 @@ final class SentimentGuard: HalenPlugin {
     func stop() {
         task?.cancel()
         task = nil
-        evaluateTask?.cancel()
-        evaluateTask = nil
+        classifier.cancel()
         dismissTask?.cancel()
         activePanel?.orderOut(nil)
         activePanel = nil
@@ -92,31 +96,40 @@ final class SentimentGuard: HalenPlugin {
 
     // MARK: - Evaluation
 
-    /// Debounce classification behind a genuine typing pause. Each `text.pause`
-    /// resets the timer, so continuous typing never triggers a Gemma round-trip
-    /// — only a real lull does.
-    private func scheduleEvaluate(text: String, caretOffset: Int) {
-        evaluateTask?.cancel()
-        evaluateTask = Task { @MainActor [weak self, delay = typingSettleDelay] in
-            try? await Task.sleep(for: .seconds(delay))
-            guard let self, !Task.isCancelled else { return }
-            await self.evaluate(text: text, caretOffset: caretOffset)
-        }
+    /// Hand off to `ParagraphClassifier`, which owns settle-debounce + paragraph
+    /// extraction + hash dedup. The closures carry SentimentGuard's specific
+    /// concerns: per-app cooldown, persistent approved-fingerprint allowlist,
+    /// the sentence-end-punctuation eligibility check, and the actual Gemma
+    /// classification + popup.
+    private func scheduleClassification(text: String, caretOffset: Int, appBundleId: String) {
+        classifier.schedule(
+            text: text,
+            caretOffset: caretOffset,
+            eligibility: { [weak self] paragraph in
+                guard let self else { return false }
+                // Opportunistic cooldown prune + per-app gate.
+                let now = Date()
+                self.cooldownUntil = self.cooldownUntil.filter { $0.value > now }
+                if self.cooldownUntil[appBundleId] != nil { return false }
+                // Drafts only — a paragraph without sentence-ending punctuation
+                // is mid-thought and likely to mis-classify.
+                guard paragraph.contains(where: { $0 == "." || $0 == "?" || $0 == "!" }) else {
+                    return false
+                }
+                // Permanent allowlist — user clicked "Looks fine" on this exact
+                // paragraph in a past session.
+                return !self.approvedHashes.contains(sha256Hex(paragraph))
+            },
+            classify: { [weak self] paragraph in
+                await self?.runGemmaClassification(paragraph: paragraph, appBundleId: appBundleId)
+            }
+        )
     }
 
-    private func evaluate(text: String, caretOffset: Int) async {
-        guard text.count > 60 else { return }
-        guard text.contains(where: { $0 == "." || $0 == "?" || $0 == "!" }) else { return }
-
-        // Window further down for the prompt. CaretObserver already caps at 8k;
-        // this trims to ~800 chars centred on the caret for fast classification.
-        let (windowed, _) = windowAroundCaret(text: text, offset: caretOffset, radius: 400)
-        guard windowed.count > 40 else { return }
-
-        let hash = sha256Hex(windowed)
-        if approvedHashes.contains(hash) { return }
-        if classifiedHashes[hash] != nil { return }
-
+    /// The Gemma half of classification: build the multi-rule prompt, run it,
+    /// surface the popup if the verdict matches an enabled rule. The
+    /// already-seen dedup is handled by `ParagraphClassifier` upstream.
+    private func runGemmaClassification(paragraph: String, appBundleId: String) async {
         let enabled = rulesStore.enabledRules
         guard !enabled.isEmpty else { return }
 
@@ -130,22 +143,18 @@ final class SentimentGuard: HalenPlugin {
 
         Reply with ONLY the matching label, lowercase, no punctuation, no preamble.
 
-        Text: \"\"\"\(windowed)\"\"\"
+        Text: \"\"\"\(paragraph)\"\"\"
         """
 
-        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 16, temperature: 0.1, taskKind: .classification)
-
+        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 16,
+                                       temperature: 0.1, taskKind: .classification)
         do {
             let response = try await services.inference.complete(request)
             let label = normalizeLabel(response.text)
-            classifiedHashes[hash] = label
-            if classifiedHashes.count > Self.maxClassifiedHashes, let evict = classifiedHashes.keys.first {
-                classifiedHashes.removeValue(forKey: evict)
-            }
             Log.info("SentimentGuard: \(label) (\(response.latencyMs)ms)")
-
             if let matched = enabled.first(where: { $0.label.lowercased() == label }) {
-                showPopup(text: windowed, rule: matched, hash: hash)
+                showPopup(text: paragraph, rule: matched,
+                          hash: sha256Hex(paragraph), appBundleId: appBundleId)
             }
         } catch {
             Log.warn("SentimentGuard: inference failed: \(error)")
@@ -163,7 +172,7 @@ final class SentimentGuard: HalenPlugin {
 
     // MARK: - Popup
 
-    private func showPopup(text: String, rule: SentimentRule, hash: String) {
+    private func showPopup(text: String, rule: SentimentRule, hash: String, appBundleId: String) {
         let label = rule.label.lowercased()
         flaggedThisSession += 1
         activePanel?.orderOut(nil)
@@ -186,7 +195,10 @@ final class SentimentGuard: HalenPlugin {
             text: text,
             label: label,
             tone: rule.colorName,
-            onDismiss: { [weak self] in self?.closePanel() },
+            onDismiss: { [weak self] in
+                self?.recordDismiss(appBundleId: appBundleId)
+                self?.closePanel()
+            },
             onApprove: { [weak self] in
                 self?.approve(hash: hash)
                 self?.closePanel()
@@ -198,28 +210,83 @@ final class SentimentGuard: HalenPlugin {
         )
         panel.contentView = NSHostingView(rootView: view)
 
-        // Anchor near the caret if we have a recent rect; else bottom-right of main screen.
-        let frame: NSRect
-        if let caret = lastCaretRect, caret.width > 0 || caret.height > 0 {
-            let x = max(20, caret.minX)
-            let y = max(20, caret.minY - 195)
-            frame = NSRect(x: x, y: y, width: 360, height: 170)
-        } else if let screen = NSScreen.main {
-            frame = NSRect(x: screen.frame.maxX - 380, y: 80, width: 360, height: 170)
-        } else {
-            frame = NSRect(x: 200, y: 200, width: 360, height: 170)
-        }
-        panel.setFrame(frame, display: true)
+        let popupSize = CGSize(width: 360, height: 170)
+        panel.setFrame(popupFrame(for: anchorRect(), size: popupSize), display: true)
         panel.orderFrontRegardless()
 
         activePanel = panel
 
-        dismissTask = Task { @MainActor [weak self] in
+        dismissTask = Task { @MainActor [weak self, appBundleId] in
             try? await Task.sleep(for: .seconds(12))
             if !Task.isCancelled {
+                // Auto-dismiss = the user ignored the popup; treat it the same
+                // as an explicit dismiss and don't immediately re-pop-up.
+                self?.recordDismiss(appBundleId: appBundleId)
                 self?.closePanel()
             }
         }
+    }
+
+    /// Resolve where to anchor the popup. Prefers freshly-read caret bounds
+    /// from the currently-focused element — `lastCaretRect` is a cache that
+    /// goes stale when focus moves between fields, especially in apps where AX
+    /// `kAXSelectedTextChangedNotification` doesn't fire reliably (Electron,
+    /// browser text fields, terminals); a stale rect anchors the popup at the
+    /// previous field's location. Validates the rect actually lies on a screen
+    /// — some apps misreport AX bounds in window-local coords, which would
+    /// otherwise pin the popup to the top-left of the display.
+    private func anchorRect() -> CGRect? {
+        if let element = caretObserver?.currentElement,
+           let axRect = axReadCaretBounds(element) {
+            let cocoa = axRectToCocoa(axRect)
+            if rectIsOnScreen(cocoa) { return cocoa }
+        }
+        if let cached = lastCaretRect, cached.width > 0 || cached.height > 0,
+           rectIsOnScreen(cached) {
+            return cached
+        }
+        return nil
+    }
+
+    private func rectIsOnScreen(_ rect: CGRect) -> Bool {
+        NSScreen.screens.contains(where: { $0.frame.intersects(rect) })
+    }
+
+    /// Place the popup just below the caret and clamp it into the
+    /// `visibleFrame` of whichever screen actually contains the anchor (so it
+    /// can never bleed off-screen, and on multi-monitor setups it stays on the
+    /// display the user is typing on). Falls back to the bottom-right of the
+    /// main screen when there's no usable anchor.
+    private func popupFrame(for anchor: CGRect?, size: CGSize) -> NSRect {
+        if let anchor, let screen = screenContaining(anchor) {
+            let visible = screen.visibleFrame
+            // 25 px below the caret bottom (Cocoa coords — lower y).
+            var x = anchor.minX
+            var y = anchor.minY - size.height - 25
+            x = min(max(visible.minX + 8, x), visible.maxX - size.width - 8)
+            y = min(max(visible.minY + 8, y), visible.maxY - size.height - 8)
+            let frame = NSRect(x: x, y: y, width: size.width, height: size.height)
+            Log.debug("SentimentGuard popup anchor=\(anchor) screen=\(visible) frame=\(frame)")
+            return frame
+        }
+        if let screen = NSScreen.main {
+            return NSRect(x: screen.frame.maxX - size.width - 20, y: 80,
+                          width: size.width, height: size.height)
+        }
+        return NSRect(x: 200, y: 200, width: size.width, height: size.height)
+    }
+
+    /// Resolve which screen the caret sits on. Uses `contains(point)` on the
+    /// anchor's centre rather than `intersects(rect)` — a zero-width caret
+    /// (most text fields report the caret as a vertical line) is
+    /// `CGRectIsEmpty`, which fails the intersect test against every screen
+    /// and silently falls back to `NSScreen.main`. On a multi-monitor setup
+    /// that's a different display than the one the user is typing on, and the
+    /// popup ends up clamped to the wrong screen's bounds.
+    private func screenContaining(_ anchor: CGRect) -> NSScreen? {
+        let center = CGPoint(x: anchor.midX, y: anchor.midY)
+        return NSScreen.screens.first(where: { $0.frame.contains(center) })
+            ?? NSScreen.main
     }
 
     private func closePanel() {
@@ -232,6 +299,14 @@ final class SentimentGuard: HalenPlugin {
     private func approve(hash: String) {
         approvedHashes.insert(hash)
         saveApproved()
+    }
+
+    /// User explicitly (or implicitly, via auto-dismiss) closed the popup.
+    /// Mute this app for the cooldown window — they've seen the warning, and
+    /// re-popping every keystroke pause is noise.
+    private func recordDismiss(appBundleId: String) {
+        cooldownUntil[appBundleId] = Date().addingTimeInterval(Self.dismissCooldown)
+        Log.info("SentimentGuard: muted in \(appBundleId) for \(Int(Self.dismissCooldown / 60)) min after dismiss")
     }
 
     private func rephrase(originalText: String) {
@@ -273,11 +348,6 @@ final class SentimentGuard: HalenPlugin {
         let list = Array(approvedHashes).sorted()
         guard let data = try? JSONEncoder().encode(list) else { return }
         try? data.write(to: approvedFileURL, options: .atomic)
-    }
-
-    private func sha256Hex(_ text: String) -> String {
-        let digest = SHA256.hash(data: Data(text.utf8))
-        return digest.map { String(format: "%02x", $0) }.joined()
     }
 }
 

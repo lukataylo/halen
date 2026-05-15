@@ -105,6 +105,41 @@ func windowAroundCaret(text: String, offset: Int, radius: Int) -> (text: String,
     return (windowed, clamped - start)
 }
 
+/// The paragraph immediately surrounding the caret — from the previous newline
+/// (or start of text) through to the next newline (or end), trimmed. For
+/// tone-style plugins (SentimentGuard, BurnoutCopilot) that should judge what
+/// the user is *currently* writing, not historical text in the same field.
+/// Avoids the two failure modes of `windowAroundCaret` for tone classification:
+///   1. Earlier text in the buffer (an old hostile draft, a quoted reply,
+///      previous unrelated paragraphs) taints the current sentence's verdict.
+///   2. The window boundary lands inside a word, leaking fragments like "ity"
+///      into the popup body.
+func paragraphAroundCaret(text: String, caretOffset: Int) -> String {
+    let ns = text as NSString
+    let length = ns.length
+    let caret = max(0, min(caretOffset, length))
+    var start = caret
+    while start > 0, ns.character(at: start - 1) != 0x0A /* \n */ {
+        start -= 1
+    }
+    var end = caret
+    while end < length, ns.character(at: end) != 0x0A {
+        end += 1
+    }
+    return ns.substring(with: NSRange(location: start, length: end - start))
+        .trimmingCharacters(in: .whitespaces)
+}
+
+/// `Character?` view of a UTF-16 code unit at `index` in `ns`. Returns `nil`
+/// if the index is out of bounds or the unit is half of a surrogate pair (and
+/// therefore not a valid Unicode scalar by itself). Used by trigger-detection
+/// and word-boundary scans in SnippetExpander and TypoFixer.
+func character(_ ns: NSString, at index: Int) -> Character? {
+    guard index >= 0, index < ns.length else { return nil }
+    guard let scalar = Unicode.Scalar(ns.character(at: index)) else { return nil }
+    return Character(scalar)
+}
+
 /// What we consider a "word" for correction-learning purposes: 3–30 chars,
 /// only letters (plus apostrophes and hyphens). Filters out single letters,
 /// numbers, code identifiers, and other false-positive sources.

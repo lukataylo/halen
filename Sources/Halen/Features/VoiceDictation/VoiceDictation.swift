@@ -49,10 +49,11 @@ final class VoiceDictation: HalenPlugin {
             for await event in services.eventBus.subscribe() {
                 guard let self else { return }
                 switch event {
-                case .caretMoved(let p):
-                    self.lastCaretRect = CGRect(x: p.rect.x, y: p.rect.y, width: p.rect.width, height: p.rect.height)
-                case .textPaused(let p):
-                    self.lastCaretOffset = p.caretOffset
+                case .caretMoved(let payload):
+                    self.lastCaretRect = CGRect(x: payload.rect.x, y: payload.rect.y,
+                                                width: payload.rect.width, height: payload.rect.height)
+                case .textPaused(let payload):
+                    self.lastCaretOffset = payload.caretOffset
                 case .appFocused:
                     // Reset on app switch so we don't insert at a stale offset.
                     self.lastCaretOffset = 0

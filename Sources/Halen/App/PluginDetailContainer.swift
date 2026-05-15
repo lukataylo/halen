@@ -72,22 +72,4 @@ struct PluginCategoryBadge: View {
     }
 }
 
-/// A glass-styled card used by detail views. Always full-width so cards align
-/// vertically regardless of intrinsic content size.
-struct GlassCard<Content: View>: View {
-    @ViewBuilder var content: () -> Content
-
-    var body: some View {
-        content()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(.separator.opacity(0.4), lineWidth: 0.5)
-                    )
-            )
-    }
-}
+// `GlassCard` and the shared `cardLabel` helper now live in App/Theme/HalenTheme.swift.

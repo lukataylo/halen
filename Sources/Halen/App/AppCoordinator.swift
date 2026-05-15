@@ -4,7 +4,6 @@ import Observation
 @Observable
 final class AppState {
     var permissionStatus: PermissionStatus = .unknown
-    var lastEvent: String = "—"
 }
 
 enum PermissionStatus {
@@ -83,6 +82,13 @@ final class AppCoordinator {
 
     private func startObservers() {
         guard !isStopped else { return }
+        // Re-entrancy guard: `start()` and the permission-poll path can both
+        // race to call this if AX permission flips during launch. Without the
+        // guard the previous CaretObserver, OverlayController and all six
+        // registered plugins would silently leak (the old refs overwritten,
+        // their AXObserver run-loop sources and event-subscription tasks still
+        // running). One call is enough.
+        guard caretObserver == nil else { return }
         Log.info("Starting observers and plugin registry")
 
         let observer = CaretObserver(eventBus: eventBus)
@@ -113,17 +119,15 @@ final class AppCoordinator {
         eventLogTask = Task { @MainActor [eventBus] in
             for await event in eventBus.subscribe() {
                 switch event {
-                case .appFocused(let p):
-                    Log.info("evt app.focused \(p.appName)")
-                case .textPaused(let p):
-                    let preview = p.text.prefix(40).replacingOccurrences(of: "\n", with: "↵")
-                    Log.info("evt text.pause app=\(p.appName) chars=\(p.text.count) offset=\(p.caretOffset) preview=\"\(preview)\"")
-                case .caretMoved(let p):
-                    Log.debug("evt caret.moved \(Int(p.rect.x)),\(Int(p.rect.y)) \(Int(p.rect.width))x\(Int(p.rect.height))")
-                case .inferenceActivity(let p):
-                    Log.debug("evt inference.activity \(p.phase.rawValue) source=\(p.source)")
-                case .textSaved, .clipboardChanged:
-                    break
+                case .appFocused(let payload):
+                    Log.info("evt app.focused \(payload.appName)")
+                case .textPaused(let payload):
+                    let preview = payload.text.prefix(40).replacingOccurrences(of: "\n", with: "↵")
+                    Log.info("evt text.pause app=\(payload.appName) chars=\(payload.text.count) offset=\(payload.caretOffset) preview=\"\(preview)\"")
+                case .caretMoved(let payload):
+                    Log.debug("evt caret.moved \(Int(payload.rect.x)),\(Int(payload.rect.y)) \(Int(payload.rect.width))x\(Int(payload.rect.height))")
+                case .inferenceActivity(let payload):
+                    Log.debug("evt inference.activity \(payload.phase.rawValue) source=\(payload.source)")
                 }
             }
         }

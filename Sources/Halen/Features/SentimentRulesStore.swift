@@ -5,12 +5,14 @@ import Observation
 /// of this category in a multi-category classification task. Built-in rules can
 /// be toggled but not deleted; custom rules can be both.
 struct SentimentRule: Codable, Identifiable, Equatable, Sendable {
-    var id: String
-    var label: String
-    var prompt: String
+    let id: String
+    let label: String
+    let prompt: String
+    /// The only mutable field — built-in rules can be turned off, custom rules
+    /// can be enabled/disabled in Settings.
     var enabled: Bool
-    var builtin: Bool
-    var colorName: String
+    let builtin: Bool
+    let colorName: String
 
     enum CodingKeys: String, CodingKey {
         case id, label, prompt, enabled, builtin, colorName

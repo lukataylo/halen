@@ -137,12 +137,6 @@ struct SnippetExpanderDetailView: View {
         }
     }
 
-    private func cardLabel(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(.system(size: 10, weight: .semibold))
-            .tracking(0.5)
-            .foregroundStyle(.secondary)
-    }
 }
 
 // MARK: - Row

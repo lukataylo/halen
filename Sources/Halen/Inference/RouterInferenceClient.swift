@@ -13,7 +13,12 @@ actor RouterInferenceClient: InferenceClient {
     private let gates: [BackendKind: AsyncSemaphore]
 
     private var availabilityCache: [BackendKind: (value: BackendAvailability, at: Date)] = [:]
-    private let availabilityTTL: TimeInterval = 15
+    /// `.available` results re-probe quickly so a backend coming online is picked
+    /// up promptly. `.unavailable` results sit much longer — re-probing a missing
+    /// Ollama daemon every 15 s burns a network round-trip for nothing, and the
+    /// user can force a refresh from the Settings backend picker.
+    private let availabilityTTLAvailable: TimeInterval = 15
+    private let availabilityTTLUnavailable: TimeInterval = 60
 
     init(backends: [InferenceBackend], settings: InferenceSettings) {
         self.backends = backends
@@ -93,9 +98,11 @@ actor RouterInferenceClient: InferenceClient {
     }
 
     private func cachedAvailability(_ backend: InferenceBackend) async -> BackendAvailability {
-        if let cached = availabilityCache[backend.kind],
-           Date().timeIntervalSince(cached.at) < availabilityTTL {
-            return cached.value
+        if let cached = availabilityCache[backend.kind] {
+            let ttl = cached.value.isAvailable ? availabilityTTLAvailable : availabilityTTLUnavailable
+            if Date().timeIntervalSince(cached.at) < ttl {
+                return cached.value
+            }
         }
         let value = await backend.availability()
         availabilityCache[backend.kind] = (value, Date())
