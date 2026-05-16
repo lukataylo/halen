@@ -21,10 +21,11 @@ mkdir -p ~/Library/Application\ Support/Halen/Plugins
 cp -r plugins/today-snippet ~/Library/Application\ Support/Halen/Plugins/
 ```
 
-Restart Halen. Now type `;today ` (with a trailing space) in any text field —
-the trigger expands to today's date, like the built-in `SnippetExpander` does
-for `;today` already, except the implementation lives in a 90-line Python
-script outside the app.
+Restart Halen. Now type `;extoday ` (with a trailing space) in any text field —
+the trigger expands to today's date. The built-in `SnippetExpander` ships
+`;today` already, so this sample uses `;extoday` to demonstrate the protocol
+without colliding (two plugins firing on the same trigger race each other's
+AX writes and produce garbage).
 
 Watch what's happening:
 
@@ -32,7 +33,7 @@ Watch what's happening:
 log stream --predicate 'subsystem == "com.dadiani.halen"' --info
 ```
 
-You'll see `plugin[com.halen.today-snippet] expanding ;today at offset N → ...`
+You'll see `plugin[com.halen.today-snippet] expanding ;extoday at offset N → ...`
 from the plugin's stderr forwarded into the host's unified log.
 
 ## Manifest reference

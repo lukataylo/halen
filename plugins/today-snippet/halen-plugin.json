@@ -1,7 +1,7 @@
 {
   "id": "com.halen.today-snippet",
   "name": "Today snippet",
-  "summary": "Type ;today to expand to today's date.",
+  "summary": "Type ;extoday to expand to today's date (sample external plugin — built-in SnippetExpander already owns ;today).",
   "version": "0.1.0",
   "halenApiVersion": "0.1",
   "executable": "/usr/bin/python3",

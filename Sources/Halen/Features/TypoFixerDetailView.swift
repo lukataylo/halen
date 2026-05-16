@@ -112,7 +112,13 @@ struct TypoFixerDetailView: View {
                     EntryRow(
                         key: item.key,
                         entry: item.entry,
-                        onDelete: { store.remove(typo: item.key) }
+                        onDelete: { store.remove(typo: item.key) },
+                        onSave:   { newCorrection in
+                            // `addUserEntry` upserts and re-arms to active —
+                            // exactly the semantics the user expects from
+                            // an inline edit.
+                            store.addUserEntry(typo: item.key, correction: newCorrection)
+                        }
                     )
                     if item.key != filteredEntries.last?.key {
                         Divider()
@@ -170,7 +176,14 @@ private struct EntryRow: View {
     let key: String
     let entry: TypoStore.Entry
     let onDelete: () -> Void
+    /// Called with a new correction string when the user submits an inline
+    /// edit. The parent passes a closure that upserts via `TypoStore`.
+    let onSave: (String) -> Void
+
     @State private var hovering = false
+    @State private var isEditing = false
+    @State private var draft: String = ""
+    @FocusState private var editorFocused: Bool
 
     var body: some View {
         HStack(spacing: 8) {
@@ -182,27 +195,72 @@ private struct EntryRow: View {
                     Image(systemName: "arrow.right")
                         .font(.system(size: 9))
                         .foregroundStyle(.tertiary)
-                    Text(entry.correction)
-                        .font(.system(.callout, design: .monospaced))
-                        .foregroundStyle(.primary)
+                    if isEditing {
+                        TextField("", text: $draft)
+                            .textFieldStyle(.roundedBorder)
+                            .controlSize(.small)
+                            .font(.system(.callout, design: .monospaced))
+                            .focused($editorFocused)
+                            .onSubmit(commit)
+                            .frame(minWidth: 120)
+                            .onExitCommand { cancelEdit() }
+                    } else {
+                        Text(entry.correction)
+                            .font(.system(.callout, design: .monospaced))
+                            .foregroundStyle(.primary)
+                    }
                 }
-                Text("\(entry.observations) observation\(entry.observations == 1 ? "" : "s")")
+                Text(isEditing
+                     ? "⏎ save · ⎋ cancel"
+                     : "\(entry.observations) observation\(entry.observations == 1 ? "" : "s")")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
             Spacer()
-            Button(action: onDelete) {
-                Image(systemName: "trash")
-                    .font(.system(size: 11))
-                    .foregroundStyle(hovering ? Color.red : Color.secondary.opacity(0.5))
+            if isEditing {
+                Button("Save", action: commit)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                Button("Cancel", action: cancelEdit)
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .foregroundStyle(.secondary)
+            } else {
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 11))
+                        .foregroundStyle(hovering ? Color.red : Color.secondary.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .opacity(hovering ? 1 : 0.6)
             }
-            .buttonStyle(.plain)
-            .opacity(hovering ? 1 : 0.6)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(hovering ? Color.primary.opacity(0.04) : Color.clear)
+        .background(hovering || isEditing ? Color.primary.opacity(0.04) : Color.clear)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
+        .onTapGesture(count: 2) { beginEdit() }
+        .help(isEditing ? "" : "Double-click to edit the correction.")
+    }
+
+    private func beginEdit() {
+        guard !isEditing else { return }
+        draft = entry.correction
+        isEditing = true
+        editorFocused = true
+    }
+
+    private func commit() {
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty, trimmed != entry.correction {
+            onSave(trimmed)
+        }
+        isEditing = false
+    }
+
+    private func cancelEdit() {
+        isEditing = false
+        draft = ""
     }
 }

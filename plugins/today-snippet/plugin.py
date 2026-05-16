@@ -4,7 +4,7 @@ Sample Halen out-of-process plugin. Demonstrates the JSON-RPC plugin protocol
 end-to-end without needing a Swift toolchain:
 
   1. Subscribes to `event/text.pause` (declared in halen-plugin.json).
-  2. Detects the `;today` snippet trigger right before the caret.
+  2. Detects the `;extoday` snippet trigger right before the caret.
   3. Calls `ax/replaceRange` on the host to swap the trigger for the
      current date.
 
@@ -80,7 +80,7 @@ def handle_exit(_msg_id, _params):
 
 # --- Trigger detection -------------------------------------------------------
 
-SNIPPET = ";today"
+SNIPPET = ";extoday"
 DATE_FORMAT = "%A %B %d, %Y"   # "Friday May 16, 2026"
 
 
@@ -90,7 +90,7 @@ def handle_text_pause(payload):
     if not text:
         return
 
-    # The trigger fires once the user has typed `;today` followed by a
+    # The trigger fires once the user has typed `;extoday` followed by a
     # separator (space / punctuation). Restrict the search window to the few
     # characters immediately before the caret so we don't accidentally re-
     # expand if the same string appears earlier in the buffer.
@@ -111,7 +111,7 @@ def handle_text_pause(payload):
 
     idx = window_start + tail.rindex(SNIPPET)
     today = datetime.date.today().strftime(DATE_FORMAT)
-    log(f"expanding ;today at offset {idx} -> {today!r}")
+    log(f"expanding ;extoday at offset {idx} -> {today!r}")
     call("ax/replaceRange", {
         "location": idx,
         "length": len(SNIPPET),

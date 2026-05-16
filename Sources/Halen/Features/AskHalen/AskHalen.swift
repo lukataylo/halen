@@ -12,10 +12,14 @@ import ApplicationServices
 /// contextual: the user doesn't have to copy-paste the email/code/draft they
 /// want help with — Halen sees what's on their screen already.
 ///
-/// Hotkey note: ⌃H is the Unix backspace control character — terminals
-/// (Terminal, iTerm) consume it locally before any system hotkey fires.
-/// Users who want the palette in a terminal should rebind via Settings
-/// (future) or press the menubar icon.
+/// Hotkey mechanism: NSEvent global+local monitors, NOT Carbon's
+/// RegisterEventHotKey. Carbon accepts the ⌃-letter combo but the OS
+/// routes it through NSResponder text-input first, where most fields
+/// consume ⌃H as the Unix-backspace control character — so the Carbon
+/// handler is never reached. NSEvent monitors observe the keystroke
+/// passively, regardless of who has focus. Trade-off: the focused app's
+/// text field may also receive a stray backspace when ⌃H fires; for the
+/// "open a palette" use case we accept it.
 @MainActor
 final class AskHalen: HalenPlugin {
     let id = "com.halen.ask-halen"
@@ -27,7 +31,10 @@ final class AskHalen: HalenPlugin {
     private let services: HalenServices
     private weak var caretObserver: CaretObserver?
 
-    private let hotkey = HotkeyRegistrar()
+    /// NSEvent monitor handles — opaque tokens we must keep alive and pass to
+    /// `NSEvent.removeMonitor(_:)` on teardown.
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
 
     private let state = AskHalenState()
     private var panel: NSPanel?
@@ -39,19 +46,37 @@ final class AskHalen: HalenPlugin {
     }
 
     func start() {
-        let modifiers = UInt32(controlKey)
-        let key = UInt32(kVK_ANSI_H)
-        let ok = hotkey.register(keyCode: key, modifiers: modifiers,
-                                 id: HotkeyID.askHalen.rawValue) { [weak self] in
+        // One handler, shared between the global (other apps focused) and
+        // local (Halen focused) monitors. `.deviceIndependentFlagsMask`
+        // strips caps lock and device-private bits so the equality check
+        // matches a clean ⌃H even when caps lock happens to be on.
+        let handler: (NSEvent) -> Void = { [weak self] event in
+            guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .control,
+                  event.charactersIgnoringModifiers?.lowercased() == "h"
+            else { return }
             MainActor.assumeIsolated { self?.togglePalette() }
         }
-        if !ok {
-            Log.warn("AskHalen: ⌃H registration failed (another app may already own it)")
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+            handler(event)
         }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Only consume the event when it's our hotkey — every other
+            // keystroke must pass through untouched or we'd hijack Halen's
+            // own text fields. Returning `nil` consumes; the explicit guard
+            // mirrors the global handler so the two paths stay aligned.
+            if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .control,
+               event.charactersIgnoringModifiers?.lowercased() == "h" {
+                handler(event)
+                return nil
+            }
+            return event
+        }
+        Log.info("AskHalen: ⌃H NSEvent monitors installed (Carbon path skipped — it would never fire for ⌃-letter combos)")
     }
 
     func stop() {
-        hotkey.unregister()
+        if let m = globalMonitor { NSEvent.removeMonitor(m); globalMonitor = nil }
+        if let m = localMonitor  { NSEvent.removeMonitor(m); localMonitor  = nil }
         inflightTask?.cancel()
         inflightTask = nil
         closePalette()
