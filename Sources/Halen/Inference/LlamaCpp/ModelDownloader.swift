@@ -32,6 +32,21 @@ final class ModelDownloader {
     static let expectedSHA256 =
         "8ccc5cd1f1b3602548715ae25a66ed73fd5dc68a210412eea643eb20eb75a135"
 
+    // MARK: - Tunables
+
+    /// Bytes flushed to disk per write. Larger ⇒ fewer syscalls, smaller ⇒
+    /// finer-grained progress updates. 64 KiB is the empirical sweet spot.
+    private static let writeBufferBytes = 64 * 1024
+    /// Minimum interval between `state = .downloading(…)` updates. Keeps the
+    /// SwiftUI progress card smooth without flooding the MainActor.
+    private static let progressReportInterval: TimeInterval = 0.1
+    /// HTTP request-line timeout. Matches the `URLSessionConfiguration` default
+    /// for outbound TCP setup; resource timeout below is much larger.
+    private static let requestTimeout: TimeInterval = 60
+    /// Hard ceiling for the entire transfer. 1 hour covers an 800 MB download
+    /// on even a slow residential link — beyond that we'd rather fail loudly.
+    private static let resourceTimeout: TimeInterval = 60 * 60
+
     enum State: Equatable {
         case notDownloaded
         case downloading(fraction: Double, bytes: Int64, total: Int64)
@@ -114,7 +129,7 @@ final class ModelDownloader {
         )
 
         var request = URLRequest(url: Self.sourceURL)
-        request.timeoutInterval = 60
+        request.timeoutInterval = Self.requestTimeout
         if resumeOffset > 0 {
             request.setValue("bytes=\(resumeOffset)-", forHTTPHeaderField: "Range")
         }
@@ -124,7 +139,7 @@ final class ModelDownloader {
 
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = true
-        config.timeoutIntervalForResource = 60 * 60   // 1 h hard cap
+        config.timeoutIntervalForResource = Self.resourceTimeout
         let session = URLSession(configuration: config)
         self.session = session
         defer { self.session = nil }
@@ -158,18 +173,16 @@ final class ModelDownloader {
             defer { try? handle.close() }
 
             var written: Int64 = startingFresh ? 0 : resumeOffset
-            // ~64 KB write buffer — bigger reduces syscalls, smaller updates
-            // the progress UI more often. 64 KB is a fine middle.
-            var buffer = Data(capacity: 65_536)
+            var buffer = Data(capacity: Self.writeBufferBytes)
             var lastReport = Date()
 
             for try await byte in bytes {
                 buffer.append(byte)
-                if buffer.count >= 65_536 {
+                if buffer.count >= Self.writeBufferBytes {
                     try handle.write(contentsOf: buffer)
                     written += Int64(buffer.count)
                     buffer.removeAll(keepingCapacity: true)
-                    if Date().timeIntervalSince(lastReport) > 0.1 {
+                    if Date().timeIntervalSince(lastReport) > Self.progressReportInterval {
                         state = .downloading(
                             fraction: Double(written) / Double(Self.expectedSize),
                             bytes: written,
@@ -196,7 +209,20 @@ final class ModelDownloader {
 
             state = .verifying
             try Task.checkCancellation()
-            let actualHash = try sha256Hash(of: partPath)
+            // SHA-256 on 770 MB is ~3 s. Off-main so the "Verifying…" state in
+            // Settings stays responsive — the main thread was previously stuck
+            // for the duration, locking the menu UI and any other plugin work.
+            let hashPath = partPath
+            let actualHash: String
+            do {
+                actualHash = try await Task.detached(priority: .userInitiated) {
+                    try Self.sha256Hash(of: hashPath)
+                }.value
+            } catch {
+                try? fm.removeItem(at: partPath)
+                state = .failed(message: "Couldn't verify downloaded file: \(error.localizedDescription)")
+                return
+            }
             guard actualHash == Self.expectedSHA256 else {
                 // Hash mismatch is almost always a corrupt mirror or
                 // bit-flipped transfer — wipe the .part so the next attempt
@@ -224,8 +250,11 @@ final class ModelDownloader {
         }
     }
 
-    /// Streaming SHA-256 — never loads the full 770 MB into memory.
-    private func sha256Hash(of fileURL: URL) throws -> String {
+    /// Streaming SHA-256 — never loads the full 770 MB into memory. Marked
+    /// `nonisolated static` so it can be invoked from `Task.detached` without
+    /// hopping back to the MainActor; capturing only the file path + the
+    /// `Data` chunks it reads keeps the call genuinely off-main.
+    nonisolated private static func sha256Hash(of fileURL: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: fileURL)
         defer { try? handle.close() }
         var hasher = SHA256()

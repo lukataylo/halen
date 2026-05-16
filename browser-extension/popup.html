@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Halen for Web</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      width: 240px; padding: 14px; margin: 0;
+      background: Canvas; color: CanvasText;
+    }
+    .row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; margin-bottom: 8px;
+    }
+    .dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: #aaa; flex: 0 0 9px;
+    }
+    .dot.ok    { background: #2dd45b; }
+    .dot.warn  { background: #f9a825; }
+    .dot.fail  { background: #ff5f56; }
+    .hint {
+      font-size: 11px; color: GrayText; line-height: 1.4;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 10.5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <div class="dot" id="dot"></div>
+    <div id="text">Checking…</div>
+  </div>
+  <div class="hint">
+    Connects to Halen on <code>127.0.0.1:50765</code>. If the status is red,
+    open Halen from the menubar — it spawns the WebSocket listener at launch.
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

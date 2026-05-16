@@ -84,7 +84,8 @@ final class VoiceDictation: HalenPlugin {
     private func registerHotkey() {
         let cmdOpt = UInt32(cmdKey | optionKey)
         let h = UInt32(kVK_ANSI_H)
-        let ok = hotkey.register(keyCode: h, modifiers: cmdOpt) { [weak self] in
+        let ok = hotkey.register(keyCode: h, modifiers: cmdOpt,
+                                 id: HotkeyID.voiceDictation.rawValue) { [weak self] in
             self?.toggleRecording()
         }
         if !ok {

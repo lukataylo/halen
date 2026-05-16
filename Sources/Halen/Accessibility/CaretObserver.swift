@@ -208,12 +208,6 @@ final class CaretObserver {
         }
     }
 
-    private nonisolated static func restorePasteboard(_ pasteboard: NSPasteboard, items: [NSPasteboardItem]) {
-        guard !items.isEmpty else { return }
-        pasteboard.clearContents()
-        pasteboard.writeObjects(items)
-    }
-
     // MARK: - App / observer lifecycle
 
     private func switchToApp(_ app: NSRunningApplication) {

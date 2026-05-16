@@ -33,9 +33,13 @@ final class PluginInstance {
     private var readerTask: Task<Void, Never>?
     private var stderrTask: Task<Void, Never>?
 
-    /// True between `start()` and `terminate()`. Reader/stderr tasks loop only
-    /// while running so cancellation winds them down cleanly.
+    /// True between `start()` and the end of `terminate()`. Reader/stderr
+    /// tasks keep looping while this is true so the polite-shutdown response
+    /// has a chance to come back through the pump.
     private(set) var isRunning = false
+    /// Set when `terminate()` begins so a concurrent caller doesn't start a
+    /// second shutdown ladder while the first is mid-flight.
+    private var shuttingDown = false
 
     init(manifest: PluginManifest, pluginDir: URL, handler: @escaping RequestHandler) {
         self.manifest = manifest
@@ -92,20 +96,32 @@ final class PluginInstance {
     /// Polite shutdown: `shutdown` request → `exit` notification → wait briefly
     /// → SIGTERM → SIGKILL. MCP's escalation ladder, lifted into the host so
     /// well-behaved plugins flush state cleanly and broken ones still die.
+    ///
+    /// Crucially, `isRunning` stays `true` across the polite phase so the
+    /// reader continues to consume stdout — without this, the plugin's
+    /// response to our `shutdown` request would never be processed and the
+    /// `call` would always time out, defeating the polite path.
     func terminate() async {
-        guard isRunning else { return }
-        isRunning = false
+        guard isRunning, !shuttingDown else { return }
+        shuttingDown = true
+
         do {
             _ = try await call(method: "shutdown", params: nil, timeoutSeconds: 2)
-            try send(notification: "exit")
+            try? send(notification: "exit")
         } catch {
-            // Plugin already in a bad state — skip the polite path.
+            Log.warn("PluginInstance[\(manifest.id)]: shutdown call failed (\(error.localizedDescription)) — escalating")
         }
-        // Give it 1 s to exit on its own, then escalate.
-        let deadline = Date().addingTimeInterval(1)
-        while process.isRunning && Date() < deadline {
+
+        // Give the plugin 1 s to exit on its own after `exit`.
+        let exitDeadline = Date().addingTimeInterval(1)
+        while process.isRunning && Date() < exitDeadline {
             try? await Task.sleep(for: .milliseconds(50))
         }
+
+        // The polite phase is done — flip `isRunning` so reader/stderr loops
+        // wind down naturally on their next pipe-close iteration.
+        isRunning = false
+
         if process.isRunning { process.terminate() }
         let killDeadline = Date().addingTimeInterval(1)
         while process.isRunning && Date() < killDeadline {
@@ -119,37 +135,63 @@ final class PluginInstance {
         Log.info("PluginInstance[\(manifest.id)]: terminated")
     }
 
+    /// Defensive cleanup if the instance is dropped without `terminate()`
+    /// (test harness, future hot-reload, programming error). Foundation
+    /// `Process` does not kill its child on dealloc, so without this the
+    /// plugin process would outlive Halen.
+    deinit {
+        if process.isRunning {
+            process.terminate()
+        }
+    }
+
     // MARK: - Outgoing
 
-    /// Issue a request to the plugin and `await` the response. `timeoutSeconds`
-    /// gives a per-call ceiling so a hung plugin doesn't pin the caller.
+    /// Issue a request to the plugin and `await` the response.
+    ///
+    /// Two correctness traps the previous implementation fell into and this
+    /// one avoids:
+    ///   * The pending continuation MUST be stored before the message is
+    ///     written. A fast plugin can respond before the next MainActor hop
+    ///     runs; if the slot isn't populated by then, `handleResponse`
+    ///     silently drops the response and the call always times out.
+    ///   * `withCheckedThrowingContinuation` is not cancellable, so a
+    ///     "race a timeout" implementation has to actively `resume(throwing:)`
+    ///     on timeout or the continuation leaks (Swift runtime prints a
+    ///     "leaked" warning and the next late response goes nowhere).
     @discardableResult
     func call(method: String, params: RPCValue?, timeoutSeconds: TimeInterval = 30) async throws -> RPCValue {
         let id = nextId; nextId += 1
-        let msg = RPCMessage(id: .number(id), method: method, params: params)
-        try writeMessage(msg)
 
-        return try await withThrowingTaskGroup(of: RPCValue.self) { group in
-            group.addTask { [weak self] in
-                try await withCheckedThrowingContinuation { cont in
-                    // `pending` is MainActor-isolated; capture into the parent
-                    // task continuation via a hop. Stored under `id` so the
-                    // reader can find and resume on response.
-                    Task { @MainActor in self?.pending[id] = cont }
-                }
-            }
-            group.addTask {
-                try await Task.sleep(for: .seconds(timeoutSeconds))
-                throw RPCErrorObject(
+        // Schedule the timeout — runs concurrent with the call. On wake it
+        // tries to remove the pending entry; if it's already gone (response
+        // beat us to it) it's a no-op. If still there, it resumes with a
+        // timeout error, ensuring no continuation ever leaks.
+        let timeoutTask = Task { @MainActor [weak self, methodName = method] in
+            try? await Task.sleep(for: .seconds(timeoutSeconds))
+            guard let self else { return }
+            if let pendingCont = self.pending.removeValue(forKey: id) {
+                pendingCont.resume(throwing: RPCErrorObject(
                     code: PluginRPC.ErrorCode.internalError.rawValue,
-                    message: "Plugin \(method) timed out after \(Int(timeoutSeconds))s",
+                    message: "Plugin \(methodName) timed out after \(Int(timeoutSeconds))s",
                     data: nil
-                )
+                ))
             }
-            let result = try await group.next()!
-            group.cancelAll()
-            pending.removeValue(forKey: id)
-            return result
+        }
+
+        return try await withCheckedThrowingContinuation { cont in
+            // Store first — `call()` and `handleResponse` both run on the
+            // MainActor, so the response can never be processed between this
+            // assignment and the `writeMessage` below.
+            pending[id] = cont
+            do {
+                try writeMessage(RPCMessage(id: .number(id), method: method, params: params))
+            } catch {
+                // Pipe closed mid-write — clean up immediately.
+                pending.removeValue(forKey: id)
+                timeoutTask.cancel()
+                cont.resume(throwing: error)
+            }
         }
     }
 
@@ -233,7 +275,17 @@ final class PluginInstance {
     }
 
     private func handleResponse(_ msg: RPCMessage) {
-        guard case .number(let id) = msg.id, let cont = pending.removeValue(forKey: id) else { return }
+        guard case .number(let id) = msg.id else {
+            // We only ever send numeric ids; a string-id response is either a
+            // plugin bug or a response to a request from a different transport.
+            Log.warn("PluginInstance[\(manifest.id)]: response with non-numeric id — dropping")
+            return
+        }
+        guard let cont = pending.removeValue(forKey: id) else {
+            // Almost always a late response after our timeout already fired.
+            Log.debug("PluginInstance[\(manifest.id)]: response for unknown id \(id) (late after timeout?)")
+            return
+        }
         if let error = msg.error {
             cont.resume(throwing: error)
         } else {

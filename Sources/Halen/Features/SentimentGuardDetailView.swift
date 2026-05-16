@@ -197,14 +197,14 @@ struct SentimentGuardDetailView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "cpu")
                         .foregroundStyle(.tertiary)
-                    Text("Gemma 4 E4B")
-                        .font(.system(.callout, design: .monospaced))
+                    Text("Routed by your inference preference")
+                        .font(.system(.callout))
                     Spacer()
-                    Text("local via Ollama")
+                    Text("See Settings")
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                 }
-                Text("Every enabled rule above goes into one classification prompt. The first match surfaces a popover; \"neutral\" is silent.")
+                Text("Every enabled rule above goes into one classification prompt sent to whichever backend the router has available (Apple Intelligence by default, falling through to the bundled model or Ollama). The first match surfaces a popover; \"neutral\" is silent.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

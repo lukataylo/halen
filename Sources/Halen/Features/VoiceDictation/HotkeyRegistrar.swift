@@ -2,6 +2,14 @@ import Carbon.HIToolbox
 import AppKit
 import Foundation
 
+/// Process-wide catalogue of Carbon hotkey ids. Adding a new hotkey here AND
+/// passing `.rawValue` to `HotkeyRegistrar.register(..., id:)` keeps id
+/// collisions a compile-time concern instead of a runtime surprise.
+enum HotkeyID: UInt32 {
+    case voiceDictation = 1
+    case askHalen       = 2
+}
+
 /// Carbon `RegisterEventHotKey` wrapper. The NSEvent global monitor we tried first
 /// didn't fire reliably for ⌥⌘Space — Carbon's path is the canonical mechanism for
 /// menubar apps that need a real, system-wide shortcut, and it works without
@@ -11,6 +19,12 @@ final class HotkeyRegistrar {
     private var hotKeyRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
     private var onFire: (() -> Void)?
+    /// `registeredID` and `signature` are read from the Carbon C callback,
+    /// which can fire on any thread. They're written only from `register`/
+    /// `unregister` (both `@MainActor`) and are simple scalars, so
+    /// `nonisolated(unsafe)` reflects the actual guarantee.
+    nonisolated(unsafe) private var registeredID: UInt32 = 0
+    nonisolated static let signature: OSType = 0x48414c4e   // 'HALN'
 
     @discardableResult
     func register(keyCode: UInt32,
@@ -19,6 +33,7 @@ final class HotkeyRegistrar {
                   onFire: @escaping () -> Void) -> Bool {
         unregister()
         self.onFire = onFire
+        self.registeredID = id
 
         var eventSpec = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
@@ -26,9 +41,31 @@ final class HotkeyRegistrar {
         )
 
         let userData = Unmanaged.passUnretained(self).toOpaque()
-        let callback: EventHandlerUPP = { _, _, userData in
-            guard let userData else { return noErr }
+        let callback: EventHandlerUPP = { _, eventRef, userData in
+            guard let userData, let eventRef else { return noErr }
             let registrar = Unmanaged<HotkeyRegistrar>.fromOpaque(userData).takeUnretainedValue()
+
+            // Carbon's `GetApplicationEventTarget` delivers every
+            // `kEventHotKeyPressed` to every installed handler whose
+            // `EventTypeSpec` matches — including handlers belonging to OTHER
+            // `HotkeyRegistrar` instances in this process. Without filtering
+            // by `EventHotKeyID`, registering ⌥Space here would *also* fire
+            // the VoiceDictation ⌥⌘H handler (and vice-versa).
+            var firedID = EventHotKeyID()
+            let status = GetEventParameter(
+                eventRef,
+                OSType(kEventParamDirectObject),
+                OSType(typeEventHotKeyID),
+                nil,
+                MemoryLayout<EventHotKeyID>.size,
+                nil,
+                &firedID
+            )
+            guard status == noErr,
+                  firedID.signature == HotkeyRegistrar.signature,
+                  firedID.id == registrar.registeredID
+            else { return noErr }
+
             DispatchQueue.main.async {
                 registrar.onFire?()
             }
@@ -51,10 +88,9 @@ final class HotkeyRegistrar {
         handlerRef = newHandler
 
         // Signature+id is the app-local identity Carbon uses to disambiguate
-        // multiple hotkeys sharing one handler. Each HotkeyRegistrar instance
-        // owns its own handler, but we still parameterise `id` so consumers
-        // can keep them unique within the process for safety.
-        let hotKeyID = EventHotKeyID(signature: 0x48414c4e, id: id) // 'HALN'
+        // multiple hotkeys. Two registrars MUST use distinct ids or the
+        // callback's filter (above) won't distinguish them.
+        let hotKeyID = EventHotKeyID(signature: Self.signature, id: id)
         var newHotKey: EventHotKeyRef?
         let registerStatus = RegisterEventHotKey(
             keyCode,

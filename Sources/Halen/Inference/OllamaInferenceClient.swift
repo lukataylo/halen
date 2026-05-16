@@ -1,15 +1,17 @@
 import Foundation
 
 /// HTTP client for a local Ollama daemon (default `http://localhost:11434`).
-/// Maps `ModelTier` to the local Gemma 4 model name. Used by every plugin that
-/// needs language reasoning — sentiment classification, summarisation, etc.
+/// Maps `ModelTier` to the local Gemma 4 model name. Used internally by
+/// `OllamaBackend`, never directly by plugin code (every consumer talks to
+/// the router via `InferenceClient`, which routes to `OllamaBackend` which
+/// owns this concrete client).
 ///
-/// Why Ollama instead of MLX/llama.cpp directly: the user already has
-/// `gemma4:e2b` and `gemma4:e4b` pulled, the daemon handles model lifecycle
-/// (warm-up, quantisation, swapping), and the JSON wire format is trivially
-/// debuggable. We can swap to MLX later for sub-100ms paths without changing
-/// any plugin code — they only see `InferenceClient`.
-final class OllamaInferenceClient: InferenceClient {
+/// Conformance to `InferenceClient` was dropped in the multi-backend
+/// refactor — it was historical from when the router didn't exist. The
+/// class is intentionally just a thin HTTP wrapper now. `Sendable` because
+/// `OllamaBackend` (an actor) holds it as a stored property and every field
+/// (`URL`, `URLSession`, `JSONEncoder`/`JSONDecoder`) is itself Sendable.
+final class OllamaInferenceClient: Sendable {
     private let baseURL: URL
     private let session: URLSession
     private let encoder = JSONEncoder()

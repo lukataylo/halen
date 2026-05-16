@@ -23,6 +23,7 @@ final class WebSocketBridge {
     nonisolated static let defaultPort: UInt16 = 50765
 
     private let services: HalenServices
+    private let bridge: HostBridge
     private let port: UInt16
 
     private var listener: NWListener?
@@ -40,6 +41,7 @@ final class WebSocketBridge {
 
     init(services: HalenServices, port: UInt16 = WebSocketBridge.defaultPort) {
         self.services = services
+        self.bridge = HostBridge(services: services)
         self.port = port
     }
 
@@ -80,11 +82,13 @@ final class WebSocketBridge {
         wsOptions.autoReplyPing = true
         let params = NWParameters.tcp
         params.allowLocalEndpointReuse = true
-        params.requiredInterfaceType = .loopback   // 127.0.0.1 only — see class comment
+        // Filters incoming connections to loopback interfaces. The underlying
+        // socket still binds to all-interfaces (Network.framework limitation),
+        // but accepts only from 127.0.0.1 — see class doc comment.
+        params.requiredInterfaceType = .loopback
         params.defaultProtocolStack.applicationProtocols.insert(wsOptions, at: 0)
         guard let nwPort = NWEndpoint.Port(rawValue: port) else {
-            throw NSError(domain: "WebSocketBridge", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "Bad port \(port)"])
+            throw WebSocketBridgeError.invalidPort(port)
         }
         return try NWListener(using: params, on: nwPort)
     }
@@ -159,34 +163,8 @@ final class WebSocketBridge {
     }
 
     private func broadcast(_ event: Event) {
-        guard !clients.isEmpty else { return }
-        let topic: String
-        let payload: RPCValue
-        switch event {
-        case .textPaused(let p):
-            topic = "text.pause"
-            payload = .object([
-                "appBundleId": p.appBundleId,
-                "appName": p.appName,
-                "text": p.text,
-                "caretOffset": p.caretOffset
-            ] as [String: Any?])
-        case .caretMoved(let p):
-            topic = "caret.moved"
-            payload = .object([
-                "appBundleId": p.appBundleId,
-                "rect": ["x": p.rect.x, "y": p.rect.y,
-                         "width": p.rect.width, "height": p.rect.height]
-            ] as [String: Any?])
-        case .appFocused(let p):
-            topic = "app.focused"
-            payload = .object([
-                "appBundleId": p.appBundleId,
-                "appName": p.appName
-            ] as [String: Any?])
-        case .inferenceActivity:
-            return
-        }
+        guard !clients.isEmpty,
+              let (topic, payload) = event.toBroadcast() else { return }
         let msg = RPCMessage(method: "event/\(topic)",
                              params: .object(["topic": .string(topic), "payload": payload]))
         send(msg, to: clients)
@@ -249,7 +227,10 @@ final class WebSocketBridge {
     private func handleRequest(_ msg: RPCMessage, from client: Client) async {
         guard let id = msg.id, let method = msg.method else { return }
         do {
-            let result = try await dispatch(method: method, params: msg.params)
+            // Single source of truth for every host method, shared with
+            // PluginHost. The WS transport now gets the full surface for
+            // free (ax/replaceRange, ui/toast — previously missing here).
+            let result = try await bridge.dispatch(method: method, params: msg.params)
             send(RPCMessage(id: id, result: result), to: [client])
         } catch let error as RPCErrorObject {
             send(RPCMessage(id: id, error: error), to: [client])
@@ -260,46 +241,15 @@ final class WebSocketBridge {
             )), to: [client])
         }
     }
+}
 
-    /// Same host methods plugins can call. Centralised here AND in
-    /// `PluginHost` so the API surface is identical regardless of transport.
-    /// A future refactor folds both into a shared `HostBridge` actor.
-    private func dispatch(method: String, params: RPCValue?) async throws -> RPCValue {
-        switch method {
-        case "inference/complete":
-            return try await runInference(params: params)
-        case "ax/readSelection":
-            return readSelection()
-        default:
-            throw RPCErrorObject(code: PluginRPC.ErrorCode.methodNotFound.rawValue,
-                                 message: "Unknown method: \(method)", data: nil)
-        }
-    }
+enum WebSocketBridgeError: Error, LocalizedError {
+    case invalidPort(UInt16)
 
-    private func runInference(params: RPCValue?) async throws -> RPCValue {
-        guard let obj = params?.objectValue, let prompt = obj["prompt"]?.stringValue else {
-            throw RPCErrorObject(code: PluginRPC.ErrorCode.invalidParams.rawValue,
-                                 message: "inference/complete requires `prompt`", data: nil)
+    var errorDescription: String? {
+        switch self {
+        case .invalidPort(let port):
+            return "Halen WebSocket bridge: invalid port \(port)"
         }
-        let tier = ModelTier(rawValue: obj["tier"]?.stringValue ?? "medium") ?? .medium
-        let request = InferenceRequest(
-            prompt: prompt, tier: tier,
-            maxTokens: obj["maxTokens"]?.intValue ?? 256,
-            temperature: 0.4
-        )
-        let response = try await services.inference.complete(request)
-        return .object([
-            "text": response.text,
-            "modelId": response.modelId,
-            "latencyMs": response.latencyMs
-        ] as [String: Any?])
-    }
-
-    private func readSelection() -> RPCValue {
-        if let element = services.caretObserver.currentElement,
-           let text = axReadString(element, kAXSelectedTextAttribute), !text.isEmpty {
-            return .object(["text": text] as [String: Any?])
-        }
-        return .object(["text": RPCValue.null])
     }
 }

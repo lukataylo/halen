@@ -23,7 +23,6 @@ final class AskHalen: HalenPlugin {
     private weak var caretObserver: CaretObserver?
 
     private let hotkey = HotkeyRegistrar()
-    private static let hotkeyId: UInt32 = 2   // VoiceDictation owns id=1
 
     private let state = AskHalenState()
     private var panel: NSPanel?
@@ -37,7 +36,8 @@ final class AskHalen: HalenPlugin {
     func start() {
         let modifiers = UInt32(optionKey)
         let space = UInt32(kVK_Space)
-        let ok = hotkey.register(keyCode: space, modifiers: modifiers, id: Self.hotkeyId) { [weak self] in
+        let ok = hotkey.register(keyCode: space, modifiers: modifiers,
+                                 id: HotkeyID.askHalen.rawValue) { [weak self] in
             MainActor.assumeIsolated { self?.togglePalette() }
         }
         if !ok {
@@ -113,6 +113,11 @@ final class AskHalen: HalenPlugin {
     }
 
     private func closePalette() {
+        // Cancel any in-flight inference — otherwise the response lands in
+        // `state.response` after the palette is gone, and the next open()
+        // would briefly flash that stale text before resetting.
+        inflightTask?.cancel()
+        inflightTask = nil
         panel?.orderOut(nil)
         panel = nil
     }
@@ -166,14 +171,24 @@ final class AskHalen: HalenPlugin {
             closePalette()
             return
         }
+        // Capture before closePalette nukes `state.response` via cancel paths.
+        let response = state.response
         closePalette()
-        // Tiny delay so the palette has actually relinquished key-window.
-        Task { @MainActor [caretObserver, response = state.response] in
+        // Tiny delay so the palette has actually relinquished key-window and
+        // any deferred focus restoration has settled.
+        Task { @MainActor [caretObserver] in
             try? await Task.sleep(for: .milliseconds(80))
-            // Use range length 0 — insert at the caret, don't replace.
-            let range = NSRange(location: 0, length: 0)
-            // Selection-set will likely fail (we don't know the real caret
-            // offset). replaceRange's clipboard fallback handles it.
+
+            // Re-read the AX selection NOW rather than using {0, 0}. In
+            // native AppKit apps, passing range {0, 0} to AX would set the
+            // caret to position 0 and insert there — i.e., at the top of
+            // the user's email, not at their actual caret. Re-reading gets
+            // the live position; falling through to {0, 0} only happens in
+            // apps where AX can't tell us (Electron, web fields), and the
+            // clipboard ⌘V fallback in that path uses the OS-tracked caret
+            // anyway.
+            let cf = axReadSelectedRange(element) ?? CFRange(location: 0, length: 0)
+            let range = NSRange(location: cf.location, length: cf.length)
             caretObserver?.replaceRange(range, with: response, in: element)
         }
     }
