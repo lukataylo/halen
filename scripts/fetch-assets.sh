@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Fetches the large build inputs that are *not* tracked in git:
-#   - Assets/Models/gemma-4-E4B-it-Q4_K_M.gguf  (downloaded + checksum-verified)
+#   - assets/Models/gemma-4-E4B-it-Q4_K_M.gguf  (downloaded + checksum-verified)
 #   - Vendor/llama.xcframework                  (rebuilt from the pinned tag)
 #
 # Only needed for `BUNDLE_MODEL=1` builds — the default slim build downloads
@@ -16,7 +16,7 @@ cd "$ROOT"
 # 1. Bundled model — Gemma 4 E4B (Q4_K_M GGUF, ~4.98 GB)
 #    Constants must match Sources/Halen/Inference/LlamaCpp/ModelDownloader.swift
 # ---------------------------------------------------------------------------
-GGUF_PATH="Assets/Models/gemma-4-E4B-it-Q4_K_M.gguf"
+GGUF_PATH="assets/Models/gemma-4-E4B-it-Q4_K_M.gguf"
 GGUF_URL="https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf"
 GGUF_SHA="519b9793ed6ce0ff530f1b7c96e848e08e49e7af4d57bb97f76215963a54146d"
 

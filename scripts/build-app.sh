@@ -86,7 +86,7 @@ fi
 # offline-first / kiosk-friendly all-in-one build.
 BUNDLE_MODEL="${BUNDLE_MODEL:-0}"
 if [[ "$BUNDLE_MODEL" == "1" ]]; then
-    GGUF_SRC="$ROOT/Assets/Models/gemma-4-E4B-it-Q4_K_M.gguf"
+    GGUF_SRC="$ROOT/assets/Models/gemma-4-E4B-it-Q4_K_M.gguf"
     if [[ -f "$GGUF_SRC" ]]; then
         echo "→ bundling $(basename "$GGUF_SRC") (BUNDLE_MODEL=1)"
         mkdir -p "$RESOURCES/Models"

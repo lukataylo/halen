@@ -3,18 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Halen — The future of AI is personal</title>
-<meta name="description" content="Halen is a local-first AI companion for macOS. Runs Gemma 4 on-device. Plugin marketplace, JSON-RPC extensions, no cloud, no upload." />
-<meta property="og:type" content="website" />
-<meta property="og:title" content="Halen — The future of AI is personal" />
-<meta property="og:description" content="Local-first AI companion for macOS. Runs on-device. No cloud. No upload." />
-<meta property="og:image" content="https://halen.dev/hero-illustration.png" />
-<meta property="og:url" content="https://halen.dev/" />
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Halen — The future of AI is personal" />
-<meta name="twitter:description" content="Local-first AI companion for macOS. Runs on-device. No cloud. No upload." />
-<meta name="twitter:image" content="https://halen.dev/hero-illustration.png" />
-<link rel="icon" type="image/svg+xml" href="assets/halen-icon.svg" />
+<title>Halen — Your computer used to be yours</title>
+<link rel="icon" type="image/svg+xml" href="../assets/halen-icon.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -51,13 +41,13 @@ a { color: inherit; text-decoration: none; }
 button { font: inherit; cursor: pointer; }
 img { display: block; max-width: 100%; }
 
-/* nav */
+/* ---------- nav ---------- */
 .nav {
   position: fixed; top: 0; left: 0; right: 0;
   z-index: 50;
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 28px;
-  background: rgba(255,255,255,0.96);
+  background: rgba(255,255,255,0.78);
   backdrop-filter: blur(18px) saturate(160%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
   border-bottom: 1px solid transparent;
@@ -66,7 +56,12 @@ img { display: block; max-width: 100%; }
   transition: opacity 0.6s var(--ease), transform 0.7s var(--ease), border-color 0.4s var(--ease);
   pointer-events: none;
 }
-.nav.show { opacity: 1; transform: translateY(0); pointer-events: auto; border-bottom-color: var(--line); }
+.nav.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  border-bottom-color: var(--line);
+}
 .nav .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 15.5px; letter-spacing: -0.018em; }
 .nav .brand img { width: 22px; height: 22px; }
 .nav .links { display: flex; gap: 28px; }
@@ -83,7 +78,7 @@ img { display: block; max-width: 100%; }
 .nav .dl-btn:hover { transform: translateY(-1px); background: var(--accent); }
 .nav .dl-btn svg { width: 12px; height: 12px; }
 
-/* hero */
+/* ---------- hero ---------- */
 .hero {
   min-height: 100vh;
   display: flex;
@@ -110,9 +105,10 @@ img { display: block; max-width: 100%; }
   font-weight: 600;
   line-height: 1.0;
   letter-spacing: -0.045em;
-  max-width: 16ch;
+  max-width: 22ch;
   margin: 0;
 }
+.hero h1 .grp { display: inline-block; white-space: nowrap; }
 .hero h1 .w {
   display: inline-block;
   opacity: 0;
@@ -127,17 +123,17 @@ img { display: block; max-width: 100%; }
 .hero h1 .w4 { animation-delay: 0.50s; }
 .hero h1 .w5 { animation-delay: 0.60s; }
 .hero h1 .w6 { animation-delay: 0.70s; }
+.hero h1 .w7 { animation-delay: 0.80s; }
 .hero h1 .ac { color: var(--accent); }
-.hero h1 .grp { display: inline-block; white-space: nowrap; }
 .hero h1 .dot {
   display: inline-block;
-  width: 0.14em; height: 0.14em;
+  width: 0.16em; height: 0.16em;
   border-radius: 50%;
   background: var(--accent);
   vertical-align: 0.1em;
   margin-left: 0.04em;
   transform: scale(0);
-  animation: pop 0.6s var(--spring) 1.4s forwards;
+  animation: pop 0.6s var(--spring) 1.5s forwards;
 }
 @keyframes pop { to { transform: scale(1); } }
 
@@ -163,7 +159,7 @@ img { display: block; max-width: 100%; }
   50%      { transform: scaleY(1) translateY(0); opacity: 1; }
 }
 
-/* story */
+/* ---------- story (long scrolling manifesto) ---------- */
 .story {
   max-width: 760px;
   margin: 0 auto;
@@ -180,6 +176,7 @@ img { display: block; max-width: 100%; }
   gap: 36px;
   width: 100%;
 }
+
 .st {
   font-size: clamp(28px, 2.4vw, 36px);
   font-weight: 400;
@@ -188,7 +185,7 @@ img { display: block; max-width: 100%; }
   color: var(--ink);
   margin: 0;
   width: 100%;
-  text-wrap: balance;
+  text-wrap: pretty;
   transform: translateY(28px);
   transition: transform 1.2s var(--ease-out);
 }
@@ -203,7 +200,11 @@ img { display: block; max-width: 100%; }
 }
 .st .w.read, .st .kw.read { opacity: 1; }
 
-.st-end { margin-top: 80px; align-self: center; text-align: center; }
+.st-end {
+  margin-top: 80px;
+  align-self: center;
+  text-align: center;
+}
 .st-brand {
   font-size: clamp(64px, 10vw, 160px);
   font-weight: 700;
@@ -224,7 +225,7 @@ img { display: block; max-width: 100%; }
 }
 .st-brand .mark img { width: 100%; height: 100%; display: block; }
 
-/* keyword highlights — distinct treatments */
+/* keyword highlights (color override only on hover) */
 .kw {
   position: relative;
   cursor: default;
@@ -238,29 +239,6 @@ img { display: block; max-width: 100%; }
   border-bottom-color: var(--accent);
   border-bottom-style: solid;
 }
-/* keyword variant: caret — adds a blinking | after the word on hover */
-.kw[data-swarm="caret"]::after {
-  content: "";
-  display: inline-block;
-  width: 2px; height: 0.85em;
-  background: var(--accent);
-  margin-left: 5px;
-  vertical-align: -2px;
-  opacity: 0;
-  transform: scaleY(0.4);
-  transition: opacity 0.2s, transform 0.3s var(--spring);
-}
-.kw[data-swarm="caret"]:hover::after {
-  opacity: 1;
-  transform: scaleY(1);
-  animation: blink 1s steps(2,start) infinite;
-}
-@keyframes blink { 50% { opacity: 0; } }
-
-/* keyword variant: pulse — just turns the word blue, no overlay */
-.kw[data-swarm="pulse"]:hover { color: var(--accent); }
-.kw[data-swarm="pulse"]:hover { mix-blend-mode: normal; }
-
 .ac { color: var(--accent); }
 
 /* swarm stage */
@@ -277,8 +255,6 @@ img { display: block; max-width: 100%; }
   will-change: transform, opacity;
   pointer-events: none;
 }
-
-/* app squircles */
 .swarm-app {
   width: 64px; height: 64px;
   border-radius: 16px;
@@ -295,16 +271,29 @@ img { display: block; max-width: 100%; }
   background: var(--accent);
   border: 2px solid #fff;
   display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 0 rgba(22,53,214,0.5);
+  animation: pulse 2.2s ease-out infinite;
 }
 .swarm-app .badge::after { content: ""; width: 4px; height: 4px; background: #fff; border-radius: 50%; }
 .swarm-app .lbl {
-  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
   font-size: 10px; font-weight: 500;
-  color: var(--muted); white-space: nowrap;
-  font-family: var(--mono); letter-spacing: 0.04em;
+  color: var(--muted);
+  white-space: nowrap;
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
 }
-
-/* model chips */
+.swarm-snippet {
+  font-family: var(--mono); font-size: 14px; font-weight: 500;
+  background: var(--accent-soft); color: var(--accent);
+  border: 1px solid rgba(22,53,214,0.25);
+  padding: 8px 14px; border-radius: 999px;
+  box-shadow: 0 8px 22px rgba(22,53,214,0.1);
+  white-space: nowrap;
+}
 .swarm-model {
   font-family: var(--mono); font-size: 12.5px; font-weight: 500;
   padding: 7px 12px; border-radius: 8px;
@@ -314,87 +303,31 @@ img { display: block; max-width: 100%; }
 .swarm-model.dark { background: var(--ink); color: #fff; }
 .swarm-model.tag { background: #fff; border: 1px solid var(--line); color: var(--ink-soft); }
 .swarm-model.blue { background: var(--accent); color: #fff; }
-
-/* clouds — drift upward, fade */
-.swarm-cloud {
-  width: 56px; height: 38px;
-  color: rgba(140, 150, 170, 0.95);
-  transition: transform 2.4s cubic-bezier(0.2, 0.6, 0.2, 1), opacity 2.4s ease-out;
-}
-.swarm-cloud svg { width: 100%; height: 100%; display: block; }
-
-/* subscription cards — plain white pills, line-through, fade */
-.swarm-sub {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 8px 14px;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--ink);
-  box-shadow: 0 4px 14px rgba(0,0,0,0.06);
-  white-space: nowrap;
-  transition: text-decoration-color 0.4s var(--ease);
-}
-.swarm-sub .price { color: #C7352D; font-weight: 600; margin-left: 8px; }
-.swarm-sub.struck {
-  text-decoration: line-through;
-  text-decoration-color: #C7352D;
-  text-decoration-thickness: 2px;
-  color: rgba(10,10,10,0.55);
-}
-.swarm-sub.struck .price { color: rgba(199,53,45,0.55); }
-
-/* pulse — large halen mark at center */
-.pulse-stage {
-  position: fixed; inset: 0;
-  z-index: 55; pointer-events: none;
-  display: flex; align-items: center; justify-content: center;
-}
-.pulse-mark {
-  width: 70vmin; height: 70vmin;
-  background: var(--accent);
-  -webkit-mask: url("assets/halen-icon.svg") center/contain no-repeat;
-          mask: url("assets/halen-icon.svg") center/contain no-repeat;
-  opacity: 0;
-  transform: scale(0.7);
-  transition: opacity 0.6s var(--ease), transform 0.9s var(--spring);
-}
-.pulse-mark.show { opacity: 0.08; transform: scale(1); }
-.pulse-mark.show.beat { animation: beat 2.4s ease-in-out infinite; }
-@keyframes beat {
-  0%, 100% { opacity: 0.06; transform: scale(1); }
-  50%      { opacity: 0.12; transform: scale(1.04); }
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(22,53,214,0.55); }
+  70%  { box-shadow: 0 0 0 9px rgba(22,53,214,0); }
+  100% { box-shadow: 0 0 0 0 rgba(22,53,214,0); }
 }
 
-/* dotted aside (italicized line group for the rhythmic stanzas) */
-.stack {
-  display: flex; flex-direction: column;
-  gap: 0;
-}
-
-/* DEMO */
+/* ---------- DEMO ---------- */
 .demo {
   padding: 140px 28px 160px;
-  max-width: 1160px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 .demo-head { text-align: center; margin-bottom: 80px; }
 .demo-head .eyebrow {
-  font-family: var(--mono); font-size: 11px;
-  letter-spacing: 0.22em; text-transform: uppercase;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
   color: var(--accent);
   margin-bottom: 22px;
   display: inline-flex; align-items: center; gap: 10px;
 }
 .demo-head .eyebrow .pulse {
   width: 7px; height: 7px; background: var(--accent); border-radius: 50%;
-  animation: dotpulse 2s ease-out infinite;
-}
-@keyframes dotpulse {
-  0%   { box-shadow: 0 0 0 0 rgba(22,53,214,0.55); }
-  70%  { box-shadow: 0 0 0 9px rgba(22,53,214,0); }
-  100% { box-shadow: 0 0 0 0 rgba(22,53,214,0); }
+  animation: pulse 2s ease-out infinite;
 }
 .demo-head h2 {
   font-size: clamp(36px, 4.6vw, 64px);
@@ -406,18 +339,25 @@ img { display: block; max-width: 100%; }
 }
 .demo-head p { font-size: 16.5px; color: var(--muted); max-width: 52ch; margin: 0 auto; line-height: 1.55; }
 
-.stage { display: grid; grid-template-columns: 1fr 1.55fr; gap: 28px; align-items: start; }
+.stage { display: grid; grid-template-columns: 1fr 1.8fr; gap: 32px; align-items: stretch; }
+.rail .list { display: flex; flex-direction: column; gap: 8px; height: 100%; }
+.rail .snip { flex: 1; }
 
 .rail h4 {
-  font-family: var(--mono); font-size: 10.5px;
-  letter-spacing: 0.2em; text-transform: uppercase;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 14px; padding-left: 4px;
+  margin-bottom: 14px;
+  padding-left: 4px;
 }
 .rail .list { display: flex; flex-direction: column; gap: 6px; }
 .rail .group-head {
-  font-family: var(--mono); font-size: 10px;
-  letter-spacing: 0.2em; text-transform: uppercase;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
   color: var(--quiet);
   padding: 14px 4px 4px;
 }
@@ -443,7 +383,7 @@ img { display: block; max-width: 100%; }
 .snip .desc { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
 .snip .bar { position: absolute; bottom: 0; left: 0; height: 2px; background: var(--accent); width: 0%; border-radius: 0 2px 2px 0; }
 
-/* yellow note field */
+/* ---------- DEMO field (macOS Notes app aesthetic) ---------- */
 .field {
   background: #FFFFFF;
   border: 1px solid var(--line);
@@ -460,7 +400,8 @@ img { display: block; max-width: 100%; }
   padding: 11px 14px;
   background: linear-gradient(180deg, #F2F1ED 0%, #E8E6E0 100%);
   border-bottom: 1px solid rgba(0,0,0,0.10);
-  position: relative; z-index: 1;
+  position: relative;
+  z-index: 1;
 }
 .field-top .dots { display: flex; gap: 6px; }
 .field-top .dot { width: 11px; height: 11px; border-radius: 50%; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.08); }
@@ -469,193 +410,173 @@ img { display: block; max-width: 100%; }
 .field-top .dot.g { background: #28C840; }
 .field-top .title { margin-left: 10px; font-size: 12.5px; color: rgba(0,0,0,0.55); font-weight: 500; }
 .field-top .right { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 11px; color: rgba(0,0,0,0.4); letter-spacing: 0.04em; }
-.field-top .right .pulse { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: dotpulse 2s ease-out infinite; }
+.field-top .right .pulse { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: pulse 2s ease-out infinite; }
 
-/* Outlook for Mac compose window */
-.field-toolbar {
-  display: flex; align-items: center; gap: 4px;
-  padding: 8px 12px;
-  background: #FAF9F8;
-  border-bottom: 1px solid rgba(0,0,0,0.08);
-}
-.field-toolbar .send {
-  background: #0F6CBD;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 6px 16px;
-  border-radius: 4px;
-  border: none;
-  display: inline-flex; align-items: center; gap: 7px;
+/* note format toolbar */
+.field-tools {
+  display: flex; align-items: center; gap: 14px;
+  padding: 8px 22px;
+  background: #FAFAF8;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  font-size: 12px;
+  color: rgba(0,0,0,0.42);
   font-family: var(--sans);
-  margin-right: 8px;
-  letter-spacing: -0.005em;
 }
-.field-toolbar .send svg { width: 13px; height: 13px; }
-.field-toolbar .send .car { font-size: 11px; opacity: 0.85; margin-left: 2px; }
-.field-toolbar .tbtn {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 5px 9px;
-  border-radius: 4px;
-  font-size: 12.5px;
-  color: rgba(0,0,0,0.7);
-  font-family: var(--sans);
-  background: transparent;
-  border: none;
-}
-.field-toolbar .tbtn svg { width: 13px; height: 13px; opacity: 0.7; }
-.field-toolbar .tbtn .car { font-size: 9px; opacity: 0.5; margin-left: 2px; }
-.field-toolbar .sep { width: 1px; height: 18px; background: rgba(0,0,0,0.1); margin: 0 4px; }
-.field-toolbar .spacer { flex: 1; }
-.field-toolbar .right-icon {
-  width: 26px; height: 26px;
+.field-tools .grp { display: inline-flex; align-items: center; gap: 4px; }
+.field-tools .grp::after { content: ""; width: 1px; height: 14px; background: rgba(0,0,0,0.08); margin-left: 10px; }
+.field-tools .grp:last-child::after { display: none; }
+.field-tools .tool {
   display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 22px;
   border-radius: 4px;
+  font-size: 11.5px;
   color: rgba(0,0,0,0.55);
 }
-.field-toolbar .right-icon svg { width: 14px; height: 14px; }
-
-/* email header rows (From / To / Cc / Subject) */
-.field-headers {
-  background: #fff;
-  padding: 4px 0;
-}
-.field-row {
-  display: flex;
-  padding: 6px 18px;
-  font-size: 13px;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid rgba(0,0,0,0.06);
-}
-.field-row .lbl {
-  width: 48px;
-  flex-shrink: 0;
-  color: rgba(0,0,0,0.45);
-  font-size: 12.5px;
-}
-.field-row .val {
-  color: var(--ink);
-  flex: 1;
-}
-.field-row .val.subject { font-weight: 600; font-size: 14px; }
-.field-row .val .chip {
-  display: inline-flex; align-items: center; gap: 7px;
-  background: #F3F2F1;
-  padding: 3px 9px 3px 3px;
-  border-radius: 999px;
-  font-size: 12.5px;
-  color: var(--ink);
-  font-weight: 500;
-}
-.field-row .val .chip .avatar {
-  width: 22px; height: 22px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #4F8EF7, #1F5EE0);
-  color: #fff;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 10.5px;
-  font-weight: 600;
-  font-family: var(--sans);
-}
-.field-row .end {
-  font-size: 12px;
-  color: rgba(0,0,0,0.4);
-  font-family: var(--sans);
-  display: inline-flex; align-items: center; gap: 6px;
-}
-.field-row .end .ic {
-  width: 18px; height: 18px;
-  display: inline-flex; align-items: center; justify-content: center;
-  opacity: 0.6;
-}
-.field-row .end .ic svg { width: 12px; height: 12px; }
+.field-tools .tool.bold { font-weight: 700; }
+.field-tools .tool.ital { font-style: italic; font-family: Georgia, serif; }
+.field-tools .tool.under { text-decoration: underline; }
+.field-tools .stamp { margin-left: auto; font-size: 11.5px; color: rgba(0,0,0,0.42); }
 
 .field-body {
-  padding: 22px 28px 36px;
-  min-height: 200px;
+  padding: 30px 36px 44px;
+  min-height: 320px;
   position: relative;
   font-family: 'Inter', sans-serif;
-  font-size: 16.5px;
-  line-height: 1.5;
+  font-size: 17px;
+  line-height: 1.55;
   letter-spacing: -0.005em;
   color: #1A1A1A;
   z-index: 1;
   background: #FFFFFF;
 }
-.meta { display: none; }
-.field-body .note-title { display: none; }
+.field-body .note-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #1A1A1A;
+  margin-bottom: 6px;
+}
+.meta { font-family: var(--sans); font-size: 12.5px; color: rgba(0,0,0,0.4); margin-bottom: 22px; display: flex; gap: 14px; }
+.meta .ln { display: inline-flex; align-items: center; gap: 6px; }
+.meta .ln::before { content: ""; width: 3px; height: 3px; border-radius: 50%; background: rgba(0,0,0,0.3); }
+.meta .ln:first-child::before { display: none; }
 
 .draft .snip-tag {
   display: inline-block;
-  font-family: var(--mono); font-size: 17px;
-  background: rgba(22,53,214,0.12);
+  font-family: var(--mono);
+  font-size: 15px;
+  background: rgba(22,53,214,0.10);
   color: var(--accent);
-  padding: 2px 8px; border-radius: 6px;
-  border: 1px solid rgba(22,53,214,0.32);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(22,53,214,0.25);
   transition: all 0.35s var(--ease);
   vertical-align: 1px;
 }
-.draft .snip-tag.expanding { background: rgba(22,53,214,0.22); border-color: rgba(22,53,214,0.5); transform: scale(1.04); }
+.draft .snip-tag.expanding { background: rgba(22,53,214,0.18); border-color: rgba(22,53,214,0.45); transform: scale(1.04); }
 .draft .snip-tag.gone { opacity: 0; transform: scale(0.4); width: 0; padding: 0; border-width: 0; margin: 0; }
-.draft .expanded { background: linear-gradient(180deg, transparent 70%, rgba(22,53,214,0.18) 70%); transition: background 1.2s var(--ease) 0.3s; }
+.draft .expanded { background: linear-gradient(180deg, transparent 72%, rgba(22,53,214,0.10) 72%); transition: background 1.2s var(--ease) 0.3s; }
 
-.draft .typo { display: inline-block; position: relative; color: #D24F3F; transition: color 0.3s var(--ease); }
+/* typo fixer animation */
+.draft .typo {
+  display: inline-block;
+  position: relative;
+  color: #D24F3F;
+  transition: color 0.3s var(--ease);
+}
 .draft .typo::after {
-  content: ""; position: absolute; left: 0; right: 0; top: 55%;
-  height: 1.5px; background: #D24F3F;
-  transform: scaleX(0); transform-origin: left;
+  content: "";
+  position: absolute;
+  left: 0; right: 0;
+  top: 55%;
+  height: 1.5px;
+  background: #D24F3F;
+  transform: scaleX(0);
+  transform-origin: left;
   transition: transform 0.28s var(--ease);
 }
 .draft .typo.struck::after { transform: scaleX(1); }
 .draft .fixed-word {
-  display: inline-block; color: #1A1A1A;
+  display: inline-block;
+  color: #1A1A1A;
   background: linear-gradient(180deg, transparent 72%, rgba(22,53,214,0.18) 72%);
   transition: background 1.4s var(--ease) 0.5s;
   animation: fixedIn 0.35s var(--ease);
 }
-@keyframes fixedIn { from { transform: translateY(-2px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes fixedIn {
+  from { transform: translateY(-2px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
 
+/* sentiment guard card */
 .guard-card {
-  position: absolute; bottom: 18px; left: 18px; right: 18px;
-  background: rgba(255,255,255,0.96);
+  position: absolute;
+  bottom: 18px; left: 18px; right: 18px;
+  background: rgba(255,255,255,0.98);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
-  border: 1px solid rgba(199,53,45,0.32);
+  border: 1px solid rgba(210,79,63,0.32);
   border-radius: 12px;
   padding: 12px 14px;
   display: flex; align-items: center; gap: 12px;
-  box-shadow: 0 18px 40px rgba(199,53,45,0.16), 0 0 0 1px rgba(199,53,45,0.04);
+  box-shadow:
+    0 16px 36px rgba(210,79,63,0.14),
+    0 0 0 1px rgba(210,79,63,0.04);
   font-size: 13.5px;
-  opacity: 0; transform: translateY(12px);
+  opacity: 0;
+  transform: translateY(12px);
   transition: opacity 0.42s var(--spring), transform 0.5s var(--spring);
-  z-index: 10; pointer-events: none;
+  z-index: 10;
+  pointer-events: none;
 }
 .guard-card.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
-.guard-card .icon { width: 34px; height: 34px; background: rgba(199,53,45,0.12); color: #C7352D; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 17px; flex-shrink: 0; }
+.guard-card .icon {
+  width: 32px; height: 32px;
+  background: rgba(210,79,63,0.12);
+  color: #D24F3F;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  flex-shrink: 0;
+}
 .guard-card .txt { flex: 1; }
 .guard-card .txt strong { font-weight: 500; color: var(--ink); }
-.guard-card .txt strong span { color: #C7352D; }
+.guard-card .txt strong span { color: #D24F3F; }
 .guard-card .txt em { color: var(--muted); font-style: normal; font-size: 11px; display: block; font-family: var(--mono); letter-spacing: 0.04em; margin-top: 2px; }
 .guard-card .actions { display: flex; gap: 6px; }
-.guard-card .actions button { padding: 8px 12px; font-size: 12.5px; font-weight: 500; border-radius: 7px; border: 1px solid var(--line); background: transparent; cursor: pointer; color: var(--ink); transition: all 0.2s var(--ease); }
+.guard-card .actions button {
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: transparent;
+  cursor: pointer;
+  color: var(--ink);
+  transition: all 0.2s var(--ease);
+}
 .guard-card .actions button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 .guard-card .actions button:hover { transform: translateY(-1px); }
 .guard-card .actions button.primary:hover { background: var(--accent-strong); }
 
-.caret { display: inline-block; width: 2px; height: 22px; background: var(--accent); vertical-align: -4px; margin-left: 1px; animation: blink 1s steps(2,start) infinite; }
+.caret { display: inline-block; width: 2px; height: 20px; background: var(--accent); vertical-align: -4px; margin-left: 1px; animation: blink 1s steps(2,start) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
 
 .pop {
   position: absolute;
   display: flex; align-items: center; gap: 11px;
-  background: rgba(255,255,255,0.94);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(22,53,214,0.22);
+  background: rgba(255,255,255,0.96);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(22,53,214,0.18);
   border-radius: 12px;
   padding: 10px 14px 10px 11px;
-  box-shadow: 0 16px 40px rgba(22,53,214,0.12), 0 0 0 1px rgba(22,53,214,0.04);
-  font-size: 12.5px; color: var(--ink);
-  white-space: nowrap; z-index: 5;
+  box-shadow: 0 14px 32px rgba(22,53,214,0.10), 0 0 0 1px rgba(22,53,214,0.03);
+  font-size: 12.5px;
+  color: var(--ink);
+  white-space: nowrap;
+  z-index: 5;
   opacity: 0;
   transform: translateY(8px) scale(0.92);
   transition: opacity 0.34s var(--spring), transform 0.45s var(--spring);
@@ -667,10 +588,10 @@ img { display: block; max-width: 100%; }
 .pop .msg .v { font-weight: 500; }
 .pop .kbd { font-family: var(--mono); font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); padding: 2px 6px; border-radius: 4px; }
 
-.stage-foot { margin-top: 24px; text-align: center; font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
-.stage-foot .acc { color: var(--accent); }
+.stage-foot { margin-top: 24px; text-align: center; font-family: var(--sans); font-size: 13px; color: var(--muted); letter-spacing: 0; text-transform: none; }
+.stage-foot .acc { color: var(--accent); font-weight: 500; }
 
-/* CTA (cobalt) */
+/* ---------- CTA (cobalt) ---------- */
 .cta {
   position: relative;
   padding: 200px 28px 180px;
@@ -698,8 +619,10 @@ img { display: block; max-width: 100%; }
 }
 .cta > * { position: relative; z-index: 1; }
 .cta .stamp {
-  font-family: var(--mono); font-size: 11px;
-  letter-spacing: 0.24em; text-transform: uppercase;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
   color: rgba(255,255,255,0.7);
   margin-bottom: 36px;
   display: inline-flex; align-items: center; gap: 12px;
@@ -715,7 +638,7 @@ img { display: block; max-width: 100%; }
   margin-left: auto; margin-right: auto;
   color: #fff;
 }
-.cta h2 .quiet { color: rgba(255,255,255,0.55); font-style: italic; font-weight: 400; }
+.cta h2 .quiet { color: rgba(255,255,255,0.55); font-weight: 400; }
 .download-stack { display: inline-flex; flex-direction: column; align-items: center; gap: 18px; }
 .dl {
   display: inline-flex; align-items: center; gap: 14px;
@@ -735,8 +658,19 @@ img { display: block; max-width: 100%; }
 .brew-row code:hover { background: rgba(255,255,255,0.2); }
 .brew-row code.copied { background: rgba(255,255,255,0.95); color: var(--accent); border-color: rgba(255,255,255,0.95); }
 
-.cta .bg-mark { display: none; }
+.cta .bg-mark {
+  position: absolute;
+  bottom: -240px; left: 50%;
+  transform: translateX(-50%);
+  width: 820px; height: 820px;
+  background: #fff;
+  -webkit-mask: url("../assets/halen-icon.svg") center/contain no-repeat;
+          mask: url("../assets/halen-icon.svg") center/contain no-repeat;
+  opacity: 0.06;
+  z-index: 0;
+}
 
+/* footer */
 .foot {
   padding: 26px 28px;
   background: var(--accent);
@@ -753,17 +687,17 @@ img { display: block; max-width: 100%; }
 @media (max-width: 880px) {
   .stage { grid-template-columns: 1fr; }
   .field-body { padding: 28px 28px 36px; font-size: 17px; min-height: 320px; }
-  .story { gap: 76px; padding: 60px 24px 140px; }
+  .story { gap: 90px; padding: 60px 24px 140px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .swarm-stage, .pulse-stage { display: none; }
+  .swarm-stage { display: none; }
 }
 </style>
 </head>
 <body>
 
 <nav class="nav" id="nav">
-  <a href="#top" class="brand"><img src="assets/halen-icon.svg" alt="" /> Halen</a>
+  <a href="#top" class="brand"><img src="../assets/halen-icon.svg" alt="" /> Halen</a>
   <div class="links">
     <a href="#demo">Demo</a>
     <a href="#download">Download</a>
@@ -778,85 +712,61 @@ img { display: block; max-width: 100%; }
 <!-- ============ HERO ============ -->
 <div class="hero" id="top">
   <span class="brandmark" aria-hidden="true">
-    <img src="assets/halen-icon.svg" alt="" />
+    <img src="../assets/halen-icon.svg" alt="" />
   </span>
-  <h1 aria-label="The future of AI is personal.">
-    <span class="w w1">The</span>
-    <span class="w w2">future</span>
-    <span class="w w3">of</span>
-    <span class="w w4">AI</span>
-    <span class="grp"><span class="w w5">is</span> <span class="w w6 ac">personal</span><span class="dot"></span></span>
+  <h1 aria-label="When did your computer stop being yours?">
+    <span class="w w1">When</span>
+    <span class="w w2">did</span>
+    <span class="w w3">your</span>
+    <span class="w w4">computer</span>
+    <span class="w w5">stop</span>
+    <span class="grp"><span class="w w6">being</span> <span class="w w7 ac">yours?</span></span>
   </h1>
 </div>
 
 <!-- ============ MANIFESTO ============ -->
 <section class="story">
 
-  <p class="st">For years, software moved in one direction: away from the user.</p>
+  <p class="st">Your computer used to be yours. Now every keystroke gets uploaded, and every assistant wants your data before it helps you think.</p>
+
+  <p class="st">Software became surveillance, wrapped in convenience. Somehow this became normal.</p>
+
+  <p class="st">The tools that promised freedom now demand subscriptions, telemetry, logins, sync, and permissions you never agreed to give.</p>
+
+  <p class="st">Halen was built on a different idea. AI should run where your thoughts happen: on your <span class="kw" data-swarm="models">machine</span>, under your control, with rules you decide. No cloud. No forwarding drafts to someone else&rsquo;s server. No invisible training pipeline built from your conversations. Just fast, local intelligence beside your cursor.</p>
+
+  <p class="st">Halen works in <span class="kw" data-swarm="apps">every text field</span>, because thinking doesn&rsquo;t happen in one app. Ideas appear in Notes, in code comments, in Slack replies, in commit messages, in late-night documents you never send. That context matters, and it should stay with you.</p>
 
   <div class="stanza">
-    <p class="st">Into the <span class="kw" data-swarm="cloud">cloud</span>.</p>
-    <p class="st">Into <span class="kw" data-swarm="subs">subscriptions</span>.</p>
-    <p class="st">Into platforms that quietly turned personal computing into rented computing.</p>
+    <p class="st">Your computer is powerful enough.</p>
+    <p class="st">Your workflow is personal enough.</p>
+    <p class="st">Your thoughts are valuable enough.</p>
   </div>
 
-  <p class="st">Your computer became a thin client for someone else&rsquo;s infrastructure.</p>
-
-  <p class="st">But something changed.</p>
-
-  <div class="stanza">
-    <p class="st">Modern <span class="kw" data-swarm="apps">Macs</span> are now powerful enough to run real AI <span class="kw" data-swarm="models">locally</span>.</p>
-    <p class="st">Fast enough to assist in real time.</p>
-    <p class="st">Efficient enough to stay invisible.</p>
-  </div>
-
-  <p class="st">Which raises a simple question.</p>
-
-  <p class="st">If your machine can already do the work, why send your thoughts anywhere else?</p>
-
-  <p class="st">Halen is built around a local-first future.</p>
-
-  <div class="stanza">
-    <p class="st">A future where AI runs privately <span class="kw" data-swarm="models">on-device</span>.</p>
-    <p class="st">Where your workflow stays yours.</p>
-    <p class="st">Where assistance happens instantly at the <span class="kw" data-swarm="caret">cursor</span>, without cloud APIs, tracking, or hidden data collection.</p>
-  </div>
-
-  <div class="stanza">
-    <p class="st">Not because privacy is a feature.</p>
-    <p class="st">Because ownership matters.</p>
-  </div>
-
-  <p class="st">AI should adapt to your workflow quietly and naturally, without demanding your data in exchange.</p>
-
-  <p class="st">Your computer is no longer just a window into the internet.</p>
-
-  <p class="st">It is becoming a <span class="kw" data-swarm="pulse">personal intelligence machine</span>.</p>
-
-  <p class="st">Halen is built for that future.</p>
+  <p class="st">Every <span class="kw" data-swarm="snippets">snippet</span> is a small file you own.</p>
 
   <div class="stanza">
     <p class="st">Take control.</p>
     <p class="st">Keep it local.</p>
   </div>
 
-  <p class="st-brand st-end"><span class="brand-text"></span><span class="mark"><img src="assets/halen-icon.svg" alt="" /></span></p>
+  <p class="st-brand st-end">Halen<span class="mark"><img src="../assets/halen-icon.svg" alt="" /></span></p>
 </section>
 
 <!-- ============ DEMO ============ -->
 <section class="demo" id="demo">
   <div class="demo-head">
     <h2>Plugins for the cursor.</h2>
-    <p>Each one runs on-device. Pick a plugin on the left, or wait and Halen will cycle through.</p>
+    <p>Each one runs on-device. Pick a plugin on the left, or wait and Halen.</p>
   </div>
 
   <div class="stage">
     <div class="rail">
       <div class="list" id="rail">
-        <button class="snip active" data-demo="typo">
+        <button class="snip" data-demo="typo">
           <div class="row1"><span class="key tx">Typo Fixer</span><span class="ms">inline</span></div>
           <div class="label">Auto-replace mistypes</div>
-          <div class="desc">Learns your typos. Backspace once and Halen never re-fixes that word.</div>
+          <div class="desc">Learns your typos </div>
           <span class="bar"></span>
         </button>
         <button class="snip" data-demo="sentiment">
@@ -865,16 +775,16 @@ img { display: block; max-width: 100%; }
           <div class="desc">Gemma classifies your sentence. Pops up before you send.</div>
           <span class="bar"></span>
         </button>
-        <button class="snip" data-demo="polite">
+        <button class="snip active" data-demo="polite">
           <div class="row1"><span class="key">;polite</span><span class="ms">132 ms</span></div>
           <div class="label">Soften the next line</div>
-          <div class="desc">Calmer rewrite of the next sentence via local Gemma 4.</div>
+          <div class="desc">Calmer, less reactive rewrite.</div>
           <span class="bar"></span>
         </button>
-        <button class="snip" data-demo="meet">
-          <div class="row1"><span class="key">;meet</span><span class="ms">184 ms</span></div>
-          <div class="label">Briefing from next event</div>
-          <div class="desc">Reads your calendar, writes the bullets.</div>
+        <button class="snip" data-demo="brief">
+          <div class="row1"><span class="key">;brief</span><span class="ms">96 ms</span></div>
+          <div class="label">Condense the paragraph</div>
+          <div class="desc">Cuts to a single direct sentence.</div>
           <span class="bar"></span>
         </button>
       </div>
@@ -883,67 +793,26 @@ img { display: block; max-width: 100%; }
     <div class="field">
       <div class="field-top">
         <div class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
-        <span class="title">Untitled — Microsoft Outlook</span>
+        <span class="title">Notes &mdash; re: timeline</span>
         <span class="right"><span class="pulse"></span> Halen · idle</span>
       </div>
-      <div class="field-toolbar">
-        <button class="send">
-          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M14.4.6L1.4 6.1c-.5.2-.5.9 0 1.1l4.7 1.7 1.7 4.7c.2.5.9.5 1.1 0L14.4 0.6z"/></svg>
-          Send
-        </button>
-        <button class="tbtn">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M11 5L7 9 5 7M3 3v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1z"/></svg>
-          Attach
-          <span class="car">▾</span>
-        </button>
-        <button class="tbtn">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2v12M2 8h12"/></svg>
-          Sign
-          <span class="car">▾</span>
-        </button>
-        <span class="sep"></span>
-        <button class="tbtn">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 12.5L8 3l5.5 9.5M5 9.5h6"/></svg>
-          <span class="car">▾</span>
-        </button>
-        <button class="tbtn" style="font-weight: 700;">B</button>
-        <button class="tbtn" style="font-style: italic; font-family: Georgia, serif;">I</button>
-        <button class="tbtn" style="text-decoration: underline;">U</button>
-        <span class="sep"></span>
-        <button class="tbtn">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
-        </button>
-        <button class="tbtn">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="3" cy="4" r="0.7" fill="currentColor"/><circle cx="3" cy="8" r="0.7" fill="currentColor"/><circle cx="3" cy="12" r="0.7" fill="currentColor"/><path d="M6 4h8M6 8h8M6 12h8"/></svg>
-        </button>
-        <span class="spacer"></span>
-        <span class="right-icon">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 2"/></svg>
-        </span>
-      </div>
-      <div class="field-headers">
-        <div class="field-row">
-          <span class="lbl">From</span>
-          <span class="val"><span class="chip"><span class="avatar">M</span>Michael Cho</span></span>
-        </div>
-        <div class="field-row">
-          <span class="lbl">To</span>
-          <span class="val"><span class="chip"><span class="avatar" style="background: linear-gradient(135deg, #E07A5F, #C4523B);">A</span>Alex Park</span></span>
-        </div>
-        <div class="field-row">
-          <span class="lbl">Subject</span>
-          <span class="val subject">re: timeline</span>
-          <span class="end">
-            <span class="ic"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4l6 5 6-5M2 4v8h12V4"/></svg></span>
-          </span>
-        </div>
+      <div class="field-tools">
+        <span class="grp"><span class="tool">Aa</span></span>
+        <span class="grp"><span class="tool bold">B</span><span class="tool ital">I</span><span class="tool under">U</span></span>
+        <span class="grp"><span class="tool">≡</span><span class="tool">•</span></span>
+        <span class="stamp">today &middot; 4:32 pm</span>
       </div>
       <div class="field-body">
+        <div class="note-title">re: timeline</div>
+        <div class="meta">
+          <span class="ln">Draft — Mail</span>
+          <span class="ln">to: alex@halen.dev</span>
+        </div>
         <div class="draft" id="draft">
           <span id="prefix"></span><span id="trigger"></span><span class="caret" id="caret"></span>
         </div>
-        <div class="pop" id="pop" style="top: 40px; left: 30px;">
-          <img class="mark" src="assets/halen-icon.svg" alt="" />
+        <div class="pop" id="pop" style="top: 168px; left: 36px;">
+          <img class="mark" src="../assets/halen-icon.svg" alt="" />
           <div class="msg">
             <span class="l" id="popL">HALEN · matched</span>
             <span class="v" id="popV">expanding ;polite via gemma4:e4b</span>
@@ -965,12 +834,13 @@ img { display: block; max-width: 100%; }
     </div>
   </div>
 
-  <div class="stage-foot" style="display: none;">Every keystroke stays here</div>
+  <div class="stage-foot">
+    Every keystroke stays here · <span class="acc">localhost:11434 · 0 bytes uploaded</span>
+  </div>
 </section>
 
 <!-- ============ CTA ============ -->
 <section class="cta" id="download">
-  <span class="bg-mark" aria-hidden="true"></span>
   <h2>Take control.<br/><span class="quiet">Keep it local.</span></h2>
   <div class="download-stack">
     <a class="dl" href="#" data-dmg>
@@ -985,7 +855,6 @@ img { display: block; max-width: 100%; }
 </section>
 
 <div class="swarm-stage" id="swarm" aria-hidden="true"></div>
-<div class="pulse-stage" aria-hidden="true"><div class="pulse-mark" id="pulseMark"></div></div>
 
 <footer class="foot">
   <span>© 2026 Halen Labs</span>
@@ -997,19 +866,21 @@ img { display: block; max-width: 100%; }
 </footer>
 
 <script>
-// ---------- keyword interactions ----------
+// ---------- keyword swarms ----------
 const SWARMS = {
   apps: [
     { emoji: '✉️', bg: '#E6F0FF', lbl: 'Mail', badge: true },
+    { emoji: '💬', bg: '#F4E6FF', lbl: 'Slack', badge: true },
     { emoji: '📝', bg: '#FFF6D9', lbl: 'Notes', badge: true },
+    { emoji: '⌨️', bg: '#E0F0E6', lbl: 'Xcode', badge: true },
     { emoji: '📅', bg: '#FFE0E0', lbl: 'Calendar', badge: true },
-    { emoji: '💬', bg: '#E0F0FF', lbl: 'Messages', badge: true },
-    { emoji: '🌐', bg: '#E6F8FF', lbl: 'Safari', badge: true },
     { emoji: '📄', bg: '#E6EBFF', lbl: 'Pages', badge: true },
-    { emoji: '⏰', bg: '#FFE9D9', lbl: 'Reminders', badge: true },
-    { emoji: '🎵', bg: '#FFE6F0', lbl: 'Music', badge: true },
-    { emoji: '📞', bg: '#E0F4E0', lbl: 'FaceTime', badge: true },
-    { emoji: '📓', bg: '#F0E6FF', lbl: 'Journal', badge: true },
+    { emoji: '📦', bg: '#F0E6FF', lbl: 'Linear', badge: true },
+    { emoji: '🔍', bg: '#E6F8FF', lbl: 'Raycast', badge: true },
+    { emoji: '📞', bg: '#FFE9D9', lbl: 'Messages', badge: true },
+    { emoji: '☕', bg: '#F0FFE6', lbl: 'iTerm', badge: true },
+    { emoji: '📊', bg: '#FFF0E6', lbl: 'Numbers', badge: true },
+    { emoji: '🎨', bg: '#FFEFF7', lbl: 'Figma', badge: true },
   ],
   models: [
     { text: 'gemma4:e4b', kind: 'dark' },
@@ -1021,33 +892,40 @@ const SWARMS = {
     { text: '0 bytes uploaded', kind: 'tag' },
     { text: '100% local', kind: 'blue' },
   ],
-  subs: [
-    { name: 'Notion AI', price: '$10/mo' },
-    { name: 'GitHub Copilot', price: '$19/mo' },
-    { name: 'ChatGPT Plus', price: '$20/mo' },
-    { name: 'Cursor Pro', price: '$20/mo' },
-    { name: 'Grammarly', price: '$30/mo' },
-    { name: 'Adobe CC', price: '$54/mo' },
-    { name: 'Linear', price: '$10/mo' },
-    { name: 'Slack', price: '$7.25/mo' },
+  snippets: [
+    { text: ';polite' }, { text: ';brief' }, { text: ';sig' }, { text: ';meet' },
+    { text: ';tldr' }, { text: ';summary' }, { text: ';formal' }, { text: ';rewrite' },
+    { text: ';tone' }, { text: ';bullets' },
   ],
 };
-const CLOUDS = ['☁️','☁️','☁️','☁️','☁️','☁️','☁️'];
 
 const $swarm = document.getElementById('swarm');
-const $pulseMark = document.getElementById('pulseMark');
 const activeMap = new WeakMap();
 
-function spawnScatter(rect, items, builder) {
+function spawnSwarm(kw, kind) {
+  const items = SWARMS[kind];
+  const rect = kw.getBoundingClientRect();
   const cx = rect.left + rect.width / 2;
   const cy = rect.top + rect.height / 2;
-  const order = items.slice().sort(() => Math.random() - 0.5);
   const els = [];
+  const order = items.slice().sort(() => Math.random() - 0.5);
+
   order.forEach((d, i) => {
-    const el = builder(d);
-    el.style.left = cx + 'px';
-    el.style.top  = cy + 'px';
-    $swarm.appendChild(el);
+    const el = document.createElement('div');
+    el.className = 'swarm-item';
+    if (kind === 'apps') {
+      el.classList.add('swarm-app');
+      el.style.background = d.bg;
+      el.innerHTML = `<span>${d.emoji}</span>` +
+        (d.badge ? '<span class="badge"></span>' : '') +
+        (d.lbl ? `<span class="lbl">${d.lbl}</span>` : '');
+    } else if (kind === 'snippets') {
+      el.classList.add('swarm-snippet');
+      el.textContent = d.text;
+    } else if (kind === 'models') {
+      el.classList.add('swarm-model', d.kind);
+      el.textContent = d.text;
+    }
     const n = order.length;
     const baseAngle = (i / n) * Math.PI * 2;
     const angle = baseAngle + (Math.random() - 0.5) * 0.7;
@@ -1057,6 +935,11 @@ function spawnScatter(rect, items, builder) {
     const tx = Math.cos(angle) * dist;
     const ty = Math.sin(angle) * dist * 0.7 - 20;
     const rot = (Math.random() - 0.5) * 24;
+
+    el.style.left = cx + 'px';
+    el.style.top  = cy + 'px';
+    $swarm.appendChild(el);
+
     const delay = 30 + i * 28 + Math.random() * 60;
     setTimeout(() => {
       el.style.transform = `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(1) rotate(${rot}deg)`;
@@ -1067,88 +950,6 @@ function spawnScatter(rect, items, builder) {
   return els;
 }
 
-function spawnClouds(rect) {
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-  const els = [];
-  const CLOUD_SVG = '<svg viewBox="0 0 64 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 30c-6 0-10-4-10-9s4-9 10-9c1 0 2 0 3 1 2-5 7-9 13-9 7 0 13 5 14 12 5 0 9 4 9 9s-4 9-10 9H16z" fill="currentColor" fill-opacity="0.2"/></svg>';
-  for (let i = 0; i < 7; i++) {
-    const el = document.createElement('div');
-    el.className = 'swarm-item swarm-cloud';
-    el.innerHTML = CLOUD_SVG;
-    el.style.left = cx + 'px';
-    el.style.top = cy + 'px';
-    $swarm.appendChild(el);
-    const dx = (Math.random() - 0.5) * 360;
-    const dy = -180 - Math.random() * 240;
-    const rot = (Math.random() - 0.5) * 20;
-    const scale = 0.7 + Math.random() * 0.8;
-    const delay = 30 + i * 80 + Math.random() * 80;
-    // appear quickly
-    setTimeout(() => {
-      el.style.transition = 'opacity 0.25s ease-out, transform 0.4s var(--spring)';
-      el.style.opacity = '1';
-      el.style.transform = `translate(-50%, -50%) scale(${scale * 0.8}) rotate(${rot * 0.3}deg)`;
-    }, delay);
-    // then drift up and fade
-    setTimeout(() => {
-      el.style.transition = 'transform 2.4s cubic-bezier(0.2, 0.6, 0.2, 1), opacity 2.0s ease-out';
-      el.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(${scale}) rotate(${rot}deg)`;
-      el.style.opacity = '0';
-    }, delay + 220);
-    els.push(el);
-  }
-  return els;
-}
-
-function spawnSubs(rect) {
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-  const items = SWARMS.subs;
-  const els = [];
-  items.forEach((d, i) => {
-    const el = document.createElement('div');
-    el.className = 'swarm-item swarm-sub';
-    el.innerHTML = `${d.name} <span class="price">${d.price}</span>`;
-    el.style.left = cx + 'px';
-    el.style.top = (cy - 220) + 'px';
-    el.style.opacity = 0;
-    el.style.transform = 'translate(-50%, -50%) scale(0.9) rotate(0deg)';
-    $swarm.appendChild(el);
-    const dx = (i - items.length / 2) * 110 + (Math.random() - 0.5) * 40;
-    const dy = 120 + Math.random() * 80;
-    const rot = (Math.random() - 0.5) * 14;
-    setTimeout(() => {
-      el.style.transition = 'transform 0.85s cubic-bezier(0.5, 0, 0.2, 1), opacity 0.4s ease-out';
-      el.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1) rotate(${rot}deg)`;
-      el.style.opacity = 1;
-    }, 30 + i * 70);
-    setTimeout(() => el.classList.add('struck'), 30 + i * 70 + 850);
-    els.push(el);
-  });
-  return els;
-}
-
-function spawnApps(rect) {
-  return spawnScatter(rect, SWARMS.apps, (d) => {
-    const el = document.createElement('div');
-    el.className = 'swarm-item swarm-app';
-    el.style.background = d.bg;
-    el.innerHTML = `<span>${d.emoji}</span>` +
-      (d.badge ? '<span class="badge"></span>' : '') +
-      (d.lbl ? `<span class="lbl">${d.lbl}</span>` : '');
-    return el;
-  });
-}
-function spawnModels(rect) {
-  return spawnScatter(rect, SWARMS.models, (d) => {
-    const el = document.createElement('div');
-    el.className = 'swarm-item swarm-model ' + d.kind;
-    el.textContent = d.text;
-    return el;
-  });
-}
-
 function despawn(els) {
   if (!els) return;
   els.forEach((el, i) => {
@@ -1157,28 +958,18 @@ function despawn(els) {
       el.style.transform = `translate(-50%, -50%) scale(0) rotate(0deg)`;
       el.style.opacity = 0;
       setTimeout(() => el.remove(), 600);
-    }, i * 12);
+    }, i * 14);
   });
 }
 
 document.querySelectorAll('.kw').forEach(kw => {
-  const swarm = kw.dataset.swarm;
   kw.addEventListener('mouseenter', () => {
     const prev = activeMap.get(kw);
     if (prev) despawn(prev);
-    const rect = kw.getBoundingClientRect();
-    let els = null;
-    if (swarm === 'apps') els = spawnApps(rect);
-    else if (swarm === 'models') els = spawnModels(rect);
-    else if (swarm === 'cloud') els = spawnClouds(rect);
-    else if (swarm === 'subs') els = spawnSubs(rect);
-    else if (swarm === 'pulse') {
-      /* no overlay — hover styles handle it */
-    }
-    if (els) activeMap.set(kw, els);
+    const els = spawnSwarm(kw, kw.dataset.swarm);
+    activeMap.set(kw, els);
   });
   kw.addEventListener('mouseleave', () => {
-    if (swarm === 'pulse') return;
     const els = activeMap.get(kw);
     if (els) { despawn(els); activeMap.delete(kw); }
   });
@@ -1190,40 +981,6 @@ const io = new IntersectionObserver(es => es.forEach(e => {
 }), { threshold: 0.18 });
 document.querySelectorAll('.st, .st-brand').forEach(el => io.observe(el));
 
-// brand: type 'Halen' then fade in icon
-(function() {
-  const brand = document.querySelector('.st-brand');
-  if (!brand) return;
-  const textEl = brand.querySelector('.brand-text');
-  const markEl = brand.querySelector('.mark');
-  if (markEl) {
-    markEl.style.opacity = '0';
-    markEl.style.transform = 'scale(0.5)';
-    markEl.style.transition = 'opacity 0.7s var(--ease), transform 0.9s var(--spring)';
-  }
-  const fullText = 'Halen';
-  const brandIO = new IntersectionObserver(es => es.forEach(e => {
-    if (e.isIntersecting) {
-      brandIO.disconnect();
-      let i = 0;
-      function step() {
-        if (i < fullText.length) {
-          textEl.textContent += fullText[i++];
-          setTimeout(step, 140);
-        } else if (markEl) {
-          setTimeout(() => {
-            markEl.style.opacity = '1';
-            markEl.style.transform = 'scale(1.08)';
-            setTimeout(() => { markEl.style.transform = 'scale(1)'; }, 460);
-          }, 280);
-        }
-      }
-      setTimeout(step, 380);
-    }
-  }), { threshold: 0.45 });
-  brandIO.observe(brand);
-})();
-
 // ---------- scroll-tracked word reveal ----------
 function splitParagraph(p) {
   const result = [];
@@ -1232,8 +989,9 @@ function splitParagraph(p) {
       const parts = node.textContent.split(/(\s+)/);
       parts.forEach(part => {
         if (!part) return;
-        if (/^\s+$/.test(part)) result.push(document.createTextNode(part));
-        else {
+        if (/^\s+$/.test(part)) {
+          result.push(document.createTextNode(part));
+        } else {
           const s = document.createElement('span');
           s.className = 'w';
           s.textContent = part;
@@ -1241,6 +999,7 @@ function splitParagraph(p) {
         }
       });
     } else if (node.nodeType === Node.ELEMENT_NODE) {
+      // keep .kw spans intact, just add to tracked set
       result.push(node);
     }
   });
@@ -1286,33 +1045,23 @@ document.getElementById('brew').addEventListener('click', () => {
   setTimeout(() => { el.textContent = t; el.classList.remove('copied'); }, 1400);
 });
 
-// ---------- demo (snippet / typo / sentiment) ----------
+// ---------- snippet/typo/sentiment demo ----------
 const DEMOS = {
   typo: { type: 'typo' },
   sentiment: { type: 'sentiment' },
   polite: {
-    type: 'snippet', trigger: ';polite',
+    type: 'snippet',
+    trigger: ';polite',
     prefix: 'Hey Alex, thanks for the update. ',
     expanded: 'Could we revisit the scope shifts before Friday? A few items moved and I want to make sure we land softly.',
-    pop: { l: 'HALEN · matched', v: 'expanding ;polite via gemma4:e4b' }, delay: 850,
+    pop: { l: 'HALEN · matched', v: 'expanding ;polite via gemma4:e4b' },
+    delay: 850,
   },
   brief: {
     type: 'snippet', trigger: ';brief',
     prefix: 'Hey Alex, thanks for the update. ',
     expanded: 'Scope drifted. Let\u2019s realign Friday before lock.',
     pop: { l: 'HALEN · matched', v: 'condensing ;brief via gemma4:e4b' }, delay: 700,
-  },
-  sig: {
-    type: 'snippet', trigger: ';sig',
-    prefix: 'Hey Alex, thanks for the update. We\u2019ll regroup Friday.\n\n',
-    expanded: 'Best,\nMichael · Halen Labs\nCET · sent from my Mac, no cloud',
-    pop: { l: 'HALEN · matched', v: 'expanding ;sig · static snippet' }, delay: 400,
-  },
-  meet: {
-    type: 'snippet', trigger: ';meet',
-    prefix: 'Hey Alex, thanks for the update. Brief for our 4pm: ',
-    expanded: 'topic — Q3 milestones · attendees — you, Priya, Sam · open items — roadmap sign-off, hiring cap. (pulled from calendar, locally)',
-    pop: { l: 'HALEN · calendar', v: 'briefing ;meet via gemma4:e4b' }, delay: 950,
   },
 };
 
@@ -1322,14 +1071,16 @@ const $pop = document.getElementById('pop');
 const $popL = document.getElementById('popL');
 const $popV = document.getElementById('popV');
 const $rail = document.getElementById('rail');
+const $caret = document.getElementById('caret');
 const $guard = document.getElementById('guard');
 
+let timer = null;
 let timers = [];
 let autoPlay = true;
 let current = 'typo';
 let userInterrupt = false;
-const wait = (ms) => new Promise(r => timers.push(setTimeout(r, ms)));
-function clearTimers() { timers.forEach(t => clearTimeout(t)); timers = []; }
+const wait = (ms) => new Promise(r => { const t = setTimeout(r, ms); timer = t; timers.push(t); });
+function clearTimers() { timers.forEach(t => clearTimeout(t)); timers = []; timer = null; }
 
 async function typeOut(el, text, speed = 20) {
   el.textContent = '';
@@ -1341,6 +1092,7 @@ async function typeOut(el, text, speed = 20) {
     await wait(d);
   }
 }
+
 function setActive(name) {
   $rail.querySelectorAll('.snip').forEach(b => {
     b.classList.toggle('active', b.dataset.demo === name);
@@ -1356,6 +1108,7 @@ async function showProgress(name, dur) {
   el.style.width = '100%';
   await wait(dur);
 }
+
 function resetField() {
   $prefix.textContent = '';
   $trigger.textContent = '';
@@ -1363,8 +1116,10 @@ function resetField() {
   $trigger.style.opacity = '1';
   $pop.classList.remove('show');
   $guard.classList.remove('show');
+  $caret.style.display = 'inline-block';
 }
 
+// ---- SNIPPET ----
 async function playSnippet(cfg, name) {
   resetField();
   $prefix.textContent = cfg.prefix;
@@ -1392,9 +1147,11 @@ async function playSnippet(cfg, name) {
   await wait(2200);
 }
 
+// ---- TYPO FIXER ----
 async function playTypo() {
   resetField();
   showProgress('typo', 9000);
+  // segments — fix=null means clean text; fix=string means typo→fix
   const segments = [
     { text: 'Hey Alex, ' },
     { text: 'thanx', fix: 'thanks' },
@@ -1402,7 +1159,8 @@ async function playTypo() {
     { text: 'teh', fix: 'the' },
     { text: ' quick ' },
     { text: 'updaet', fix: 'update' },
-    { text: '. Let me ' },
+    { text: '. ' },
+    { text: 'Let me ', },
     { text: 'recieve', fix: 'receive' },
     { text: ' the file and circle back.' },
   ];
@@ -1435,6 +1193,7 @@ async function playTypo() {
   await wait(2400);
 }
 
+// ---- SENTIMENT GUARD ----
 async function playSentiment() {
   resetField();
   showProgress('sentiment', 11000);
@@ -1442,15 +1201,18 @@ async function playSentiment() {
   await typeOut($trigger, hostile, 22);
   if (userInterrupt) return;
   await wait(300);
+  // classifying popover
   $popL.textContent = 'HALEN · sentiment guard';
   $popV.textContent = 'classifying tone · gemma4:e4b';
   $pop.classList.add('show');
   await wait(900);
   $pop.classList.remove('show');
   await wait(200);
+  // guard card
   $guard.classList.add('show');
   await wait(3000);
   if (userInterrupt) return;
+  // auto rephrase
   $popL.textContent = 'HALEN · rephrasing';
   $popV.textContent = 'softening tone · gemma4:e4b';
   $pop.classList.add('show');
@@ -1495,10 +1257,15 @@ $rail.addEventListener('click', (e) => {
   autoPlay = false;
   clearTimers();
   setTimeout(() => {
-    playDemo(current).then(() => { autoPlay = true; setTimeout(loop, 600); });
+    playDemo(current).then(() => {
+      autoPlay = true;
+      setTimeout(loop, 600);
+    });
   }, 50);
 });
+
 document.getElementById('guardFix').addEventListener('click', () => {
+  // user manually triggers rephrase — kick into sentiment flow from here
   userInterrupt = true;
   autoPlay = false;
   clearTimers();

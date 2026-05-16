@@ -6,5 +6,5 @@ build/
 
 # Large build inputs — not source. Reproduced by scripts/fetch-assets.sh
 # (GGUF download + checksum; llama.xcframework rebuild from the pinned tag).
-Assets/Models/*.gguf
+assets/Models/*.gguf
 Vendor/llama.xcframework/
