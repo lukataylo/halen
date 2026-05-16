@@ -793,24 +793,56 @@ img { display: block; max-width: 100%; }
 }
 .cta h2 .quiet { color: rgba(255,255,255,0.55); font-style: italic; font-weight: 400; }
 .download-stack { display: inline-flex; flex-direction: column; align-items: center; gap: 18px; }
+
+/* Manifest-style download card: reads like a release artefact (icon,
+   filename, version row, OS row, SHA fingerprint) rather than a button.
+   Whole card is the link target so the click area matches the visual. */
 .dl {
-  display: inline-flex; align-items: center; gap: 14px;
+  display: inline-flex; flex-direction: column;
   background: #fff; color: var(--ink);
-  padding: 18px 26px 18px 20px;
-  border-radius: 999px;
-  font-size: 15.5px; font-weight: 500;
+  padding: 22px 28px;
+  border-radius: 18px;
+  text-align: left;
+  min-width: 420px;
   transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
-  box-shadow: 0 20px 50px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.06);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.22), 0 0 0 1px rgba(255,255,255,0.06);
 }
-.dl:hover { transform: translateY(-3px); box-shadow: 0 28px 60px rgba(0,0,0,0.28); }
-.dl .ic { width: 32px; height: 32px; background: var(--accent); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
-.dl .ic svg { width: 14px; height: 14px; }
-.dl .meta-ml { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; padding-left: 14px; border-left: 1px solid var(--line); margin-left: 4px; }
-.brew-row { font-family: var(--mono); font-size: 12.5px; color: rgba(255,255,255,0.7); letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 8px; margin-top: 2px; }
-.brew-row code { color: #fff; background: rgba(255,255,255,0.12); padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18); cursor: pointer; transition: all 0.18s var(--ease); }
-.brew-row code:hover { background: rgba(255,255,255,0.2); }
-.brew-row code.copied { background: rgba(255,255,255,0.95); color: var(--accent); border-color: rgba(255,255,255,0.95); }
-.brew-row .brew-note { font-size: 11px; color: rgba(255,255,255,0.5); font-family: var(--mono); }
+.dl:hover { transform: translateY(-3px); box-shadow: 0 32px 72px rgba(0,0,0,0.30); }
+.dl .dl-head {
+  display: inline-flex; align-items: center; gap: 14px;
+  font-size: 19px; font-weight: 600;
+  margin-bottom: 16px;
+}
+.dl .ic {
+  width: 38px; height: 38px;
+  background: var(--accent);
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.dl .ic svg { width: 16px; height: 16px; }
+.dl .dl-meta {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  line-height: 1.55;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.dl .dl-meta .row {
+  display: flex; gap: 14px;
+  margin-bottom: 4px;
+}
+.dl .dl-meta .row .sep { color: rgba(0,0,0,0.18); }
+.dl .dl-meta .sha {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(0,0,0,0.08);
+  font-size: 11px;
+  color: rgba(0,0,0,0.45);
+}
+.dl .dl-meta .sha .label { color: rgba(0,0,0,0.35); margin-right: 6px; }
 
 .cta .bg-mark { display: none; }
 
@@ -1370,14 +1402,30 @@ img { display: block; max-width: 100%; }
 
   </div>
 
-  <h2>Take control.<br/><span class="quiet">Keep it local.</span></h2>
+  <h2>At your cursor.<br/><span class="quiet">All on-device.</span></h2>
   <div class="download-stack">
     <a class="dl" href="https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/Halen.dmg" data-dmg>
-      <span class="ic">
-        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+      <span class="dl-head">
+        <span class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        </span>
+        Download Halen.dmg
       </span>
-      Download Halen.dmg
-      <span class="meta-ml">v0.1.0-alpha · 3.7 MB · Apple Silicon · ad-hoc signed</span>
+      <span class="dl-meta">
+        <span class="row">
+          <span>v0.1.0-alpha</span>
+          <span class="sep">·</span>
+          <span>3.7 MB</span>
+        </span>
+        <span class="row">
+          <span>macOS 14+</span>
+          <span class="sep">·</span>
+          <span>Apple Silicon</span>
+          <span class="sep">·</span>
+          <span>ad-hoc signed</span>
+        </span>
+        <span class="sha"><span class="label">SHA-256</span>e787f1aa&hellip;c4b98</span>
+      </span>
     </a>
   </div>
 </section>
