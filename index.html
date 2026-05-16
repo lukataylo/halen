@@ -214,13 +214,20 @@ img { display: block; max-width: 100%; }
   transform: translateY(28px);
   transition: opacity 1.2s var(--ease-out), transform 1.2s var(--ease-out);
   display: inline-flex;
-  align-items: center;
+  /* Align the Halen mark to the TOP of the cap-height of "Halen" rather
+     than its centre — sits up near the H's apex, the way the real
+     overlay-indicator sits at the top of a line of text. */
+  align-items: flex-start;
   gap: 0.18em;
 }
 .st-brand.in { opacity: 1; transform: translateY(0); }
 .st-brand .mark {
   display: inline-block;
   width: 0.78em; height: 0.78em;
+  /* Tiny nudge down so the mark's optical centre lines up with the
+     H's top serif/cap rather than floating above it. Eyeballed against
+     the screenshot the user shared from Notes. */
+  margin-top: 0.06em;
 }
 .st-brand .mark img { width: 100%; height: 100%; display: block; }
 
@@ -649,12 +656,17 @@ img { display: block; max-width: 100%; }
    (see OverlayController.swift). Painted with the icon SVG as a mask so
    it inherits the cobalt accent colour and matches the rest of the page
    instead of carrying its own palette. Hidden by default; the demo JS
-   adds .show to fade it in alongside whatever's being typed. */
+   adds .show to fade it in alongside whatever's being typed.
+
+   `vertical-align: text-top` parks the mark at the top of the font's
+   cap-height instead of riding the baseline — matches how it looks in
+   the real app screenshot the user shared (mark sits roughly at the
+   top of the capital letters, not mid-line). */
 .halen-cursor {
   display: inline-block;
   width: 16px; height: 16px;
   margin-left: 6px;
-  vertical-align: -2px;
+  vertical-align: text-top;
   background: var(--accent);
   -webkit-mask: url("assets/halen-icon.svg") center/contain no-repeat;
           mask: url("assets/halen-icon.svg") center/contain no-repeat;
