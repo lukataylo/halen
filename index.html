@@ -1237,20 +1237,22 @@ img { display: block; max-width: 100%; }
   .testimonials h2 { margin-bottom: 36px; }
 }
 
+/* Footer: white ground, cobalt text. Continues the white surface from
+   the testimonials section above so the bottom of the page reads as
+   one calm area; the subtle line is the only visible boundary. */
 .foot {
   padding: 26px 28px;
-  background: var(--accent);
-  border-top: 1px solid rgba(255,255,255,0.14);
+  background: #fff;
+  border-top: 1px solid var(--line);
   display: flex; justify-content: space-between; align-items: center;
   font-size: 12px;
-  color: rgba(255,255,255,0.7);
+  color: var(--accent);
   font-family: var(--mono);
   letter-spacing: 0.06em;
 }
-.foot a { color: rgba(255,255,255,0.85); text-decoration: none; transition: color 0.18s ease; }
-.foot a:hover { color: #fff; }
-.foot .links a { margin-left: 22px; color: rgba(255,255,255,0.7); }
-.foot .links a:hover { color: #fff; }
+.foot a { color: var(--accent); text-decoration: none; transition: opacity 0.18s ease; opacity: 0.75; }
+.foot a:hover { opacity: 1; }
+.foot .links a { margin-left: 22px; }
 
 @media (max-width: 880px) {
   .stage { grid-template-columns: 1fr; }
