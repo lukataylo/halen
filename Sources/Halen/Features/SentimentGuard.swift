@@ -227,50 +227,102 @@ final class SentimentGuard: HalenPlugin {
         }
     }
 
-    /// Resolve where to anchor the popup. Prefers freshly-read caret bounds
-    /// from the currently-focused element — `lastCaretRect` is a cache that
-    /// goes stale when focus moves between fields, especially in apps where AX
-    /// `kAXSelectedTextChangedNotification` doesn't fire reliably (Electron,
-    /// browser text fields, terminals); a stale rect anchors the popup at the
-    /// previous field's location. Validates the rect actually lies on a screen
-    /// — some apps misreport AX bounds in window-local coords, which would
-    /// otherwise pin the popup to the top-left of the display.
-    private func anchorRect() -> CGRect? {
+    /// Resolve where to anchor the popup. Tries progressively coarser anchors
+    /// so apps with poor AX support (Electron, browser text fields, Notion)
+    /// don't fall through to a screen-corner pin — the popup should always
+    /// appear near the work the user was doing, not floating off in the
+    /// bottom-right of the display.
+    ///
+    /// Each step's rect is validated against the screen list because some
+    /// apps misreport AX bounds in window-local coords; pinning the popup
+    /// to those would put it at (0,0).
+    private func anchorRect() -> AnchorResult? {
+        // 1. Exact caret bounds — the ideal: popup pops right below the caret.
         if let element = caretObserver?.currentElement,
            let axRect = axReadCaretBounds(element) {
             let cocoa = axRectToCocoa(axRect)
-            if rectIsOnScreen(cocoa) { return cocoa }
+            if rectIsOnScreen(cocoa) { return .init(rect: cocoa, kind: .caret) }
         }
+        // 2. Cached caret rect from the most recent caret.moved event.
         if let cached = lastCaretRect, cached.width > 0 || cached.height > 0,
            rectIsOnScreen(cached) {
-            return cached
+            return .init(rect: cached, kind: .caret)
+        }
+        // 3. The focused element's frame. Electron / web text fields refuse
+        //    to expose caret bounds but almost always expose AXFrame on the
+        //    field itself — we can anchor below that field, which still lands
+        //    near where the user was typing.
+        if let element = caretObserver?.currentElement,
+           let axFrame = axReadFrame(element) {
+            let cocoa = axRectToCocoa(axFrame)
+            if rectIsOnScreen(cocoa) { return .init(rect: cocoa, kind: .element) }
+        }
+        // 4. The containing window's frame. Last-stop "right region of the
+        //    screen": at minimum we land on the app the user is in, not
+        //    a different display's corner.
+        if let element = caretObserver?.currentElement,
+           let axWindow = axReadContainingWindowFrame(element) {
+            let cocoa = axRectToCocoa(axWindow)
+            if rectIsOnScreen(cocoa) { return .init(rect: cocoa, kind: .window) }
         }
         return nil
+    }
+
+    /// Tagged anchor — the *kind* of region influences placement (a caret
+    /// gets a popup directly below it; an element/window anchor gets the
+    /// popup at the field's bottom-left, inside the window's bounds).
+    private struct AnchorResult {
+        let rect: CGRect
+        let kind: Kind
+        enum Kind { case caret, element, window }
     }
 
     private func rectIsOnScreen(_ rect: CGRect) -> Bool {
         NSScreen.screens.contains(where: { $0.frame.intersects(rect) })
     }
 
-    /// Place the popup just below the caret and clamp it into the
-    /// `visibleFrame` of whichever screen actually contains the anchor (so it
-    /// can never bleed off-screen, and on multi-monitor setups it stays on the
-    /// display the user is typing on). Falls back to the bottom-right of the
-    /// main screen when there's no usable anchor.
-    private func popupFrame(for anchor: CGRect?, size: CGSize) -> NSRect {
-        if let anchor, let screen = screenContaining(anchor) {
+    /// Place the popup near whichever anchor we resolved, clamped into the
+    /// `visibleFrame` of the screen that actually contains it. Anchor kind
+    /// changes the placement strategy:
+    ///   - `.caret`: 25 px below the caret (closest to where the user looked).
+    ///   - `.element`: 12 px below the bottom-left of the focused field.
+    ///   - `.window`: bottom-left of the window's content area, 24 px inset
+    ///     (Electron fallback — the window frame is the best we can get).
+    /// The final fallback (no anchor at all, never reached unless we have
+    /// no AX info whatsoever) lands at the centre of the main screen, not
+    /// the corner: anything in the corner reads as "system notification",
+    /// which is the wrong mental model.
+    private func popupFrame(for anchor: AnchorResult?, size: CGSize) -> NSRect {
+        if let anchor, let screen = screenContaining(anchor.rect) {
             let visible = screen.visibleFrame
-            // 25 px below the caret bottom (Cocoa coords — lower y).
-            var x = anchor.minX
-            var y = anchor.minY - size.height - 25
+            var x = anchor.rect.minX
+            var y: CGFloat
+            switch anchor.kind {
+            case .caret:
+                // Caret rects are zero-width vertical bars; sit directly below.
+                y = anchor.rect.minY - size.height - 25
+            case .element:
+                // Field's bottom-left; tuck just below.
+                y = anchor.rect.minY - size.height - 12
+            case .window:
+                // Window-anchored: nestle in the window's bottom-left inset
+                // rather than directly below (windows extend to screen edges).
+                x = anchor.rect.minX + 24
+                y = anchor.rect.minY + 24
+            }
             x = min(max(visible.minX + 8, x), visible.maxX - size.width - 8)
             y = min(max(visible.minY + 8, y), visible.maxY - size.height - 8)
             let frame = NSRect(x: x, y: y, width: size.width, height: size.height)
-            Log.debug("SentimentGuard popup anchor=\(anchor) screen=\(visible) frame=\(frame)")
+            Log.info("SentimentGuard popup anchor=\(anchor.kind) rect=\(anchor.rect) frame=\(frame)")
             return frame
         }
+        // No usable anchor at all. Centre on the main screen — feels like a
+        // dialog, not a system toast. Screen-corner pin was the old fallback
+        // and it read as "completely unrelated to what I was doing."
         if let screen = NSScreen.main {
-            return NSRect(x: screen.frame.maxX - size.width - 20, y: 80,
+            let f = screen.visibleFrame
+            return NSRect(x: f.midX - size.width / 2,
+                          y: f.midY - size.height / 2,
                           width: size.width, height: size.height)
         }
         return NSRect(x: 200, y: 200, width: size.width, height: size.height)

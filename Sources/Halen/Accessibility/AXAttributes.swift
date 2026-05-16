@@ -65,6 +65,33 @@ func axReadCaretBounds(_ element: AXUIElement) -> CGRect? {
     return axReadBounds(element, range: CFRange(location: selection.location, length: 0))
 }
 
+/// Read the on-screen frame of an arbitrary AX element via
+/// `kAXFrameAttribute`. Useful when `kAXBoundsForRangeParameterizedAttribute`
+/// isn't supported by the element (Electron, most browser text fields) and
+/// we just need *somewhere reasonable* to anchor UI relative to the field
+/// the user is typing in. Returns AX coords — convert via `axRectToCocoa`.
+func axReadFrame(_ element: AXUIElement) -> CGRect? {
+    var value: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(element, "AXFrame" as CFString, &value) == .success,
+          let v = value, CFGetTypeID(v) == AXValueGetTypeID() else { return nil }
+    var rect = CGRect.zero
+    // Safe: see `axReadSelectedRange` — `CFGetTypeID` is the guard.
+    AXValueGetValue(v as! AXValue, .cgRect, &rect)
+    return rect
+}
+
+/// Walk up an AX element's window chain to the containing window, then read
+/// its on-screen frame. The window frame is the broadest fallback that's
+/// still the right *region of the screen* (vs. pinning to a screen corner)
+/// when neither caret bounds nor element frame are available.
+func axReadContainingWindowFrame(_ element: AXUIElement) -> CGRect? {
+    var windowRef: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(element, kAXWindowAttribute as CFString, &windowRef) == .success,
+          let win = windowRef, CFGetTypeID(win) == AXUIElementGetTypeID() else { return nil }
+    let windowElement: AXUIElement = win as! AXUIElement
+    return axReadFrame(windowElement)
+}
+
 /// Convert an AX rect (top-left origin, primary-display coords) to a Cocoa screen rect
 /// (bottom-left origin). Multi-monitor setups with displays above the primary need extra
 /// work — handled in a later milestone.
