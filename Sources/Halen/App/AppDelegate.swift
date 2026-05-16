@@ -18,6 +18,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator.start()
     }
 
+    /// Re-probe inference backends whenever Halen returns to the foreground.
+    /// Catches the common "user went to System Settings → Apple Intelligence,
+    /// toggled it on, came back to Halen" flow without making the user wait
+    /// for the Settings panel's 30-second poll (or hunt for the Refresh
+    /// button). Ditto for "user started Ollama in another terminal".
+    func applicationDidBecomeActive(_ notification: Notification) {
+        let router = coordinator.inference
+        Task { await router.refreshAvailability() }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // `applicationShouldTerminate` (below) is the one that actually waits
         // on the async cleanup; this hook fires after we've already replied

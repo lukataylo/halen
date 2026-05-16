@@ -116,6 +116,11 @@ actor RouterInferenceClient: InferenceClient {
         }
         let value = await backend.availability()
         availabilityCache[backend.kind] = (value, Date())
+        // Log every fresh probe — surfaces exactly what each backend reports
+        // (e.g. Apple Intelligence's specific UnavailableReason) so a user
+        // saying "I enabled it but Halen doesn't see it" can be diagnosed
+        // from the log without re-instrumenting.
+        Log.info("Router: \(backend.kind.rawValue) availability = \(value)")
         let settings = self.settings
         let kind = backend.kind
         await MainActor.run { settings.availability[kind] = value }

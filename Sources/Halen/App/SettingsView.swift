@@ -186,6 +186,16 @@ struct SettingsView: View {
             statusKind = .warning
             detail = "Checking…"
         }
+        // When Apple Intelligence is specifically *off* (vs unsupported
+        // hardware), surface a one-click jump to the right System Settings
+        // pane — the user has already said "I want this on", asking them
+        // to dig through System Settings is friction they shouldn't pay.
+        let showAppleAISettingsButton: Bool = {
+            guard kind == .appleFoundationModels,
+                  case .unavailable(let reason) = availability else { return false }
+            return reason.localizedCaseInsensitiveContains("turned off")
+                || reason.localizedCaseInsensitiveContains("not enabled")
+        }()
         return HStack(spacing: 10) {
             statusDot(statusKind)
             VStack(alignment: .leading, spacing: 1) {
@@ -195,6 +205,19 @@ struct SettingsView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if showAppleAISettingsButton {
+                    Button("Open System Settings → Apple Intelligence") {
+                        // x-apple-systempreferences URLs are stable across
+                        // macOS versions; the AppleIntelligence pane is the
+                        // canonical anchor.
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.appleintelligence") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .font(.system(size: 11))
+                }
             }
             Spacer(minLength: 6)
             VStack(spacing: 2) {
