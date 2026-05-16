@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Privacy — Halen</title>
+<meta name="description" content="What Halen sees, what stays on your Mac, and the exact set of outbound connections (all loopback)." />
+<meta property="og:title" content="Privacy — Halen" />
+<meta property="og:description" content="Local-first by construction. No telemetry, no cloud, no upload." />
+<meta property="og:image" content="https://halen.dev/hero-illustration.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" type="image/svg+xml" href="assets/halen-icon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #ffffff;
+  --ink: #0A0A0A;
+  --ink-soft: #2A2A2A;
+  --muted: #6E6E6E;
+  --line: rgba(0,0,0,0.08);
+  --accent: #1635D6;
+  --accent-soft: rgba(22,53,214,0.08);
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--ink); }
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 16px; line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+.nav {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 28px;
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border-bottom: 1px solid var(--line);
+}
+.nav .brand {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-weight: 600; color: var(--ink); text-decoration: none;
+  font-size: 15px;
+}
+.nav .brand img { width: 22px; height: 22px; }
+.nav .links { display: flex; gap: 22px; }
+.nav .links a {
+  color: var(--ink-soft); text-decoration: none; font-size: 14px;
+  transition: color 0.18s ease;
+}
+.nav .links a:hover { color: var(--accent); }
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 64px 28px 96px;
+}
+h1 {
+  font-size: 44px; font-weight: 800; letter-spacing: -0.025em;
+  line-height: 1.08; margin: 0 0 8px;
+}
+.subtitle {
+  color: var(--muted); font-size: 16px; margin: 0 0 48px;
+}
+h2 {
+  font-size: 22px; font-weight: 700; letter-spacing: -0.015em;
+  margin: 48px 0 12px;
+}
+h2 .acc { color: var(--accent); }
+p { margin: 0 0 14px; color: var(--ink-soft); }
+ul {
+  margin: 0 0 18px; padding-left: 22px;
+  color: var(--ink-soft);
+}
+ul li { margin-bottom: 6px; }
+ul li strong { color: var(--ink); font-weight: 600; }
+code, .mono {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+pre {
+  background: #FAFAFA;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 0 0 18px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+pre code {
+  background: none; color: inherit; padding: 0;
+}
+table {
+  width: 100%; border-collapse: collapse; margin: 0 0 18px;
+  font-size: 14px;
+}
+th, td {
+  text-align: left; padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+th {
+  font-weight: 600; color: var(--muted);
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+td { color: var(--ink-soft); vertical-align: top; }
+td:first-child { font-weight: 600; color: var(--ink); white-space: nowrap; }
+
+a.inline { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(22,53,214,0.25); }
+a.inline:hover { border-bottom-color: var(--accent); }
+
+.callout {
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  padding: 14px 18px;
+  border-radius: 0 8px 8px 0;
+  margin: 0 0 18px;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+footer.foot {
+  margin-top: 80px;
+  padding: 22px 28px;
+  border-top: 1px solid var(--line);
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; color: var(--muted);
+}
+footer.foot .links { display: flex; gap: 18px; }
+footer.foot .links a {
+  color: var(--muted); text-decoration: none;
+  transition: color 0.18s ease;
+}
+footer.foot .links a:hover { color: var(--accent); }
+
+@media (max-width: 600px) {
+  main { padding: 44px 22px 80px; }
+  h1 { font-size: 34px; }
+  .nav { padding: 12px 20px; }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="index.html" class="brand"><img src="assets/halen-icon.svg" alt="" /> Halen</a>
+  <div class="links">
+    <a href="index.html#demo">Demo</a>
+    <a href="index.html#download">Download</a>
+    <a href="https://github.com/lukataylo/halen" rel="noopener" target="_blank">Source</a>
+  </div>
+</nav>
+
+<main>
+  <h1>Privacy</h1>
+  <p class="subtitle">What Halen sees, what stays on your Mac, and the exact set of outbound connections (all loopback).</p>
+
+  <div class="callout">
+    Halen is built around one constraint: <strong>nothing leaves the machine.</strong> This page documents what data the app sees, where it&rsquo;s processed, and the few egress points that do exist (all to localhost).
+  </div>
+
+  <h2>What Halen sees</h2>
+  <p>Once Accessibility is granted, the <code>CaretObserver</code> reads two AX attributes from whichever text field is currently focused, system-wide:</p>
+  <ul>
+    <li><code>kAXValueAttribute</code> — the full text of the field.</li>
+    <li><code>kAXSelectedTextRangeAttribute</code> — the caret offset (and selection if any).</li>
+  </ul>
+  <p>That includes any text you&rsquo;re editing in any app that exposes a native AX text element: Mail compose windows, Notes, Slack, Notion, Apple Calendar event titles, browser address bars, IDE editor panes, and so on. <strong>It does not include the screen pixel buffer, the keyboard event stream, window titles, file system contents, or anything outside the focused field.</strong></p>
+  <p>Payloads are <strong>windowed to 8 000 characters around the caret</strong> before being published to the event bus, so a terminal scrollback or a long Notes document can&rsquo;t blast inference plugins with megabytes of unrelated text.</p>
+  <p>Plugins that downstream the text further:</p>
+  <ul>
+    <li><strong>Sentiment Guard</strong> re-windows to ~800 chars around the caret before hashing and sending to the on-device model.</li>
+    <li><strong>Burnout Copilot</strong> re-windows to ~800 chars before its yes/no tone call.</li>
+    <li><strong>Snippet Expander (AI snippets)</strong> sends the 500 chars <em>immediately preceding</em> the trigger as prior context.</li>
+    <li><strong>Meeting Prep</strong> sends EventKit event titles, attendee names, and notes — never anything from focused text fields.</li>
+    <li><strong>Typo Fixer</strong> does string diffs locally; it never sends text to a model.</li>
+    <li><strong>Voice Dictation</strong> streams audio buffers to <code>SFSpeechRecognizer</code> with <code>requiresOnDeviceRecognition = true</code> (see below).</li>
+  </ul>
+
+  <h2>What stays local</h2>
+  <p>Everything by default. Concretely:</p>
+  <ul>
+    <li><strong>Typo dictionary</strong> — <code>~/Library/Application Support/Halen/typos.json</code>. Local file. Editable.</li>
+    <li><strong>Sentiment rules</strong> — <code>~/Library/Application Support/Halen/com.halen.sentiment-guard/rules.json</code>. Local file.</li>
+    <li><strong>Approved-draft fingerprints</strong> — <code>approved.json</code>. <strong>SHA-256 hex digests</strong> of windowed drafts the user marked &ldquo;Looks fine&rdquo;. The plaintext is <em>not</em> persisted — only the hash.</li>
+    <li><strong>Snippets</strong> — <code>com.halen.snippet-expander/snippets.json</code>. Local file.</li>
+    <li><strong>Briefed-event ids</strong> — <code>com.halen.meeting-prep/processed.json</code>. Contains only EventKit event identifiers, not titles or contents.</li>
+    <li><strong>Bridge pairing token</strong> — <code>~/Library/Application Support/Halen/bridge-token</code>, 0600 permissions. Used by the optional browser extension to authenticate to the local WebSocket on <code>127.0.0.1:50765</code>.</li>
+  </ul>
+
+  <h2>Network traffic</h2>
+  <p>Halen makes <strong>only loopback connections</strong>. Three possible paths, all to <code>127.0.0.1</code>:</p>
+  <ul>
+    <li><strong>Apple Foundation Models</strong> — runs in-process via Apple&rsquo;s on-device API (macOS 26+). No socket at all.</li>
+    <li><strong>Bundled llama.cpp + Gemma 4 E4B</strong> — also in-process. No socket.</li>
+    <li><strong>Ollama (optional)</strong> — HTTP POST to <code>http://localhost:11434/api/chat</code>. The base URL is set in code; there is no setting that would let a process change it to a remote host. Ollama itself binds to <code>127.0.0.1</code> by default.</li>
+  </ul>
+  <p>That traffic does not leave the loopback interface unless you have separately configured Ollama to bind to a non-localhost address.</p>
+  <p>There is <strong>no other outbound network code</strong> in the project — no analytics SDK, no remote logging endpoint, no auto-updater, no crash reporter. The optional WebSocket bridge on <code>127.0.0.1:50765</code> only <em>accepts</em> inbound connections from the local browser extension; it never dials out.</p>
+
+  <h2>Apple on-device speech recognition</h2>
+  <p>Voice Dictation uses <code>SFSpeechRecognizer</code> with:</p>
+  <pre><code>req.requiresOnDeviceRecognition = true</code></pre>
+  <p>When <code>requiresOnDeviceRecognition = true</code>, Apple&rsquo;s recogniser refuses to fall back to a server-side path: if the on-device model for your locale isn&rsquo;t installed, the request fails outright (<code>recognizerUnavailable</code>) rather than silently round-tripping audio to Apple.</p>
+  <p>The model itself is downloaded by macOS the first time you enable Dictation for a language (System Settings → Keyboard → Dictation). Once installed, recognition runs entirely on the Neural Engine.</p>
+
+  <h2>EventKit</h2>
+  <p>Burnout Copilot and Meeting Prep ask for <strong>full Calendars access</strong> via <code>EKEventStore.requestFullAccessToEvents()</code>. Both plugins:</p>
+  <ul>
+    <li>Read events (titles, start/end, attendees, notes) from the system calendar database.</li>
+    <li>Burnout Copilot also <strong>writes</strong> a single &ldquo;🌿 Halen break&rdquo; event when the user accepts the break suggestion. No other writes.</li>
+  </ul>
+  <p>Calendar data flows through the same pipeline as everything else: read into memory, sent to the on-device model if needed (Meeting Prep), never persisted outside macOS&rsquo;s own EventKit store.</p>
+
+  <h2>Telemetry</h2>
+  <p><strong>There is none.</strong> No analytics, no usage metrics, no error reporting, no remote feature flags. Logging goes to stderr and the unified system log. Nothing is uploaded.</p>
+
+  <h2>Permissions, summarised</h2>
+  <table>
+    <thead>
+      <tr><th>Permission</th><th>Used by</th><th>Why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Accessibility</td><td>host (CaretObserver)</td><td>Read focused text, write back corrections / dictation / snippets</td></tr>
+      <tr><td>Input Monitoring</td><td>Ask Halen (⌃H)</td><td>Observe the ⌃H hotkey globally; nothing else is recorded</td></tr>
+      <tr><td>Microphone</td><td>Voice Dictation</td><td>Capture audio for SFSpeechRecognizer</td></tr>
+      <tr><td>Speech Recognition</td><td>Voice Dictation</td><td>Convert audio to text <strong>on-device</strong></td></tr>
+      <tr><td>Calendars (full access)</td><td>Burnout Copilot, Meeting Prep</td><td>Read events; Burnout writes the &ldquo;🌿 Halen break&rdquo; event</td></tr>
+      <tr><td>Notifications</td><td>Meeting Prep, Ask Halen</td><td>Briefing &amp; clipboard-fallback alerts</td></tr>
+    </tbody>
+  </table>
+  <p>You can deny any of these and Halen continues to run. The dependent plugins surface their own &ldquo;permission required&rdquo; detail-view state with a one-click jump to System Settings.</p>
+
+  <h2>Contact</h2>
+  <p>Questions or concerns about how Halen handles your data? Email <a class="inline" href="#" data-contact>the maintainer</a> or open an issue at <a class="inline" href="https://github.com/lukataylo/halen" rel="noopener" target="_blank">github.com/lukataylo/halen</a>.</p>
+</main>
+
+<footer class="foot">
+  <span>© 2026 Halen Labs</span>
+  <span class="links">
+    <a href="privacy.html">Privacy</a>
+    <a href="https://github.com/lukataylo/halen" rel="noopener" target="_blank">Source</a>
+    <a href="#" data-contact>Contact</a>
+  </span>
+</footer>
+
+<script>
+// Email obfuscation: assemble parts only when the user actually clicks
+// "Contact". Static scrapers see no @-sign; only a JS-executing browser
+// gets the mailto:. Plain alert is enough — a full modal would be heavier
+// than the friction it saves.
+document.querySelectorAll('[data-contact]').forEach(el => {
+  el.addEventListener('click', (e) => {
+    e.preventDefault();
+    const u = ['luka', '.', 'taylor'].join('');
+    const d = ['gmail', '.', 'com'].join('');
+    window.location.href = 'mailto:' + u + '@' + d + '?subject=' + encodeURIComponent('Halen');
+  });
+});
+</script>
+</body>
+</html>

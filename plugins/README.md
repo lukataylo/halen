@@ -14,27 +14,57 @@ The host discovers installed plugins at:
 Each subdirectory must contain a `halen-plugin.json` manifest pointing at the
 plugin's executable. Halen auto-creates the parent directory on first launch.
 
-## Try the sample
+## Hello-world plugin
 
-```bash
-mkdir -p ~/Library/Application\ Support/Halen/Plugins
-cp -r plugins/today-snippet ~/Library/Application\ Support/Halen/Plugins/
+A complete plugin is two files. Drop both into
+`~/Library/Application\ Support/Halen/Plugins/com.example.hello/` and
+restart Halen.
+
+`halen-plugin.json`:
+
+```jsonc
+{
+  "id":              "com.example.hello",
+  "name":            "Hello",
+  "summary":         "Logs every text.pause event.",
+  "version":         "0.1.0",
+  "halenApiVersion": "0.1",
+  "executable":      "/usr/bin/python3",
+  "args":            ["plugin.py"],
+  "events":          ["text.pause"],
+  "permissions":     [],
+  "icon":            "hand.wave",
+  "category":        "productivity"
+}
 ```
 
-Restart Halen. Now type `;extoday ` (with a trailing space) in any text field —
-the trigger expands to today's date. The built-in `SnippetExpander` ships
-`;today` already, so this sample uses `;extoday` to demonstrate the protocol
-without colliding (two plugins firing on the same trigger race each other's
-AX writes and produce garbage).
+`plugin.py`:
 
-Watch what's happening:
+```python
+import json, sys
+
+def send(msg): sys.stdout.write(json.dumps(msg) + "\n"); sys.stdout.flush()
+
+for line in sys.stdin:
+    msg = json.loads(line)
+    if msg.get("method") == "initialize":
+        send({"jsonrpc": "2.0", "id": msg["id"], "result": {"capabilities": {}}})
+    elif msg.get("method") == "event/text.pause":
+        sys.stderr.write(f"text.pause in {msg['params']['payload']['appName']}\n")
+        sys.stderr.flush()
+    elif msg.get("method") == "shutdown":
+        send({"jsonrpc": "2.0", "id": msg["id"], "result": None})
+```
+
+Watch it run:
 
 ```bash
 log stream --predicate 'subsystem == "com.dadiani.halen"' --info
 ```
 
-You'll see `plugin[com.halen.today-snippet] expanding ;extoday at offset N → ...`
-from the plugin's stderr forwarded into the host's unified log.
+Every time you pause typing in any text field you'll see the
+`text.pause in <appName>` line from the plugin's stderr forwarded into
+Halen's unified log.
 
 ## Manifest reference
 

@@ -734,6 +734,7 @@ img { display: block; max-width: 100%; }
 .brew-row code { color: #fff; background: rgba(255,255,255,0.12); padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18); cursor: pointer; transition: all 0.18s var(--ease); }
 .brew-row code:hover { background: rgba(255,255,255,0.2); }
 .brew-row code.copied { background: rgba(255,255,255,0.95); color: var(--accent); border-color: rgba(255,255,255,0.95); }
+.brew-row .brew-note { font-size: 11px; color: rgba(255,255,255,0.5); font-family: var(--mono); }
 
 .cta .bg-mark { display: none; }
 
@@ -769,7 +770,7 @@ img { display: block; max-width: 100%; }
     <a href="#download">Download</a>
     <a href="https://github.com/lukataylo/halen" rel="noopener" target="_blank">Source</a>
   </div>
-  <a class="dl-btn" href="#download">
+  <a class="dl-btn" href="https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/Halen.dmg">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
     Download
   </a>
@@ -800,40 +801,26 @@ img { display: block; max-width: 100%; }
     <p class="st">Into platforms that quietly turned personal computing into rented computing.</p>
   </div>
 
-  <p class="st">Your computer became a thin client for someone else&rsquo;s infrastructure.</p>
+  <p class="st">But modern <span class="kw" data-swarm="apps">Macs</span> can now run real AI <span class="kw" data-swarm="models">locally</span> &mdash; fast enough to assist in real time.</p>
 
-  <p class="st">But something changed.</p>
-
-  <div class="stanza">
-    <p class="st">Modern <span class="kw" data-swarm="apps">Macs</span> are now powerful enough to run real AI <span class="kw" data-swarm="models">locally</span>.</p>
-    <p class="st">Fast enough to assist in real time.</p>
-    <p class="st">Efficient enough to stay invisible.</p>
-  </div>
-
-  <p class="st">Which raises a simple question.</p>
-
-  <p class="st">If your machine can already do the work, why send your thoughts anywhere else?</p>
+  <p class="st">So why send your thoughts anywhere else?</p>
 
   <p class="st">Halen runs beside your <span class="kw" data-swarm="caret">cursor</span>, not somewhere across the internet.</p>
 
   <div class="stanza">
     <p class="st">No <span class="kw" data-swarm="cloud">cloud APIs</span>.</p>
     <p class="st">No uploads.</p>
-    <p class="st">No waiting for responses from someone else&rsquo;s server.</p>
+    <p class="st">No waiting for someone else&rsquo;s server.</p>
   </div>
-
-  <p class="st">Just instant, local intelligence that stays quiet until you need it.</p>
 
   <div class="stanza">
     <p class="st">Not because privacy is a feature.</p>
     <p class="st">Because ownership matters.</p>
   </div>
 
-  <p class="st">Apple shipped local LLMs on every modern Mac.</p>
+  <p class="st">Apple shipped local LLMs on every modern Mac. But no real way to shape them &mdash; no way to teach them your snippets, your tone, your rules.</p>
 
-  <p class="st">But no real way to shape them. No way to teach them your snippets, your tone, your rules.</p>
-
-  <p class="st">Halen is that missing surface. A small, native layer that lets you control and customise the intelligence already sitting on your machine.</p>
+  <p class="st">Halen is that missing surface.</p>
 
   <div class="stanza">
     <p class="st">Take control.</p>
@@ -977,14 +964,14 @@ img { display: block; max-width: 100%; }
   <span class="bg-mark" aria-hidden="true"></span>
   <h2>Take control.<br/><span class="quiet">Keep it local.</span></h2>
   <div class="download-stack">
-    <a class="dl" href="#" data-dmg>
+    <a class="dl" href="https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/Halen.dmg" data-dmg>
       <span class="ic">
         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
       </span>
       Download Halen.dmg
-      <span class="meta-ml">v0.4 · 38 MB · Apple Silicon</span>
+      <span class="meta-ml">v0.1.0-alpha · 3.7 MB · Apple Silicon · ad-hoc signed</span>
     </a>
-    <span class="brew-row">or run <code id="brew">brew install --cask halen</code></span>
+    <span class="brew-row">or run <code id="brew">brew install --cask halen</code> <span class="brew-note">(coming soon)</span></span>
   </div>
 </section>
 
@@ -994,13 +981,26 @@ img { display: block; max-width: 100%; }
 <footer class="foot">
   <span>© 2026 Halen Labs</span>
   <span class="links">
-    <a href="#">Privacy</a>
-    <a href="#">Source</a>
-    <a href="#">Contact</a>
+    <a href="privacy.html">Privacy</a>
+    <a href="https://github.com/lukataylo/halen" rel="noopener" target="_blank">Source</a>
+    <a href="#" data-contact>Contact</a>
   </span>
 </footer>
 
 <script>
+// ---------- contact email obfuscation ----------
+// Assemble the address parts only when the user clicks. Static scrapers
+// see no @-sign in the markup; only a JS-executing browser gets the
+// mailto: link.
+document.querySelectorAll('[data-contact]').forEach(el => {
+  el.addEventListener('click', (e) => {
+    e.preventDefault();
+    const u = ['luka', '.', 'taylor'].join('');
+    const d = ['gmail', '.', 'com'].join('');
+    window.location.href = 'mailto:' + u + '@' + d + '?subject=' + encodeURIComponent('Halen');
+  });
+});
+
 // ---------- keyword interactions ----------
 const SWARMS = {
   apps: [
