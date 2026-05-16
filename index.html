@@ -786,17 +786,8 @@ img { display: block; max-width: 100%; }
   box-shadow: 0 0 8px rgba(111,230,160,0.6);
 }
 
-/* Supporting subhead under the headline. Sized mid-way between the
-   headline (clamp 52-104) and the body copy, so the eye flows
-   eyebrow → headline → subhead → card without a typographic gap. */
-.cta-sub {
-  font-size: clamp(17px, 1.6vw, 22px);
-  font-weight: 400;
-  line-height: 1.45;
-  color: rgba(255,255,255,0.72);
-  max-width: 30ch;
-  margin: 0 auto 48px;
-}
+/* (No supporting subhead — the headline flows straight into the button
+   for a cleaner stack.) */
 
 /* Trust strip under the download card. Same family/size as the eyebrow
    so the section bookends with matching small-caps marks at top and
@@ -851,57 +842,49 @@ img { display: block; max-width: 100%; }
   color: #fff;
 }
 .cta h2 .quiet { color: rgba(255,255,255,0.55); font-style: italic; font-weight: 400; }
-.download-stack { display: inline-flex; flex-direction: column; align-items: center; gap: 18px; }
+.download-stack { display: inline-flex; flex-direction: column; align-items: center; gap: 14px; }
 
-/* Manifest-style download card: reads like a release artefact (icon,
-   filename, version row, OS row, SHA fingerprint) rather than a button.
-   Whole card is the link target so the click area matches the visual. */
+/* Minimal pill button — keep the focal weight on the headline + the
+   floating mockup cards. White pill, cobalt icon disc, short label.
+   Width fits the content; no spec metadata stuffed inside (it lives
+   in the chips row below). */
 .dl {
-  display: inline-flex; flex-direction: column;
+  display: inline-flex; align-items: center; gap: 12px;
   background: #fff; color: var(--ink);
-  padding: 22px 28px;
-  border-radius: 18px;
-  text-align: left;
-  min-width: 420px;
+  padding: 12px 22px 12px 12px;
+  border-radius: 999px;
+  font-size: 15px; font-weight: 500;
   transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
-  box-shadow: 0 24px 60px rgba(0,0,0,0.22), 0 0 0 1px rgba(255,255,255,0.06);
+  box-shadow: 0 18px 40px rgba(0,0,0,0.20);
 }
-.dl:hover { transform: translateY(-3px); box-shadow: 0 32px 72px rgba(0,0,0,0.30); }
-.dl .dl-head {
-  display: inline-flex; align-items: center; gap: 14px;
-  font-size: 19px; font-weight: 600;
-  margin-bottom: 16px;
-}
+.dl:hover { transform: translateY(-2px); box-shadow: 0 24px 50px rgba(0,0,0,0.28); }
 .dl .ic {
-  width: 38px; height: 38px;
+  width: 30px; height: 30px;
   background: var(--accent);
   border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-.dl .ic svg { width: 16px; height: 16px; }
-.dl .dl-meta {
+.dl .ic svg { width: 13px; height: 13px; }
+
+/* Spec chips row beneath the button — three quiet pills with the
+   only-the-essentials info. Same mono caps treatment as the
+   eyebrow/trust strip so the whole vertical stack reads as one
+   typographic family. */
+.dl-specs {
+  display: inline-flex; gap: 8px;
   font-family: var(--mono);
-  font-size: 12px;
-  color: var(--muted);
-  letter-spacing: 0.02em;
-  line-height: 1.55;
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
-.dl .dl-meta .row {
-  display: flex; gap: 14px;
-  margin-bottom: 4px;
+.dl-specs .chip {
+  padding: 5px 12px;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 999px;
+  color: rgba(255,255,255,0.65);
+  background: rgba(255,255,255,0.04);
 }
-.dl .dl-meta .row .sep { color: rgba(0,0,0,0.18); }
-.dl .dl-meta .sha {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed rgba(0,0,0,0.08);
-  font-size: 11px;
-  color: rgba(0,0,0,0.45);
-}
-.dl .dl-meta .sha .label { color: rgba(0,0,0,0.35); margin-right: 6px; }
 
 .cta .bg-mark { display: none; }
 
@@ -1504,31 +1487,18 @@ img { display: block; max-width: 100%; }
   <div class="cta-content">
     <span class="cta-eyebrow"><span class="dot"></span>v0.1.0 alpha · ready to install</span>
     <h2>At your cursor.<br/><span class="quiet">All on-device.</span></h2>
-    <p class="cta-sub">One Mac. One model. No cloud, no accounts, no waiting on someone else&rsquo;s server.</p>
     <div class="download-stack">
       <a class="dl" href="https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/Halen.dmg" data-dmg>
-        <span class="dl-head">
-          <span class="ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-          </span>
-          Download Halen.dmg
+        <span class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
         </span>
-        <span class="dl-meta">
-          <span class="row">
-            <span>v0.1.0-alpha</span>
-            <span class="sep">·</span>
-            <span>3.7 MB</span>
-          </span>
-          <span class="row">
-            <span>macOS 14+</span>
-            <span class="sep">·</span>
-            <span>Apple Silicon</span>
-            <span class="sep">·</span>
-            <span>ad-hoc signed</span>
-          </span>
-          <span class="sha"><span class="label">SHA-256</span>e787f1aa&hellip;c4b98</span>
-        </span>
+        Download Halen
       </a>
+      <span class="dl-specs">
+        <span class="chip">macOS 14+</span>
+        <span class="chip">Apple Silicon only</span>
+        <span class="chip">Alpha</span>
+      </span>
       <span class="cta-trust">
         <span>100% local</span>
         <span class="sep"></span>
@@ -2083,6 +2053,15 @@ async function showProgress(name, dur) {
 }
 function resetField() {
   $prefix.textContent = '';
+  // Reset $prefix inline style too — the `;casual` rewrite path
+  // animates $prefix.style.opacity to 0 then back to 1. If a user click
+  // interrupts after the fade-to-0 but before the restore, the next
+  // demo sets $prefix.textContent but the element stays invisible and
+  // only the trigger/expansion is visible. (Symptom: ";today" expanded
+  // but the "Hey Alex, thanks for the update. Let's regroup on " lead-in
+  // never appeared, just "Saturday 16…" floating at the right edge.)
+  $prefix.style.opacity = '1';
+  $prefix.style.transition = '';
   $trigger.textContent = '';
   $trigger.className = '';
   $trigger.style.opacity = '1';
