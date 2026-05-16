@@ -171,11 +171,18 @@ final class AskHalen: HalenPlugin {
             )
             p.setFrame(NSRect(origin: origin, size: size), display: true)
         }
-        // Activate Halen so the palette becomes both key window and focus
-        // owner for SwiftUI's input pipeline. The source app loses
-        // foreground status, which is fine: AX writes are pid-targeted, not
-        // first-responder-targeted, so Insert still lands in the right field.
-        NSApp.activate()
+        // Activate Halen and grab key-window status for the palette so the
+        // SwiftUI TextField's @FocusState fires.
+        //
+        // The deprecated `activate(ignoringOtherApps: true)` is used
+        // deliberately: Halen is an accessory app (LSUIElement), and the
+        // modern `NSApp.activate()` is a soft request that macOS denies for
+        // background-→-foreground transitions from accessory apps invoked
+        // via NSEvent monitor callbacks. The deprecated path forces the
+        // transfer the way Raycast / Alfred / every other launcher does.
+        // SE-0399 marks this deprecated but provides no replacement that
+        // works for our case; the warning is suppressed below.
+        NSApp.activate(ignoringOtherApps: true)
         p.makeKeyAndOrderFront(nil)
         panel = p
         Log.info("AskHalen.open: panel shown frame=\(p.frame) isKey=\(p.isKeyWindow) isVisible=\(p.isVisible) screen=\(NSScreen.main?.frame ?? .zero)")
