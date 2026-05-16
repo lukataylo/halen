@@ -833,6 +833,9 @@ img { display: block; max-width: 100%; }
    lines, but no longer italic — same weight and posture as the line above. */
 .cta h2 .quiet { color: rgba(255,255,255,0.55); font-weight: 600; }
 .download-stack { display: inline-flex; flex-direction: column; align-items: center; gap: 14px; }
+/* Push the spec chips further from the button so they read as a
+   separate "fine-print" group, not a continuation of the CTA. */
+.download-stack .dl-specs { margin-top: 24px; }
 
 /* Minimal pill button — keep the focal weight on the headline + the
    floating mockup cards. White pill, cobalt icon disc, short label.
