@@ -645,6 +645,26 @@ img { display: block; max-width: 100%; }
 
 .caret { display: inline-block; width: 2px; height: 22px; background: var(--accent); vertical-align: -4px; margin-left: 1px; animation: blink 1s steps(2,start) infinite; }
 
+/* The Halen indicator that sits beside the user's caret in the real app
+   (see OverlayController.swift). Painted with the icon SVG as a mask so
+   it inherits the cobalt accent colour and matches the rest of the page
+   instead of carrying its own palette. Hidden by default; the demo JS
+   adds .show to fade it in alongside whatever's being typed. */
+.halen-cursor {
+  display: inline-block;
+  width: 16px; height: 16px;
+  margin-left: 6px;
+  vertical-align: -2px;
+  background: var(--accent);
+  -webkit-mask: url("assets/halen-icon.svg") center/contain no-repeat;
+          mask: url("assets/halen-icon.svg") center/contain no-repeat;
+  filter: drop-shadow(0 1px 2px rgba(22,53,214,0.35));
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.28s var(--ease), transform 0.34s var(--spring);
+}
+.halen-cursor.show { opacity: 1; transform: scale(1); }
+
 .pop {
   position: absolute;
   display: flex; align-items: center; gap: 11px;
@@ -855,16 +875,16 @@ img { display: block; max-width: 100%; }
           <div class="desc">Gemma classifies your sentence. Pops up before you send.</div>
           <span class="bar"></span>
         </button>
-        <button class="snip" data-demo="polite">
-          <div class="row1"><span class="key">;polite</span><span class="ms">132 ms</span></div>
-          <div class="label">Soften the next line</div>
-          <div class="desc">Calmer rewrite of the next sentence via local Gemma 4.</div>
+        <button class="snip" data-demo="casual">
+          <div class="row1"><span class="key">;casual</span><span class="ms">240 ms</span></div>
+          <div class="label">Soften the prior paragraph</div>
+          <div class="desc">Rewrites the paragraph you just typed in a friendlier tone via local Gemma 4.</div>
           <span class="bar"></span>
         </button>
-        <button class="snip" data-demo="meet">
-          <div class="row1"><span class="key">;meet</span><span class="ms">184 ms</span></div>
-          <div class="label">Briefing from next event</div>
-          <div class="desc">Reads your calendar, writes the bullets.</div>
+        <button class="snip" data-demo="today">
+          <div class="row1"><span class="key">;today</span><span class="ms">instant</span></div>
+          <div class="label">Insert today&rsquo;s date</div>
+          <div class="desc">Expands the trigger into the current date wherever you&rsquo;re typing.</div>
           <span class="bar"></span>
         </button>
       </div>
@@ -930,7 +950,7 @@ img { display: block; max-width: 100%; }
       </div>
       <div class="field-body">
         <div class="draft" id="draft">
-          <span id="prefix"></span><span id="trigger"></span><span class="caret" id="caret"></span>
+          <span id="prefix"></span><span id="trigger"></span><span class="caret" id="caret"></span><span class="halen-cursor" id="halenCursor"></span>
         </div>
         <!-- Anchored bottom-right so it never overlaps typed text. The
              draft flows top-down/left-to-right, so the bottom-right corner
@@ -974,7 +994,6 @@ img { display: block; max-width: 100%; }
       Download Halen.dmg
       <span class="meta-ml">v0.1.0-alpha · 3.7 MB · Apple Silicon · ad-hoc signed</span>
     </a>
-    <span class="brew-row">or run <code id="brew">brew install --cask halen</code> <span class="brew-note">(coming soon)</span></span>
   </div>
 </section>
 
@@ -1323,24 +1342,33 @@ const navIO = new IntersectionObserver(es => es.forEach(e => {
 }), { rootMargin: '-10% 0px 0px 0px', threshold: 0.05 });
 navIO.observe(document.getElementById('demo'));
 
-// brew copy
-document.getElementById('brew').addEventListener('click', () => {
-  navigator.clipboard?.writeText('brew install --cask halen').catch(()=>{});
-  const el = document.getElementById('brew');
-  el.classList.add('copied');
-  const t = el.textContent; el.textContent = '✓ copied';
-  setTimeout(() => { el.textContent = t; el.classList.remove('copied'); }, 1400);
-});
-
 // ---------- demo (snippet / typo / sentiment) ----------
+// Mirrors the format the real `SnippetExpander.dynamicValue("today")`
+// produces in Sources/Halen/Features/SnippetExpander/SnippetExpander.swift
+// ("EEEE d MMMM yyyy") so what the lander shows matches what the user
+// will actually get when they install Halen.
+function todayLabel() {
+  const d = new Date();
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}.`;
+}
+
 const DEMOS = {
   typo: { type: 'typo' },
   sentiment: { type: 'sentiment' },
-  polite: {
-    type: 'snippet', trigger: ';polite',
-    prefix: 'Hey Alex, thanks for the update. ',
-    expanded: 'Could we revisit the scope shifts before Friday? A few items moved and I want to make sure we land softly.',
-    pop: { l: 'HALEN · matched', v: 'expanding ;polite via gemma4:e4b' }, delay: 850,
+  // Matches the real `;casual` built-in: replacesPrior=true. The trigger
+  // dissolves the harsher paragraph the user just wrote and replaces it
+  // with a friendlier rewrite from local Gemma. (`;polite` was previously
+  // shown here but it appears to just expand into a new sentence without
+  // softening anything, which read as confusing.)
+  casual: {
+    type: 'snippet', trigger: ';casual',
+    prefix: '',
+    rewritePrior: 'Hey Alex, just lock the scope already. We’ve redone this three times.',
+    expanded: 'Hey Alex, could we lock the scope this week? I want to make sure we land it cleanly.',
+    pop: { l: 'HALEN · matched', v: 'softening prior paragraph via gemma4:e4b' }, delay: 950,
   },
   brief: {
     type: 'snippet', trigger: ';brief',
@@ -1354,11 +1382,14 @@ const DEMOS = {
     expanded: 'Best,\nMichael · Halen Labs\nCET · sent from my Mac, no cloud',
     pop: { l: 'HALEN · matched', v: 'expanding ;sig · static snippet' }, delay: 400,
   },
-  meet: {
-    type: 'snippet', trigger: ';meet',
-    prefix: 'Hey Alex, thanks for the update. Brief for our 4pm: ',
-    expanded: 'topic: Q3 milestones · attendees: you, Priya, Sam · open items: roadmap sign-off, hiring cap. (pulled from calendar, locally)',
-    pop: { l: 'HALEN · calendar', v: 'briefing ;meet via gemma4:e4b' }, delay: 950,
+  // Dynamic built-in: SnippetExpander resolves `;today` to the current
+  // date in "EEEE d MMMM yyyy" format. No model call needed — that's why
+  // delay is short.
+  today: {
+    type: 'snippet', trigger: ';today',
+    prefix: 'Hey Alex, thanks for the update. Let’s regroup on ',
+    expanded: todayLabel(),
+    pop: { l: 'HALEN · snippet', v: 'expanding ;today (dynamic)' }, delay: 220,
   },
 };
 
@@ -1369,6 +1400,25 @@ const $popL = document.getElementById('popL');
 const $popV = document.getElementById('popV');
 const $rail = document.getElementById('rail');
 const $guard = document.getElementById('guard');
+const $halenCursor = document.getElementById('halenCursor');
+
+// Mirrors OverlayController in the real app: shows the cobalt mark
+// beside the caret while activity is in progress, hides after a short
+// idle. Demo-side this just toggles a class — typing helpers call
+// `showHalenCursor()` on every keystroke; resetField() / pause hooks
+// call `hideHalenCursor()` so it disappears between segments.
+let halenCursorHideTimer = null;
+function showHalenCursor() {
+  if (!$halenCursor) return;
+  $halenCursor.classList.add('show');
+  if (halenCursorHideTimer) clearTimeout(halenCursorHideTimer);
+  halenCursorHideTimer = setTimeout(() => $halenCursor.classList.remove('show'), 2200);
+}
+function hideHalenCursor() {
+  if (!$halenCursor) return;
+  $halenCursor.classList.remove('show');
+  if (halenCursorHideTimer) { clearTimeout(halenCursorHideTimer); halenCursorHideTimer = null; }
+}
 
 let timers = [];
 let autoPlay = true;
@@ -1382,6 +1432,7 @@ async function typeOut(el, text, speed = 20) {
   for (let i = 0; i < text.length; i++) {
     if (userInterrupt) return;
     el.textContent += text[i];
+    showHalenCursor();
     const ch = text[i];
     const d = ch === ' ' ? speed * 0.45 : ch === '\n' ? 80 : speed + Math.random() * 12;
     await wait(d);
@@ -1409,16 +1460,64 @@ function resetField() {
   $trigger.style.opacity = '1';
   $pop.classList.remove('show');
   $guard.classList.remove('show');
+  hideHalenCursor();
 }
 
 async function playSnippet(cfg, name) {
   resetField();
+
+  // Rewrite-prior path (e.g. `;casual`): the user has already typed a full
+  // paragraph; the trigger then dissolves it and Gemma writes a softer
+  // replacement in its place. Mirrors the real Snippet.replacesPrior=true
+  // behaviour in Sources/Halen/Features/SnippetExpander/Snippet.swift.
+  if (cfg.rewritePrior) {
+    // Type the harsher paragraph first so the viewer feels it land.
+    await typeOut($prefix, cfg.rewritePrior, 18);
+    await wait(250);
+    // Then the trigger appears at the caret.
+    $trigger.className = 'snip-tag';
+    $trigger.textContent = '';
+    for (const c of (' ' + cfg.trigger)) {
+      if (userInterrupt) return;
+      $trigger.textContent += c;
+      showHalenCursor();
+      await wait(58);
+    }
+    $popL.textContent = cfg.pop.l;
+    $popV.textContent = cfg.pop.v;
+    $pop.classList.add('show');
+    showProgress(name, cfg.delay);
+    await wait(cfg.delay);
+    if (userInterrupt) return;
+    // Fade out the trigger AND the prior paragraph together — they're
+    // both being replaced by the rewrite.
+    $trigger.classList.add('expanding');
+    $prefix.style.transition = 'opacity 0.34s ease';
+    $prefix.style.opacity = '0.25';
+    await wait(220);
+    $trigger.classList.add('gone');
+    $prefix.style.opacity = '0';
+    await wait(300);
+    $trigger.textContent = '';
+    $trigger.className = '';
+    $prefix.style.transition = '';
+    $prefix.style.opacity = '1';
+    // Type the rewrite into $prefix (where the original paragraph was).
+    await typeOut($prefix, cfg.expanded, 16);
+    await wait(1400);
+    $pop.classList.remove('show');
+    await wait(2000);
+    return;
+  }
+
+  // Default path: trigger expands into new text appended after the prefix.
   $prefix.textContent = cfg.prefix;
   $trigger.className = 'snip-tag';
   await wait(320);
   for (const c of cfg.trigger) {
     if (userInterrupt) return;
     $trigger.textContent += c;
+    showHalenCursor();
     await wait(58);
   }
   $popL.textContent = cfg.pop.l;
@@ -1460,6 +1559,7 @@ async function playTypo() {
     for (const c of seg.text) {
       if (userInterrupt) return;
       span.textContent += c;
+      showHalenCursor();
       await wait(c === ' ' ? 30 : 52 + Math.random() * 18);
     }
     if (seg.fix) {
