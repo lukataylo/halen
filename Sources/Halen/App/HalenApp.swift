@@ -11,7 +11,8 @@ struct HalenApp: App {
                 state: appDelegate.coordinator.state,
                 registry: appDelegate.coordinator.registry,
                 inferenceSettings: appDelegate.coordinator.inferenceSettings,
-                router: appDelegate.coordinator.inference
+                router: appDelegate.coordinator.inference,
+                modelDownloader: appDelegate.coordinator.modelDownloader
             )
         } label: {
             Image(nsImage: Self.menubarIcon)

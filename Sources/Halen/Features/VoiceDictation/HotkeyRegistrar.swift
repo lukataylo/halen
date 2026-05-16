@@ -13,7 +13,10 @@ final class HotkeyRegistrar {
     private var onFire: (() -> Void)?
 
     @discardableResult
-    func register(keyCode: UInt32, modifiers: UInt32, onFire: @escaping () -> Void) -> Bool {
+    func register(keyCode: UInt32,
+                  modifiers: UInt32,
+                  id: UInt32 = 1,
+                  onFire: @escaping () -> Void) -> Bool {
         unregister()
         self.onFire = onFire
 
@@ -47,7 +50,11 @@ final class HotkeyRegistrar {
         }
         handlerRef = newHandler
 
-        let hotKeyID = EventHotKeyID(signature: 0x48414c4e, id: 1) // 'HALN'
+        // Signature+id is the app-local identity Carbon uses to disambiguate
+        // multiple hotkeys sharing one handler. Each HotkeyRegistrar instance
+        // owns its own handler, but we still parameterise `id` so consumers
+        // can keep them unique within the process for safety.
+        let hotKeyID = EventHotKeyID(signature: 0x48414c4e, id: id) // 'HALN'
         var newHotKey: EventHotKeyRef?
         let registerStatus = RegisterEventHotKey(
             keyCode,

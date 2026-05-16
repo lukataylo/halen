@@ -9,6 +9,7 @@ struct SettingsView: View {
     @Bindable var state: AppState
     @Bindable var inferenceSettings: InferenceSettings
     let router: RouterInferenceClient
+    @Bindable var modelDownloader: ModelDownloader
     let onBack: () -> Void
 
     @State private var pollTask: Task<Void, Never>?
@@ -23,6 +24,7 @@ struct SettingsView: View {
                     accessibilityCard
                     overlayCard
                     aiCard
+                    builtInModelCard
                     aboutCard
                 }
                 .padding(12)
@@ -215,6 +217,112 @@ struct SettingsView: View {
         let item = order.remove(at: from)
         order.insert(item, at: to)
         inferenceSettings.preferenceOrder = order
+    }
+
+    private var builtInModelCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                cardLabel("Built-in model")
+
+                HStack(spacing: 10) {
+                    statusDot(modelStatusKind)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(modelStatusTitle)
+                            .font(.system(.callout, weight: .medium))
+                        Text(modelStatusDetail)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 6)
+                    modelActionButton
+                }
+
+                if case let .downloading(fraction, bytes, total) = modelDownloader.state {
+                    ProgressView(value: fraction)
+                        .progressViewStyle(.linear)
+                        .controlSize(.small)
+                    Text("\(formatBytes(bytes)) of \(formatBytes(total)) (\(Int(fraction * 100))%)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("The 770 MB Gemma 3 1B GGUF runs locally as a fallback when Apple Intelligence isn't available. Downloads on demand into Application Support — never bundled in the .app unless you build with BUNDLE_MODEL=1.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var modelActionButton: some View {
+        switch modelDownloader.state {
+        case .notDownloaded:
+            Button("Download") { modelDownloader.start() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+        case .downloading:
+            Button("Cancel") { modelDownloader.cancel() }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        case .verifying, .installing:
+            ProgressView()
+                .controlSize(.small)
+        case .ready:
+            Button("Remove") { modelDownloader.removeDownloaded() }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        case .failed:
+            Button("Retry") { modelDownloader.start() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+        }
+    }
+
+    private var modelStatusKind: StatusKind {
+        switch modelDownloader.state {
+        case .ready:                              return .ok
+        case .downloading, .verifying, .installing: return .warning
+        case .notDownloaded:                       return .warning
+        case .failed:                              return .error
+        }
+    }
+
+    private var modelStatusTitle: String {
+        switch modelDownloader.state {
+        case .notDownloaded: return "Not downloaded"
+        case .downloading:   return "Downloading…"
+        case .verifying:     return "Verifying…"
+        case .installing:    return "Installing…"
+        case .ready:         return "Ready"
+        case .failed:        return "Download failed"
+        }
+    }
+
+    private var modelStatusDetail: String {
+        switch modelDownloader.state {
+        case .notDownloaded:
+            return "Apple Intelligence (if available) covers most requests. Download Gemma for the fallback."
+        case .downloading(_, let bytes, let total):
+            return "\(formatBytes(bytes)) of \(formatBytes(total))"
+        case .verifying:
+            return "Checking SHA-256 against the pinned hash."
+        case .installing:
+            return "Moving into Application Support."
+        case .ready:
+            return "Gemma 3 1B Q4_K_M, ~770 MB on disk."
+        case .failed(let message):
+            return message
+        }
+    }
+
+    private func formatBytes(_ bytes: Int64) -> String {
+        let mb = Double(bytes) / 1_048_576
+        if mb >= 1024 {
+            return String(format: "%.1f GB", mb / 1024)
+        }
+        return String(format: "%.0f MB", mb)
     }
 
     private var aboutCard: some View {

@@ -38,7 +38,21 @@ final class AppleFMBackend: InferenceBackend {
             temperature: request.temperature,
             maximumResponseTokens: request.maxTokens
         )
-        let response = try await session.respond(to: request.prompt, options: options)
+
+        let response: LanguageModelSession.Response<String>
+        do {
+            response = try await session.respond(to: request.prompt, options: options)
+        } catch let err as LanguageModelSession.GenerationError {
+            // Map the documented case so the router can decide. Anything else
+            // (guardrails, tool errors, future cases) bubbles as a plain throw
+            // so the router falls through to llama.cpp.
+            switch err {
+            case .exceededContextWindowSize:
+                throw AppleFMError.contextOverflow
+            default:
+                throw err
+            }
+        }
 
         // Foundation Models has no native stop-sequence param — truncate at the
         // earliest match across all stop tokens (order-independent).
@@ -54,6 +68,15 @@ final class AppleFMBackend: InferenceBackend {
         return InferenceResponse(text: text, modelId: "apple-fm/system", latencyMs: latency)
     }
 
+    /// Best-effort weight prewarm. Foundation Models lazy-loads on the first
+    /// `respond(...)`, which adds a few hundred ms of first-token latency.
+    /// Calling `prewarm()` at app launch — when `availability == .available` —
+    /// amortises that cost into the splash phase the user already pays for.
+    func prewarm() {
+        let session = LanguageModelSession()
+        session.prewarm()
+    }
+
     private static func describe(_ reason: SystemLanguageModel.Availability.UnavailableReason) -> String {
         switch reason {
         case .deviceNotEligible:
@@ -64,6 +87,21 @@ final class AppleFMBackend: InferenceBackend {
             return "Apple's on-device model is still downloading"
         @unknown default:
             return "Apple model unavailable"
+        }
+    }
+}
+
+@available(macOS 26, *)
+enum AppleFMError: Error, LocalizedError {
+    /// Apple's documented `LanguageModelSession.GenerationError.exceededContextWindowSize`.
+    /// Surfaced as a recoverable error so the router can fall through to the
+    /// bundled-Gemma backend, which has its own (smaller) context window.
+    case contextOverflow
+
+    var errorDescription: String? {
+        switch self {
+        case .contextOverflow:
+            return "Apple Intelligence context window exceeded."
         }
     }
 }

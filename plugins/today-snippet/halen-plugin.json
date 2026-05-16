@@ -1,0 +1,13 @@
+{
+  "id": "com.halen.today-snippet",
+  "name": "Today snippet",
+  "summary": "Type ;today to expand to today's date.",
+  "version": "0.1.0",
+  "halenApiVersion": "0.1",
+  "executable": "/usr/bin/python3",
+  "args": ["plugin.py"],
+  "events": ["text.pause"],
+  "permissions": ["ax.write"],
+  "icon": "calendar",
+  "category": "productivity"
+}

@@ -15,6 +15,7 @@ struct HalenCenterView: View {
     let registry: PluginRegistry
     @Bindable var inferenceSettings: InferenceSettings
     let router: RouterInferenceClient
+    @Bindable var modelDownloader: ModelDownloader
     @State private var nav: CenterNav = .marketplace
 
     var body: some View {
@@ -35,6 +36,7 @@ struct HalenCenterView: View {
                     state: state,
                     inferenceSettings: inferenceSettings,
                     router: router,
+                    modelDownloader: modelDownloader,
                     onBack: { back() }
                 )
                 .transition(.move(edge: .trailing).combined(with: .opacity))

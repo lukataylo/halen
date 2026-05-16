@@ -1,9 +1,14 @@
 import Foundation
 
 /// Inference backend backed by a Gemma model running on the bundled llama.cpp
-/// runtime. The Gemma 3 1B GGUF ships inside the app bundle, so this backend is
-/// always available with zero install — it's the default the router falls back
-/// to when neither Apple Intelligence nor Ollama is present.
+/// runtime. The GGUF is resolved via `ModelLocation`:
+///
+///   * default slim build → user must download via `ModelDownloader` before
+///     this backend becomes `.available` (Apple Intelligence is the
+///     zero-install path; bundled-Gemma is the fallback for older macOS or
+///     for users who explicitly opt in).
+///   * `BUNDLE_MODEL=1` build → the GGUF ships inside the .app, so the
+///     backend is `.available` with zero download.
 ///
 /// The 1B model is strong at classification/extraction but weak at open-ended
 /// generation, so `capability.strongAt` is `.classification` only — the router
@@ -28,16 +33,16 @@ actor LlamaCppBackend: InferenceBackend {
     private var idleUnloadTask: Task<Void, Never>?
     private let idleUnloadInterval: TimeInterval = 5 * 60
 
-    /// The bundled GGUF, copied into `Contents/Resources/Models/` by build-app.sh.
-    static var modelURL: URL? {
-        Bundle.main.url(forResource: "gemma-3-1b-it-Q4_K_M", withExtension: "gguf", subdirectory: "Models")
-    }
+    /// Whichever copy of the GGUF is on disk — downloaded path wins over
+    /// bundled. `nil` when neither is present (the default slim install on a
+    /// Mac without Apple Intelligence, before the user downloads).
+    static var modelURL: URL? { ModelLocation.resolved }
 
     func availability() async -> BackendAvailability {
         if loadFailed { return .unavailable(reason: "Built-in model failed to load") }
         if loadedContext != nil { return .available }   // already loaded — proven good
         guard let url = Self.modelURL else {
-            return .unavailable(reason: "Built-in model is missing from the app bundle")
+            return .unavailable(reason: "Built-in model not downloaded yet — visit Settings → Inference")
         }
         guard Self.modelLooksValid(at: url) else {
             return .unavailable(reason: "Built-in model file looks corrupt or incomplete")

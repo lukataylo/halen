@@ -17,12 +17,19 @@ final class AppCoordinator {
     let state = AppState()
     let eventBus = EventBus()
     let inferenceSettings = InferenceSettings()
+    let modelDownloader = ModelDownloader()
     let inference: RouterInferenceClient
     let typoStore = TypoStore()
     let registry = PluginRegistry()
 
+    /// Kept around so we can prewarm Apple FM at launch and re-probe
+    /// availability from the Settings UI without going through the router.
+    let backends: [InferenceBackend]
+
     private var caretObserver: CaretObserver?
     private var overlay: OverlayController?
+    private var pluginHost: PluginHost?
+    private var webSocketBridge: WebSocketBridge?
 
     private var permissionPollTask: Task<Void, Never>?
     private var eventLogTask: Task<Void, Never>?
@@ -31,15 +38,20 @@ final class AppCoordinator {
     private var isStopped = false
 
     init() {
-        inference = RouterInferenceClient(
-            backends: InferenceBackends.makeAll(),
-            settings: inferenceSettings
-        )
+        let backends = InferenceBackends.makeAll()
+        self.backends = backends
+        self.inference = RouterInferenceClient(backends: backends, settings: inferenceSettings)
     }
 
     func start() {
         Log.info("Halen starting")
         startEventLogger()
+        // Best-effort prewarm of Apple Foundation Models so the first inference
+        // call (typo classify, snippet expansion, Ask Halen) doesn't pay the
+        // weight-load latency in front of the user.
+        Task { @MainActor [backends] in
+            await InferenceBackends.prewarmAll(backends)
+        }
 
         let trusted = AXPermissions.isTrusted()
         state.permissionStatus = trusted ? .granted : .denied
@@ -76,6 +88,11 @@ final class AppCoordinator {
         for plugin in registry.plugins {
             plugin.stop()
         }
+        // Out-of-process plugins get a polite shutdown → exit → SIGTERM ladder.
+        if let pluginHost {
+            Task { await pluginHost.stop() }
+        }
+        webSocketBridge?.stop()
         caretObserver?.stop()
         overlay?.stop()
     }
@@ -107,12 +124,28 @@ final class AppCoordinator {
         )
 
         // Register first-party plugins.
+        registry.register(AskHalen(services: services))
         registry.register(TypoFixer(services: services, store: typoStore))
         registry.register(SentimentGuard(services: services))
         registry.register(VoiceDictation(services: services))
         registry.register(SnippetExpander(services: services))
         registry.register(BurnoutCopilot(services: services))
         registry.register(MeetingPrep(services: services))
+
+        // Spin up any out-of-process plugins under
+        // ~/Library/Application Support/Halen/Plugins/. Discovery + spawn is
+        // async — happens off the launch path so a slow or hung plugin can't
+        // block Halen from coming up. The host is idempotent: a 0-plugin
+        // install just logs and returns.
+        let host = PluginHost(services: services)
+        pluginHost = host
+        Task { await host.start() }
+
+        // Browser extensions (and any future loopback client) connect over
+        // this WS server. Bound to 127.0.0.1 only.
+        let ws = WebSocketBridge(services: services)
+        webSocketBridge = ws
+        ws.start()
     }
 
     private func startEventLogger() {

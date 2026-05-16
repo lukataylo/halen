@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Carbon.HIToolbox
 
 /// Observes the user's currently focused text field and emits events on the bus:
 ///   - `app.focused` when the frontmost app changes
@@ -85,9 +86,11 @@ final class CaretObserver {
     }
 
     /// Replace `range` (UTF-16 units) in a specific `element` with `replacement`.
-    /// Uses the AX "set selection then set selected-text" pattern, which most native AppKit
-    /// text fields honor. Returns false for apps that don't support AX writes
-    /// (most Electron / web text fields, terminals) or if the element has gone stale.
+    /// Uses the AX "set selection then set selected-text" pattern, which most
+    /// native AppKit text fields honor. When AX writes are silently refused
+    /// (the common case in Electron, web text fields, terminals) falls back to
+    /// a clipboard-and-⌘V paste so the feature still works there — same
+    /// observable result, less ideal mechanism.
     @discardableResult
     func replaceRange(_ range: NSRange, with replacement: String, in element: AXUIElement) -> Bool {
         var cfRange = CFRange(location: range.location, length: range.length)
@@ -100,21 +103,115 @@ final class CaretObserver {
             kAXSelectedTextRangeAttribute as CFString,
             rangeValue
         )
-        guard setRange == .success else {
-            Log.warn("replaceRange: failed to set selection range, status=\(setRange.rawValue)")
-            return false
+
+        // Path A — AX selection succeeded. Try the AX text write; if *that*
+        // fails (Electron is the typical offender) the selection is already
+        // set in the target field, so pasting with no preceding backspaces
+        // replaces the AX-selected range cleanly.
+        if setRange == .success {
+            let setText = AXUIElementSetAttributeValue(
+                element,
+                kAXSelectedTextAttribute as CFString,
+                replacement as CFString
+            )
+            if setText == .success { return true }
+            Log.info("replaceRange: AX write failed (status=\(setText.rawValue)) — pasting over AX-set selection")
+            return Self.pasteFallback(text: replacement, deleteCount: 0)
         }
 
-        let setText = AXUIElementSetAttributeValue(
-            element,
-            kAXSelectedTextAttribute as CFString,
-            replacement as CFString
-        )
-        guard setText == .success else {
-            Log.warn("replaceRange: failed to write replacement, status=\(setText.rawValue)")
-            return false
+        // Path B — AX can't even set the selection (some web text fields).
+        // Best effort: backspace `range.length` UTF-16 units to remove the
+        // trigger token, then paste. Imperfect for grapheme-cluster boundaries
+        // but right for ASCII trigger/correction text, which is the common case.
+        Log.info("replaceRange: AX setRange failed (status=\(setRange.rawValue)) — backspace+paste fallback")
+        return Self.pasteFallback(text: replacement, deleteCount: range.length)
+    }
+
+    /// Clipboard-and-⌘V fallback for apps that refuse AX writes. Saves and
+    /// restores the user's clipboard around the paste so they don't lose what
+    /// was on it. `deleteCount` synthesises that many backspace presses first
+    /// — used to remove a snippet trigger or typo when AX couldn't select it.
+    ///
+    /// `nonisolated static` so plugin write paths can call it without an
+    /// `await` hop. Keystroke synthesis already requires the Accessibility
+    /// permission Halen has at launch.
+    @discardableResult
+    nonisolated static func pasteFallback(text: String, deleteCount: Int) -> Bool {
+        let pasteboard = NSPasteboard.general
+        let saved = savedPasteboardItems(pasteboard)
+
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+
+        let safeDeletes = max(0, min(deleteCount, 256))   // safety cap
+        for _ in 0..<safeDeletes {
+            synthesizeKey(virtualKey: CGKeyCode(kVK_Delete), flags: [])
+        }
+        synthesizeKey(virtualKey: CGKeyCode(kVK_ANSI_V), flags: .maskCommand)
+
+        // Wait long enough for the target app to grab the string off the
+        // pasteboard before we swap it back. 300 ms is the empirically-safe
+        // value across Slack/Discord/VS Code/Chrome; faster occasionally
+        // lands the user's old clipboard back into the field on slow renderers.
+        // Wrap in @unchecked Sendable — NSPasteboard / NSPasteboardItem are
+        // AppKit main-thread types, and the asyncAfter block also lands on
+        // main, so the cross-actor warning is spurious.
+        let restore = PasteboardRestore(pasteboard: pasteboard, items: saved)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            restore.apply()
         }
         return true
+    }
+
+    /// Restore handle for the pasteFallback's deferred clipboard re-write.
+    /// `@unchecked Sendable` so we can pass it into the `DispatchQueue.main`
+    /// closure — both creation and execution happen on the main thread, so the
+    /// "captured non-Sendable" warning is a false positive in this context.
+    private struct PasteboardRestore: @unchecked Sendable {
+        let pasteboard: NSPasteboard
+        let items: [NSPasteboardItem]
+
+        func apply() {
+            guard !items.isEmpty else { return }
+            pasteboard.clearContents()
+            pasteboard.writeObjects(items)
+        }
+    }
+
+    /// Synthesise one keyboard event pair (down + up) and post it at the HID
+    /// layer so the focused app sees a real key press. Requires the
+    /// Accessibility permission, which Halen already holds.
+    private nonisolated static func synthesizeKey(virtualKey: CGKeyCode, flags: CGEventFlags) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        guard let down = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: false)
+        else { return }
+        down.flags = flags
+        up.flags = flags
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+    }
+
+    /// Snapshot the pasteboard's current contents across all data types so we
+    /// can put it back after the paste. Best effort — apps that write
+    /// custom non-data types lose those representations on restore.
+    private nonisolated static func savedPasteboardItems(_ pasteboard: NSPasteboard) -> [NSPasteboardItem] {
+        guard let originals = pasteboard.pasteboardItems else { return [] }
+        return originals.map { source in
+            let copy = NSPasteboardItem()
+            for type in source.types {
+                if let data = source.data(forType: type) {
+                    copy.setData(data, forType: type)
+                }
+            }
+            return copy
+        }
+    }
+
+    private nonisolated static func restorePasteboard(_ pasteboard: NSPasteboard, items: [NSPasteboardItem]) {
+        guard !items.isEmpty else { return }
+        pasteboard.clearContents()
+        pasteboard.writeObjects(items)
     }
 
     // MARK: - App / observer lifecycle

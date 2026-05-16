@@ -80,15 +80,22 @@ else
     echo "warning: $LLAMA_FW_SRC not found — run scripts/fetch-assets.sh" >&2
 fi
 
-# Bundle the default local model (Gemma 3 1B GGUF) so inference works with no
-# external runtime. ditto, not cp — the macOS-blessed copy that codesign trusts.
-GGUF_SRC="$ROOT/Assets/Models/gemma-3-1b-it-Q4_K_M.gguf"
-if [[ -f "$GGUF_SRC" ]]; then
-    echo "→ bundling $(basename "$GGUF_SRC")"
-    mkdir -p "$RESOURCES/Models"
-    ditto "$GGUF_SRC" "$RESOURCES/Models/$(basename "$GGUF_SRC")"
+# Bundling the GGUF inflates the .app from ~12 MB to ~780 MB. Default OFF —
+# `ModelDownloader` fetches the file on demand into Application Support, so
+# the .app users download stays small. Opt-in with BUNDLE_MODEL=1 for an
+# offline-first / kiosk-friendly all-in-one build.
+BUNDLE_MODEL="${BUNDLE_MODEL:-0}"
+if [[ "$BUNDLE_MODEL" == "1" ]]; then
+    GGUF_SRC="$ROOT/Assets/Models/gemma-3-1b-it-Q4_K_M.gguf"
+    if [[ -f "$GGUF_SRC" ]]; then
+        echo "→ bundling $(basename "$GGUF_SRC") (BUNDLE_MODEL=1)"
+        mkdir -p "$RESOURCES/Models"
+        ditto "$GGUF_SRC" "$RESOURCES/Models/$(basename "$GGUF_SRC")"
+    else
+        echo "warning: $GGUF_SRC not found — run scripts/fetch-assets.sh" >&2
+    fi
 else
-    echo "warning: $GGUF_SRC not found — run scripts/fetch-assets.sh" >&2
+    echo "→ slim build (no GGUF); ModelDownloader will fetch on first use"
 fi
 
 # Sign nested code (the framework) before the app so the app seals a valid
