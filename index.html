@@ -749,11 +749,70 @@ img { display: block; max-width: 100%; }
 /* CTA (cobalt) */
 .cta {
   position: relative;
-  padding: 200px 28px 180px;
+  padding: 160px 28px 140px;
   text-align: center;
   background: var(--accent);
   color: #fff;
   overflow: hidden;
+}
+
+/* ---- CTA hierarchy elements ---------------------------------------- */
+
+/* z-index:2 puts the whole content stack above the floating cards (z=0)
+   and the radial glows from .cta::after (z=auto). The cards explode
+   from behind it. */
+.cta-content {
+  position: relative; z-index: 2;
+  display: flex; flex-direction: column; align-items: center;
+}
+
+/* Eyebrow: small mono pill above the headline. Anchors the section as
+   "this is the download" without competing with the headline's weight. */
+.cta-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.6);
+  padding: 7px 16px;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 999px;
+  margin-bottom: 32px;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.cta-eyebrow .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #6FE6A0;
+  box-shadow: 0 0 8px rgba(111,230,160,0.6);
+}
+
+/* Supporting subhead under the headline. Sized mid-way between the
+   headline (clamp 52-104) and the body copy, so the eye flows
+   eyebrow → headline → subhead → card without a typographic gap. */
+.cta-sub {
+  font-size: clamp(17px, 1.6vw, 22px);
+  font-weight: 400;
+  line-height: 1.45;
+  color: rgba(255,255,255,0.72);
+  max-width: 30ch;
+  margin: 0 auto 48px;
+}
+
+/* Trust strip under the download card. Same family/size as the eyebrow
+   so the section bookends with matching small-caps marks at top and
+   bottom — a quiet structural rhyme. */
+.cta-trust {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.5);
+  margin-top: 4px;
+  display: inline-flex; gap: 16px; align-items: center;
+}
+.cta-trust .sep {
+  width: 3px; height: 3px; border-radius: 50%;
+  background: rgba(255,255,255,0.35);
 }
 .cta::before {
   content: "";
@@ -786,7 +845,7 @@ img { display: block; max-width: 100%; }
   font-weight: 600;
   letter-spacing: -0.045em;
   line-height: 0.98;
-  margin-bottom: 60px;
+  margin-bottom: 24px;
   max-width: 16ch;
   margin-left: auto; margin-right: auto;
   color: #fff;
@@ -1038,10 +1097,23 @@ img { display: block; max-width: 100%; }
   padding: 10px 0 0; margin-top: 8px;
 }
 
-/* Each card gets its own keyframe so they drift independently —
-   if they all shared one animation the screen would breathe in
-   unison and feel mechanical. Translate-only (no rotate inside
-   the keyframe) so rotation set in the base rule sticks. */
+/* Default (pre-explosion) state: cards invisible at their natural
+   position. Without this they'd flash visible on page load before the
+   IntersectionObserver triggers `.exploded` and the keyframes start. */
+.cta-card { opacity: 0; }
+
+/* Card animations only start once the CTA enters the viewport. The
+   explosion keyframe (~1.2s, spring easing) starts each card clustered
+   behind the headline and translates it outward to its natural rotated
+   position. Then the float keyframe (delayed by 1.2s) takes over and
+   loops forever, providing the gentle idle motion.
+   Each card has its own "from" direction so they truly burst outward
+   like a firework rather than slide in unison from one side.
+
+   Stagger via animation-delay (per card) so they don't all explode on
+   the same frame — gives the eye time to track each one bursting.
+   The base 0.15s holds the section visible-but-still for a beat
+   before the first card moves; feels intentional, not laggy. */
 .cta-card.c-typing    { transform: rotate(-4deg); }
 .cta-card.c-assistant { transform: rotate(2deg);  }
 .cta-card.c-model     { transform: rotate(-3deg); }
@@ -1049,6 +1121,29 @@ img { display: block; max-width: 100%; }
 .cta-card.c-improve   { transform: rotate(-2deg); }
 .cta-card.c-snippets  { transform: rotate(3deg);  }
 
+.cta-cards.exploded .c-typing    { animation: ctaExplodeA 1.2s cubic-bezier(0.18, 1.35, 0.4, 1) 0.15s forwards, ctaFloatA 7s ease-in-out 1.35s infinite; }
+.cta-cards.exploded .c-tone      { animation: ctaExplodeB 1.2s cubic-bezier(0.18, 1.35, 0.4, 1) 0.22s forwards, ctaFloatD 8s ease-in-out 1.42s infinite; }
+.cta-cards.exploded .c-assistant { animation: ctaExplodeC 1.2s cubic-bezier(0.18, 1.35, 0.4, 1) 0.30s forwards, ctaFloatB 9s ease-in-out 1.50s infinite; }
+.cta-cards.exploded .c-improve   { animation: ctaExplodeD 1.2s cubic-bezier(0.18, 1.35, 0.4, 1) 0.36s forwards, ctaFloatE 7.5s ease-in-out 1.56s infinite; }
+.cta-cards.exploded .c-model     { animation: ctaExplodeE 1.2s cubic-bezier(0.18, 1.35, 0.4, 1) 0.44s forwards, ctaFloatC 8s ease-in-out 1.64s infinite; }
+.cta-cards.exploded .c-snippets  { animation: ctaExplodeF 1.2s cubic-bezier(0.18, 1.35, 0.4, 1) 0.50s forwards, ctaFloatF 9s ease-in-out 1.70s infinite; }
+
+/* Explosion keyframes — each starts collapsed at the centre of the CTA
+   (positive translate values push *toward* centre from the card's
+   natural corner) and overshoots slightly into its rotated final
+   position via the spring easing above. vw/vh values are eyeballed to
+   land the card at roughly the headline area regardless of viewport. */
+@keyframes ctaExplodeA { 0% { transform: translate(38vw, 32vh)   scale(0.1) rotate(0deg);  opacity: 0; } 25% { opacity: 1; } 100% { transform: rotate(-4deg); opacity: 1; } }
+@keyframes ctaExplodeB { 0% { transform: translate(-38vw, 34vh)  scale(0.1) rotate(0deg);  opacity: 0; } 25% { opacity: 1; } 100% { transform: rotate(3deg);  opacity: 1; } }
+@keyframes ctaExplodeC { 0% { transform: translate(36vw, 4vh)    scale(0.1) rotate(0deg);  opacity: 0; } 25% { opacity: 1; } 100% { transform: rotate(2deg);  opacity: 1; } }
+@keyframes ctaExplodeD { 0% { transform: translate(-36vw, 4vh)   scale(0.1) rotate(0deg);  opacity: 0; } 25% { opacity: 1; } 100% { transform: rotate(-2deg); opacity: 1; } }
+@keyframes ctaExplodeE { 0% { transform: translate(42vw, -32vh)  scale(0.1) rotate(0deg);  opacity: 0; } 25% { opacity: 1; } 100% { transform: rotate(-3deg); opacity: 1; } }
+@keyframes ctaExplodeF { 0% { transform: translate(-42vw, -32vh) scale(0.1) rotate(0deg);  opacity: 0; } 25% { opacity: 1; } 100% { transform: rotate(3deg);  opacity: 1; } }
+
+/* Float keyframes — gentle idle motion once each card has arrived.
+   Each one's own keyframe so they drift independently; if they all
+   shared one animation the screen would breathe in unison and feel
+   mechanical. */
 @keyframes ctaFloatA { 0%,100% { transform: rotate(-4deg) translateY(0); } 50% { transform: rotate(-4deg) translateY(-12px); } }
 @keyframes ctaFloatB { 0%,100% { transform: rotate(2deg)  translateY(0); } 50% { transform: rotate(2deg)  translateY(10px);  } }
 @keyframes ctaFloatC { 0%,100% { transform: rotate(-3deg) translateY(0); } 50% { transform: rotate(-3deg) translateY(-9px);  } }
@@ -1062,7 +1157,11 @@ img { display: block; max-width: 100%; }
   .cta { padding: 120px 28px 120px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cta-card { animation: none !important; }
+  /* No explosion / float. Cards just appear in their natural rotated
+     positions when the section loads. Important to force opacity:1
+     because the default state is opacity:0 (the explosion keyframe is
+     what reveals them in the normal-motion path). */
+  .cta-card { animation: none !important; opacity: 1 !important; }
 }
 
 .foot {
@@ -1402,31 +1501,42 @@ img { display: block; max-width: 100%; }
 
   </div>
 
-  <h2>At your cursor.<br/><span class="quiet">All on-device.</span></h2>
-  <div class="download-stack">
-    <a class="dl" href="https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/Halen.dmg" data-dmg>
-      <span class="dl-head">
-        <span class="ic">
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+  <div class="cta-content">
+    <span class="cta-eyebrow"><span class="dot"></span>v0.1.0 alpha · ready to install</span>
+    <h2>At your cursor.<br/><span class="quiet">All on-device.</span></h2>
+    <p class="cta-sub">One Mac. One model. No cloud, no accounts, no waiting on someone else&rsquo;s server.</p>
+    <div class="download-stack">
+      <a class="dl" href="https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/Halen.dmg" data-dmg>
+        <span class="dl-head">
+          <span class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+          </span>
+          Download Halen.dmg
         </span>
-        Download Halen.dmg
+        <span class="dl-meta">
+          <span class="row">
+            <span>v0.1.0-alpha</span>
+            <span class="sep">·</span>
+            <span>3.7 MB</span>
+          </span>
+          <span class="row">
+            <span>macOS 14+</span>
+            <span class="sep">·</span>
+            <span>Apple Silicon</span>
+            <span class="sep">·</span>
+            <span>ad-hoc signed</span>
+          </span>
+          <span class="sha"><span class="label">SHA-256</span>e787f1aa&hellip;c4b98</span>
+        </span>
+      </a>
+      <span class="cta-trust">
+        <span>100% local</span>
+        <span class="sep"></span>
+        <span>Open source</span>
+        <span class="sep"></span>
+        <span>No telemetry</span>
       </span>
-      <span class="dl-meta">
-        <span class="row">
-          <span>v0.1.0-alpha</span>
-          <span class="sep">·</span>
-          <span>3.7 MB</span>
-        </span>
-        <span class="row">
-          <span>macOS 14+</span>
-          <span class="sep">·</span>
-          <span>Apple Silicon</span>
-          <span class="sep">·</span>
-          <span>ad-hoc signed</span>
-        </span>
-        <span class="sha"><span class="label">SHA-256</span>e787f1aa&hellip;c4b98</span>
-      </span>
-    </a>
+    </div>
   </div>
 </section>
 
@@ -1687,6 +1797,28 @@ const io = new IntersectionObserver(es => es.forEach(e => {
   if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
 }), { threshold: 0.18 });
 document.querySelectorAll('.st, .st-brand').forEach(el => io.observe(el));
+
+// ---------- CTA explosion trigger ----------
+// Cards start invisible at viewport-center distance from their natural
+// positions; adding `.exploded` kicks off the explode+float lifecycle
+// animations defined in CSS. IntersectionObserver fires once when the
+// CTA scrolls into view so the burst lands at the moment the user
+// arrives, not on page load while they're still up at the hero.
+(function () {
+  const ctaCards = document.querySelector('.cta-cards');
+  if (!ctaCards) return;
+  const cta = document.getElementById('download');
+  if (!cta) return;
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        ctaCards.classList.add('exploded');
+        io.disconnect();
+      }
+    });
+  }, { threshold: 0.25 });
+  io.observe(cta);
+})();
 
 // ---------- CTA floating-card animations ----------
 // Three small loops that keep the mockup cards feeling alive without
