@@ -3,6 +3,7 @@ import SwiftUI
 import Carbon.HIToolbox
 import Observation
 import ApplicationServices
+import IOKit.hid
 
 /// ⌃H anywhere → a floating palette that asks the local AI a one-shot
 /// question, with the user's current context (focused app, selected text,
@@ -46,6 +47,17 @@ final class AskHalen: HalenPlugin {
     }
 
     func start() {
+        // `NSEvent.addGlobalMonitorForEvents` for `.keyDown` requires the user
+        // to grant Input Monitoring — separate from Accessibility. Without it
+        // the monitor "installs" (returns a non-nil token) but its callback
+        // never fires for events from other apps, so the hotkey looks dead.
+        // Request explicitly; macOS shows a one-shot system prompt the first
+        // time, returns the cached answer afterwards.
+        let granted = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+        if !granted {
+            Log.warn("AskHalen: Input Monitoring not granted — ⌃H from other apps will not fire. Grant in System Settings → Privacy & Security → Input Monitoring → Halen.")
+        }
+
         // One handler, shared between the global (other apps focused) and
         // local (Halen focused) monitors. `.deviceIndependentFlagsMask`
         // strips caps lock and device-private bits so the equality check
@@ -54,10 +66,14 @@ final class AskHalen: HalenPlugin {
             guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .control,
                   event.charactersIgnoringModifiers?.lowercased() == "h"
             else { return }
+            Log.debug("AskHalen: ⌃H detected — toggling palette")
             MainActor.assumeIsolated { self?.togglePalette() }
         }
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             handler(event)
+        }
+        if globalMonitor == nil {
+            Log.warn("AskHalen: addGlobalMonitorForEvents returned nil — Input Monitoring blocked")
         }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             // Only consume the event when it's our hotkey — every other
@@ -71,7 +87,7 @@ final class AskHalen: HalenPlugin {
             }
             return event
         }
-        Log.info("AskHalen: ⌃H NSEvent monitors installed (Carbon path skipped — it would never fire for ⌃-letter combos)")
+        Log.info("AskHalen: ⌃H monitors installed (global=\(globalMonitor != nil), local=\(localMonitor != nil), inputMonitoring=\(granted))")
     }
 
     func stop() {
@@ -80,6 +96,7 @@ final class AskHalen: HalenPlugin {
         inflightTask?.cancel()
         inflightTask = nil
         closePalette()
+        Log.info("AskHalen: ⌃H monitors removed (plugin disabled)")
     }
 
     func makeDetailView() -> AnyView {

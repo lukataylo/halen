@@ -30,5 +30,7 @@
     <string>Halen reads your upcoming events to suggest breaks (Burnout Copilot) and prepare briefings before meetings (Meeting Prep). Calendar data is read locally only.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
     <string>Halen reads your upcoming events to suggest breaks (Burnout Copilot) and prepare briefings before meetings (Meeting Prep). Calendar data is read locally only.</string>
+    <key>NSInputMonitoringUsageDescription</key>
+    <string>Halen listens for the ⌃H hotkey so the Ask Halen palette can open in any app. Only the hotkey is matched; no other keystrokes are recorded.</string>
 </dict>
 </plist>
