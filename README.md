@@ -1,11 +1,9 @@
 <p align="center">
-  <img src="docs/hero.png" alt="Halen — take control. Keep it local." />
+  <img src="assets/readme-header.png" alt="Halen — Local AI at your cursor. Floating product mockups of email composer, project brief editor, notes app, snippets and tone suggestions, all on a cobalt background." />
 </p>
 
-<h1 align="center">Halen</h1>
-
 <p align="center">
-  <strong>Local-first writing agent for macOS.</strong><br>
+  <strong>Local-first AI companion for macOS.</strong><br>
   No cloud. No upload. Just you, your data, your rules.<br>
   <a href="https://halen.dev">halen.dev</a>
 </p>
