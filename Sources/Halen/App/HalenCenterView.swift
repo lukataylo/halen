@@ -16,6 +16,10 @@ struct HalenCenterView: View {
     @Bindable var inferenceSettings: InferenceSettings
     let router: RouterInferenceClient
     @Bindable var modelDownloader: ModelDownloader
+    /// Optional — only present once `AppCoordinator.startObservers()` has run
+    /// (which happens after Accessibility is granted). The Settings card hides
+    /// the WS section while it's nil to avoid a half-rendered control.
+    let webSocketBridge: WebSocketBridge?
     @State private var nav: CenterNav = .marketplace
 
     var body: some View {
@@ -37,6 +41,7 @@ struct HalenCenterView: View {
                     inferenceSettings: inferenceSettings,
                     router: router,
                     modelDownloader: modelDownloader,
+                    webSocketBridge: webSocketBridge,
                     onBack: { back() }
                 )
                 .transition(.move(edge: .trailing).combined(with: .opacity))

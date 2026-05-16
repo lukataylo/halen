@@ -4,7 +4,7 @@ import Carbon.HIToolbox
 import Observation
 import ApplicationServices
 
-/// ⌘H anywhere → a floating palette that asks the local AI a one-shot
+/// ⌃H anywhere → a floating palette that asks the local AI a one-shot
 /// question, with the user's current context (focused app, selected text,
 /// recent clipboard, current paragraph) automatically attached.
 ///
@@ -12,14 +12,15 @@ import ApplicationServices
 /// contextual: the user doesn't have to copy-paste the email/code/draft they
 /// want help with — Halen sees what's on their screen already.
 ///
-/// Hotkey note: registering ⌘H globally takes precedence over the per-app
-/// "Hide window" binding that macOS apps inherit from `Cmd-H`. Users who
-/// rely on that should disable this plugin or rebind via Settings (future).
+/// Hotkey note: ⌃H is the Unix backspace control character — terminals
+/// (Terminal, iTerm) consume it locally before any system hotkey fires.
+/// Users who want the palette in a terminal should rebind via Settings
+/// (future) or press the menubar icon.
 @MainActor
 final class AskHalen: HalenPlugin {
     let id = "com.halen.ask-halen"
     let name = "Ask Halen"
-    let summary = "⌘H anywhere to ask your local AI with the page's context attached."
+    let summary = "⌃H anywhere to ask your local AI with the page's context attached."
     let icon = "sparkles.rectangle.stack"
     let category: PluginCategory = .productivity
 
@@ -38,14 +39,14 @@ final class AskHalen: HalenPlugin {
     }
 
     func start() {
-        let modifiers = UInt32(cmdKey)
+        let modifiers = UInt32(controlKey)
         let key = UInt32(kVK_ANSI_H)
         let ok = hotkey.register(keyCode: key, modifiers: modifiers,
                                  id: HotkeyID.askHalen.rawValue) { [weak self] in
             MainActor.assumeIsolated { self?.togglePalette() }
         }
         if !ok {
-            Log.warn("AskHalen: ⌘H registration failed (another app may already own it)")
+            Log.warn("AskHalen: ⌃H registration failed (another app may already own it)")
         }
     }
 
@@ -236,9 +237,9 @@ private struct AskHalenDetailView: View {
             Image(systemName: "sparkles.rectangle.stack")
                 .font(.system(size: 32, weight: .light))
                 .foregroundStyle(Color.halenCobalt)
-            Text("Press ⌘H anywhere")
+            Text("Press ⌃H anywhere")
                 .font(.system(.callout, weight: .medium))
-            Text("A floating palette opens with your focused app, selected text, and recent clipboard already in context. Ask anything — Halen answers locally using whichever backend is active. Note: this overrides macOS's per-app ⌘H (Hide window) shortcut.")
+            Text("A floating palette opens with your focused app, selected text, and recent clipboard already in context. Ask anything — Halen answers locally using whichever backend is active. Note: terminals consume ⌃H as backspace, so the hotkey won't fire inside Terminal / iTerm.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

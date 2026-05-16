@@ -29,7 +29,10 @@ final class AppCoordinator {
     private var caretObserver: CaretObserver?
     private var overlay: OverlayController?
     private var pluginHost: PluginHost?
-    private var webSocketBridge: WebSocketBridge?
+    /// `private(set)` so the Settings UI can observe `isListening` /
+    /// `clientCount` and call `start()`/`stop()` when the user toggles
+    /// the bridge on or off.
+    private(set) var webSocketBridge: WebSocketBridge?
 
     private var permissionPollTask: Task<Void, Never>?
     private var eventLogTask: Task<Void, Never>?
@@ -150,20 +153,29 @@ final class AppCoordinator {
         registry.register(BurnoutCopilot(services: services))
         registry.register(MeetingPrep(services: services))
 
-        // Spin up any out-of-process plugins under
-        // ~/Library/Application Support/Halen/Plugins/. Discovery + spawn is
-        // async — happens off the launch path so a slow or hung plugin can't
-        // block Halen from coming up. The host is idempotent: a 0-plugin
-        // install just logs and returns.
+        // Out-of-process plugins under ~/Library/Application Support/Halen/Plugins/.
+        // Discover manifests synchronously (just filesystem scan + JSON parse),
+        // register each as an `ExternalPluginAdapter` so the marketplace
+        // shows them with toggle + permissions + status alongside first-
+        // party plugins. The actual subprocess spawn happens via the
+        // registry's `start()` call on each adapter, which routes to
+        // `PluginHost.spawn(...)`.
         let host = PluginHost(services: services)
         pluginHost = host
-        Task { await host.start() }
+        for (dir, manifest) in host.discoverManifests() {
+            let adapter = ExternalPluginAdapter(manifest: manifest, pluginDir: dir, host: host)
+            registry.register(adapter)
+        }
+        host.startEventDispatcher()
 
         // Browser extensions (and any future loopback client) connect over
-        // this WS server. Bound to 127.0.0.1 only.
+        // this WS server. Bound to 127.0.0.1 only. The user can turn the
+        // bridge off in Settings — start only when enabled.
         let ws = WebSocketBridge(services: services)
         webSocketBridge = ws
-        ws.start()
+        if WebSocketBridge.isEnabledInDefaults {
+            ws.start()
+        }
     }
 
     private func startEventLogger() {

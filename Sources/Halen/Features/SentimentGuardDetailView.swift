@@ -10,6 +10,7 @@ struct SentimentGuardDetailView: View {
     @State private var newLabel = ""
     @State private var newPrompt = ""
     @State private var newColor = "purple"
+    @State private var confirmingClear = false
 
     var body: some View {
         ScrollView {
@@ -166,7 +167,7 @@ struct SentimentGuardDetailView: View {
                 }
                 .padding(.vertical, 4)
                 Button {
-                    onClearApproved()
+                    confirmingClear = true
                 } label: {
                     HStack {
                         Image(systemName: "arrow.counterclockwise")
@@ -180,6 +181,14 @@ struct SentimentGuardDetailView: View {
                 .controlSize(.small)
                 .foregroundStyle(approvedCount == 0 ? Color.secondary.opacity(0.5) : Color.red)
                 .disabled(approvedCount == 0)
+                .confirmationDialog("Clear \(approvedCount) approved fingerprint\(approvedCount == 1 ? "" : "s")?",
+                                    isPresented: $confirmingClear,
+                                    titleVisibility: .visible) {
+                    Button("Clear approvals", role: .destructive) { onClearApproved() }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Texts you've marked as fine will become eligible for the tone classifier again. This can't be undone.")
+                }
             }
         }
     }

@@ -7,7 +7,7 @@
     :root { color-scheme: light dark; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
-      width: 240px; padding: 14px; margin: 0;
+      width: 280px; padding: 14px; margin: 0;
       background: Canvas; color: CanvasText;
     }
     .row {
@@ -23,10 +23,39 @@
     .dot.fail  { background: #ff5f56; }
     .hint {
       font-size: 11px; color: GrayText; line-height: 1.4;
+      margin-bottom: 8px;
     }
     code {
       font-family: ui-monospace, SFMono-Regular, monospace;
       font-size: 10.5px;
+    }
+    .section {
+      border-top: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+      padding-top: 10px; margin-top: 8px;
+    }
+    label {
+      display: block; font-size: 11px; font-weight: 500;
+      color: GrayText; margin-bottom: 4px;
+    }
+    input[type="password"], input[type="text"] {
+      width: 100%; box-sizing: border-box;
+      padding: 6px 8px; font-size: 11px;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+      border-radius: 5px; background: Field; color: FieldText;
+    }
+    button {
+      padding: 5px 10px; font-size: 12px;
+      border-radius: 5px; cursor: pointer;
+      border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+      background: ButtonFace; color: ButtonText;
+    }
+    button.primary {
+      background: #0a84ff; color: white; border-color: #0a84ff;
+    }
+    .actions { display: flex; gap: 6px; margin-top: 6px; }
+    .saved {
+      font-size: 10px; color: #2dd45b; margin-left: 8px;
     }
   </style>
 </head>
@@ -36,9 +65,20 @@
     <div id="text">Checking…</div>
   </div>
   <div class="hint">
-    Connects to Halen on <code>127.0.0.1:50765</code>. If the status is red,
-    open Halen from the menubar — it spawns the WebSocket listener at launch.
+    Connects to Halen on <code>127.0.0.1:50765</code>. The bridge requires a
+    pairing token — copy it from Halen Settings → Browser bridge.
   </div>
+
+  <div class="section">
+    <label for="token">Pairing token</label>
+    <input type="password" id="token" placeholder="Paste from Halen…" autocomplete="off" spellcheck="false">
+    <div class="actions">
+      <button class="primary" id="save">Save</button>
+      <button id="clear">Clear</button>
+      <span class="saved" id="saved" style="display:none;">Saved · reload tabs to apply</span>
+    </div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>

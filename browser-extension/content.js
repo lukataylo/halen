@@ -21,14 +21,44 @@
 
 (() => {
   const HALEN_HOST = "ws://127.0.0.1:50765/";
+  const STORAGE_KEY = "halenBridgeToken";
   const PAUSE_DEBOUNCE_MS = 600;
   const RECONNECT_INITIAL_MS = 2_000;
   const RECONNECT_MAX_MS = 30_000;
+  // Topics we want from the host. Browser tabs don't care about app.focused
+  // (that's about *native* app switches) or caret.moved (DOM tracks its own).
+  const SUBSCRIBE_TOPICS = ["text.pause"];
 
   let socket = null;
   let reconnectDelay = RECONNECT_INITIAL_MS;
   let pauseTimer = null;
   let lastSent = null;   // last { text, caretOffset } we sent — for dedup
+  let token = null;
+
+  // --- Token sync -----------------------------------------------------------
+
+  function loadToken(callback) {
+    if (typeof chrome === "undefined" || !chrome.storage) {
+      callback("");
+      return;
+    }
+    chrome.storage.local.get([STORAGE_KEY], (result) => {
+      callback((result && typeof result[STORAGE_KEY] === "string") ? result[STORAGE_KEY] : "");
+    });
+  }
+
+  // Re-pair when the user updates the token in the popup. The simplest
+  // reliable thing is to drop the current socket; the reconnect logic
+  // then opens a fresh one and re-subscribes with the new value.
+  if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !changes[STORAGE_KEY]) return;
+      token = changes[STORAGE_KEY].newValue || "";
+      if (socket) {
+        try { socket.close(); } catch (_) {}
+      }
+    });
+  }
 
   // --- Connection -----------------------------------------------------------
 
@@ -41,7 +71,14 @@
     }
     socket.addEventListener("open", () => {
       reconnectDelay = RECONNECT_INITIAL_MS;
-      console.debug("[Halen] connected");
+      // Halen rejects every method (events, RPCs) until we send `subscribe`
+      // with a matching token. Without it we're connected but invisible.
+      if (token) {
+        send("subscribe", { token, topics: SUBSCRIBE_TOPICS });
+        console.debug("[Halen] connected + subscribed");
+      } else {
+        console.warn("[Halen] connected but no token configured — open the popup and paste from Halen Settings");
+      }
     });
     socket.addEventListener("close", () => {
       socket = null;
@@ -178,5 +215,10 @@
   document.addEventListener("input", scheduleEmit, true);
   document.addEventListener("focusin", scheduleEmit, true);
 
-  connect();
+  // Load token first so the very first connect attempt can include it in
+  // its `subscribe` notification — no wasted unauth'd round-trip.
+  loadToken((t) => {
+    token = t;
+    connect();
+  });
 })();

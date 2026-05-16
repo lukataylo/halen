@@ -5,6 +5,7 @@ struct TypoFixerDetailView: View {
     @State private var newTypo: String = ""
     @State private var newCorrection: String = ""
     @State private var search: String = ""
+    @State private var confirmingReset = false
     @FocusState private var typoFieldFocused: Bool
 
     var body: some View {
@@ -145,11 +146,22 @@ struct TypoFixerDetailView: View {
             .buttonStyle(.borderless)
             .controlSize(.small)
             Button("Reset all") {
-                store.reset()
+                confirmingReset = true
             }
             .buttonStyle(.borderless)
             .controlSize(.small)
             .foregroundStyle(.red)
+            .confirmationDialog("Reset the typo dictionary?",
+                                isPresented: $confirmingReset,
+                                titleVisibility: .visible) {
+                Button("Reset all (\(store.entries.count) entries)",
+                       role: .destructive) {
+                    store.reset()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Custom corrections you've added will be deleted. Built-in seeds will be restored on next launch.")
+            }
         }
     }
 }

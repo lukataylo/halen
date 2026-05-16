@@ -10,10 +10,17 @@ struct SettingsView: View {
     @Bindable var inferenceSettings: InferenceSettings
     let router: RouterInferenceClient
     @Bindable var modelDownloader: ModelDownloader
+    let webSocketBridge: WebSocketBridge?
     let onBack: () -> Void
 
     @State private var pollTask: Task<Void, Never>?
+    @State private var confirmingModelRemove = false
+    @State private var confirmingTokenRotate = false
+    @State private var tokenCopied = false
     @AppStorage(OverlayController.showDotKey) private var showCaretIndicator: Bool = true
+    /// Two-way binding to the WS bridge's enabled preference. Toggling
+    /// here also calls into the bridge to actually start/stop it live.
+    @AppStorage(WebSocketBridge.enabledKey) private var webSocketEnabled: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,6 +32,7 @@ struct SettingsView: View {
                     overlayCard
                     aiCard
                     builtInModelCard
+                    if webSocketBridge != nil { webSocketCard }
                     aboutCard
                 }
                 .padding(12)
@@ -270,9 +278,20 @@ struct SettingsView: View {
             ProgressView()
                 .controlSize(.small)
         case .ready:
-            Button("Remove") { modelDownloader.removeDownloaded() }
+            Button("Remove") { confirmingModelRemove = true }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .confirmationDialog("Delete the downloaded Gemma 4 E4B model?",
+                                    isPresented: $confirmingModelRemove,
+                                    titleVisibility: .visible) {
+                    Button("Delete (\(formatBytes(ModelDownloader.expectedSize)))",
+                           role: .destructive) {
+                        modelDownloader.removeDownloaded()
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("You'll need to re-download the model the next time the bundled fallback is requested.")
+                }
         case .failed:
             Button("Retry") { modelDownloader.start() }
                 .buttonStyle(.borderedProminent)
@@ -326,6 +345,103 @@ struct SettingsView: View {
             return String(format: "%.1f GB", mb / 1024)
         }
         return String(format: "%.0f MB", mb)
+    }
+
+    // MARK: - WebSocket bridge card
+
+    @ViewBuilder
+    private var webSocketCard: some View {
+        if let bridge = webSocketBridge {
+            GlassCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        cardLabel("Browser & companion bridge")
+                        Spacer()
+                        Toggle("", isOn: $webSocketEnabled)
+                            .toggleStyle(.switch)
+                            .controlSize(.regular)
+                            .labelsHidden()
+                            .onChange(of: webSocketEnabled) { _, newValue in
+                                // Live start/stop so the user doesn't have to
+                                // restart Halen for the toggle to take effect.
+                                if newValue { bridge.start() } else { bridge.stop() }
+                            }
+                    }
+                    HStack(spacing: 10) {
+                        statusDot(bridge.isListening ? .ok : .neutral)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(bridge.isListening
+                                 ? "127.0.0.1:\(WebSocketBridge.defaultPort)"
+                                 : "Off")
+                                .font(.system(.callout, design: .monospaced))
+                            Text(bridgeStatusDetail(bridge))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
+                    }
+                    Text("Halen exposes a JSON-RPC bridge on loopback so the browser extension (and future companions) can report typing in fields macOS Accessibility can't reach — Slack, Discord, Gmail, Docs.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Divider().padding(.vertical, 2)
+
+                    HStack(spacing: 8) {
+                        Text("Pairing token")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button(tokenCopied ? "Copied!" : "Copy") {
+                            if let token = BridgeTokenStore.tokenOrCreate() {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(token, forType: .string)
+                                tokenCopied = true
+                                Task { @MainActor in
+                                    try? await Task.sleep(for: .seconds(1.5))
+                                    tokenCopied = false
+                                }
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        Button("Regenerate") { confirmingTokenRotate = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .foregroundStyle(.red)
+                            .confirmationDialog("Regenerate the bridge token?",
+                                                isPresented: $confirmingTokenRotate,
+                                                titleVisibility: .visible) {
+                                Button("Regenerate", role: .destructive) {
+                                    _ = BridgeTokenStore.regenerate()
+                                    // Drop every connected client — they'll
+                                    // need to re-pair with the new token.
+                                    bridge.stop()
+                                    if webSocketEnabled { bridge.start() }
+                                }
+                                Button("Cancel", role: .cancel) {}
+                            } message: {
+                                Text("Every paired client (browser extension, companion apps) will need to re-enter the new token. Use this if you think the current token has leaked.")
+                            }
+                    }
+                    Text("Browser extension: open its popup, paste this token, click Save.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
+    private func bridgeStatusDetail(_ bridge: WebSocketBridge) -> String {
+        guard bridge.isListening else {
+            return "Browser extension and other loopback clients won't connect while off."
+        }
+        switch bridge.clientCount {
+        case 0:  return "Listening — no clients connected."
+        case 1:  return "1 client connected."
+        default: return "\(bridge.clientCount) clients connected."
+        }
     }
 
     private var aboutCard: some View {

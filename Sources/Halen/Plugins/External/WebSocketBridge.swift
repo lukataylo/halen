@@ -2,6 +2,7 @@ import Foundation
 import Network
 import AppKit
 import ApplicationServices
+import Observation
 
 /// Local WebSocket server that lets non-process clients — browser extensions
 /// today, eventually VS Code / Slack extension / iOS companion — speak the
@@ -16,17 +17,33 @@ import ApplicationServices
 /// `RPCValue` types the stdio plugin host uses, just delivered as WebSocket
 /// text frames instead of stdout lines.
 @MainActor
+@Observable
 final class WebSocketBridge {
     /// Pinned default port. Browser-extension code constants must match.
     /// `nonisolated` so default-arg initialisers (e.g. `init(services:port:)`)
     /// can read it from outside the MainActor.
     nonisolated static let defaultPort: UInt16 = 50765
 
+    /// UserDefaults key controlling whether the bridge is started at launch.
+    /// Default ON — installed clients (browser extension, future companions)
+    /// can't function without it, and binding to loopback-only keeps the
+    /// trust boundary tight.
+    nonisolated static let enabledKey = "halen.websocketBridge.enabled"
+
+    nonisolated static var isEnabledInDefaults: Bool {
+        UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
+    }
+
     private let services: HalenServices
     private let bridge: HostBridge
     private let port: UInt16
 
     private var listener: NWListener?
+    /// Observable-visible state — SettingsView reads `isListening` and
+    /// `clientCount` for the live status card.
+    private(set) var isListening = false
+    private(set) var clientCount = 0
+
     private var clients: [Client] = []
     private var subscriptionTask: Task<Void, Never>?
 
@@ -36,6 +53,10 @@ final class WebSocketBridge {
     private final class Client: Identifiable {
         let id = UUID()
         let connection: NWConnection
+        /// `nil` until the client has sent a valid `subscribe` notification.
+        /// Unauthenticated clients can connect (so the popup's ping-and-close
+        /// liveness check works) but get no events and can't inject any.
+        var subscribedTopics: Set<String>?
         init(_ connection: NWConnection) { self.connection = connection }
     }
 
@@ -61,6 +82,7 @@ final class WebSocketBridge {
             }
             listener.start(queue: .main)
             self.listener = listener
+            self.isListening = true
             Log.info("WebSocketBridge: listening on 127.0.0.1:\(port)")
             startEventForwarder()
         } catch {
@@ -73,8 +95,10 @@ final class WebSocketBridge {
         subscriptionTask = nil
         for client in clients { client.connection.cancel() }
         clients.removeAll()
+        clientCount = 0
         listener?.cancel()
         listener = nil
+        isListening = false
     }
 
     private func makeListener() throws -> NWListener {
@@ -98,6 +122,7 @@ final class WebSocketBridge {
     private func accept(_ connection: NWConnection) {
         let client = Client(connection)
         clients.append(client)
+        clientCount = clients.count
         Log.info("WebSocketBridge: client \(client.id.uuidString.prefix(8)) connected (\(clients.count) total)")
 
         // Capture only the UUID (Sendable) — looking the client up by id in
@@ -148,6 +173,7 @@ final class WebSocketBridge {
     private func removeClient(_ client: Client) {
         client.connection.cancel()
         clients.removeAll { $0.id == client.id }
+        clientCount = clients.count
         Log.info("WebSocketBridge: client \(client.id.uuidString.prefix(8)) gone (\(clients.count) left)")
     }
 
@@ -165,9 +191,14 @@ final class WebSocketBridge {
     private func broadcast(_ event: Event) {
         guard !clients.isEmpty,
               let (topic, payload) = event.toBroadcast() else { return }
+        // Filter to clients that authenticated AND subscribed to this topic.
+        // Unauthenticated or wrong-topic clients receive nothing — that's the
+        // whole point of the subscribe-with-token handshake.
+        let targets = clients.filter { $0.subscribedTopics?.contains(topic) == true }
+        guard !targets.isEmpty else { return }
         let msg = RPCMessage(method: "event/\(topic)",
                              params: .object(["topic": .string(topic), "payload": payload]))
-        send(msg, to: clients)
+        send(msg, to: targets)
     }
 
     private func send(_ msg: RPCMessage, to targets: [Client]) {
@@ -190,20 +221,35 @@ final class WebSocketBridge {
         if msg.isRequest {
             Task { @MainActor in await self.handleRequest(msg, from: client) }
         } else if msg.isNotification {
-            handleNotification(msg)
+            handleNotification(msg, from: client)
         }
         // Responses to our outbound requests would land here — we don't
         // currently make any, but the dispatcher is ready when we do.
     }
 
-    private func handleNotification(_ msg: RPCMessage) {
-        // Clients can inject events. The big use case: browser extensions
-        // reporting DOM-text.pause events that AX can't see (Slack web,
-        // Discord web, Google Docs, etc.). Publishing onto the EventBus
-        // means every in-process plugin (SnippetExpander, TypoFixer,
-        // SentimentGuard) reacts uniformly, with no per-client wiring.
-        guard let method = msg.method,
-              method.hasPrefix("event/"),
+    private func handleNotification(_ msg: RPCMessage, from client: Client) {
+        guard let method = msg.method else { return }
+
+        // Subscription handshake: client posts `{token, topics: [...]}`.
+        // Without it, the client is connected but ignored for everything
+        // below — the auth gate that loopback-only binding doesn't give us.
+        if method == "subscribe" {
+            handleSubscribe(msg, from: client)
+            return
+        }
+
+        // Every method below requires an authenticated subscription. Unauth'd
+        // clients can liveness-ping (popup) but can neither receive events
+        // nor inject them into the EventBus.
+        guard client.subscribedTopics != nil else {
+            Log.debug("WebSocketBridge: ignored \(method) from unauthenticated client \(client.id.uuidString.prefix(8))")
+            return
+        }
+
+        // Clients can inject events (the browser extension's main use case).
+        // Publishing onto the EventBus means every in-process plugin reacts
+        // uniformly, with no per-client wiring.
+        guard method.hasPrefix("event/"),
               let params = msg.params?.objectValue,
               let topic = params["topic"]?.stringValue,
               let payloadObj = params["payload"]?.objectValue
@@ -222,6 +268,32 @@ final class WebSocketBridge {
         default:
             break
         }
+    }
+
+    /// Validate the client's `subscribe` notification against the persisted
+    /// token; on success, record the requested topics so `broadcast(...)`
+    /// fan-out can filter on them.
+    ///
+    /// Shape: `subscribe { token: "...", topics: ["text.pause", "app.focused"] }`.
+    /// Topics not in the bridge's set of emitted topics are dropped silently.
+    private func handleSubscribe(_ msg: RPCMessage, from client: Client) {
+        guard let params = msg.params?.objectValue,
+              let providedToken = params["token"]?.stringValue,
+              let topicsAny = params["topics"]?.arrayValue
+        else {
+            Log.warn("WebSocketBridge: bad subscribe payload from \(client.id.uuidString.prefix(8))")
+            return
+        }
+        guard let expected = BridgeTokenStore.tokenOrCreate(),
+              providedToken == expected else {
+            Log.warn("WebSocketBridge: rejected subscribe from \(client.id.uuidString.prefix(8)) — token mismatch")
+            return
+        }
+        let valid: Set<String> = ["text.pause", "caret.moved", "app.focused"]
+        let topics = Set(topicsAny.compactMap { $0.stringValue }).intersection(valid)
+        client.subscribedTopics = topics
+        let topicList = topics.sorted().joined(separator: ", ")
+        Log.info("WebSocketBridge: \(client.id.uuidString.prefix(8)) subscribed to [\(topicList)]")
     }
 
     private func handleRequest(_ msg: RPCMessage, from client: Client) async {

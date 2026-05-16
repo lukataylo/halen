@@ -60,7 +60,6 @@ final class ModelDownloader {
     private(set) var state: State
 
     private var downloadTask: Task<Void, Never>?
-    private var session: URLSession?
 
     init() {
         // On launch we trust the existence of the file; the (multi-second)
@@ -84,12 +83,12 @@ final class ModelDownloader {
     }
 
     /// Abort an in-flight download. Leaves the `.part` file in place so the
-    /// next `start()` resumes from where it stopped.
+    /// next `start()` resumes from where it stopped. The cancellation flows
+    /// through `withTaskCancellationHandler` in `run(...)` into the detached
+    /// download body, which winds down on its next `Task.checkCancellation()`.
     func cancel() {
         downloadTask?.cancel()
         downloadTask = nil
-        session?.invalidateAndCancel()
-        session = nil
         if case .downloading = state {
             state = .notDownloaded
         }
@@ -129,84 +128,72 @@ final class ModelDownloader {
             total: Self.expectedSize
         )
 
-        var request = URLRequest(url: Self.sourceURL)
-        request.timeoutInterval = Self.requestTimeout
-        if resumeOffset > 0 {
-            request.setValue("bytes=\(resumeOffset)-", forHTTPHeaderField: "Range")
+        // Hand off the actual byte-pumping to a detached Task so the iter-
+        // bytes loop doesn't run on the MainActor. `performDownload(...)` is
+        // nonisolated static and takes everything it needs by value, so no
+        // MainActor state escapes the detached context. Progress updates
+        // come back through the `onProgress` closure, which hops via
+        // `Task { @MainActor in }` so SwiftUI sees the state changes on
+        // its expected actor.
+        //
+        // `withTaskCancellationHandler` wires the OUTER `downloadTask`'s
+        // cancellation through to the detached child — without that bridge
+        // the user pressing Cancel would unblock the await but leave the
+        // download running silently in the background for up to an hour.
+        let written: Int64
+        do {
+            // Re-bind `self` to a local `weak` so the progress callback
+            // captures a Sendable weak ref, not the `var self` of the
+            // surrounding closure (which the strict-concurrency checker
+            // refuses to let cross actor boundaries).
+            weak let weakSelf = self
+            let inner = Task.detached(priority: .utility) {
+                try await Self.performDownload(
+                    sourceURL: Self.sourceURL,
+                    partPath: partPath,
+                    resumeOffset: resumeOffset,
+                    expectedSize: Self.expectedSize,
+                    requestTimeout: Self.requestTimeout,
+                    resourceTimeout: Self.resourceTimeout,
+                    writeBufferBytes: Self.writeBufferBytes,
+                    progressInterval: Self.progressReportInterval,
+                    onProgress: { fraction, bytes, total in
+                        Task { @MainActor in
+                            weakSelf?.state = .downloading(
+                                fraction: fraction, bytes: bytes, total: total
+                            )
+                        }
+                    }
+                )
+            }
+            written = try await withTaskCancellationHandler {
+                try await inner.value
+            } onCancel: {
+                inner.cancel()
+            }
+        } catch is CancellationError {
+            state = .notDownloaded
+            return
+        } catch let DownloadError.badStatus(code) {
+            state = .failed(message: "Server returned HTTP \(code)")
+            return
+        } catch DownloadError.noHTTPResponse {
+            state = .failed(message: "Unexpected response from server")
+            return
+        } catch {
+            state = .failed(message: error.localizedDescription)
+            return
         }
-        // Polite identity. HuggingFace serves unauthenticated requests, just
-        // with tighter rate limits; not relevant for a single ~800 MB file.
-        request.setValue("Halen-Mac/0.1", forHTTPHeaderField: "User-Agent")
 
-        let config = URLSessionConfiguration.default
-        config.waitsForConnectivity = true
-        config.timeoutIntervalForResource = Self.resourceTimeout
-        let session = URLSession(configuration: config)
-        self.session = session
-        defer { self.session = nil }
+        // Size sanity-check before the (~3 s) full SHA-256 pass — catches
+        // truncated transfers cheaply.
+        if written != Self.expectedSize {
+            state = .failed(message:
+                "Downloaded \(written) bytes, expected \(Self.expectedSize). Try again.")
+            return
+        }
 
         do {
-            let (bytes, response) = try await session.bytes(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                state = .failed(message: "Unexpected response from server")
-                return
-            }
-            // 206 on resume, 200 on a fresh download (or when the server
-            // ignored our Range — treat as fresh and rewrite the part file).
-            let startingFresh = http.statusCode == 200
-            if !startingFresh && http.statusCode != 206 {
-                state = .failed(message: "Server returned HTTP \(http.statusCode)")
-                return
-            }
-
-            // Open the .part file: truncate on a fresh response, append on resume.
-            if startingFresh {
-                fm.createFile(atPath: partPath.path, contents: nil)
-            } else if !fm.fileExists(atPath: partPath.path) {
-                fm.createFile(atPath: partPath.path, contents: nil)
-            }
-            let handle = try FileHandle(forWritingTo: partPath)
-            if startingFresh {
-                try handle.truncate(atOffset: 0)
-            } else {
-                try handle.seekToEnd()
-            }
-            defer { try? handle.close() }
-
-            var written: Int64 = startingFresh ? 0 : resumeOffset
-            var buffer = Data(capacity: Self.writeBufferBytes)
-            var lastReport = Date()
-
-            for try await byte in bytes {
-                buffer.append(byte)
-                if buffer.count >= Self.writeBufferBytes {
-                    try handle.write(contentsOf: buffer)
-                    written += Int64(buffer.count)
-                    buffer.removeAll(keepingCapacity: true)
-                    if Date().timeIntervalSince(lastReport) > Self.progressReportInterval {
-                        state = .downloading(
-                            fraction: Double(written) / Double(Self.expectedSize),
-                            bytes: written,
-                            total: Self.expectedSize
-                        )
-                        lastReport = Date()
-                    }
-                }
-                try Task.checkCancellation()
-            }
-            if !buffer.isEmpty {
-                try handle.write(contentsOf: buffer)
-                written += Int64(buffer.count)
-            }
-            try handle.close()
-
-            // Size sanity-check before the (~3 s) full SHA-256 pass — catches
-            // truncated transfers cheaply.
-            if written != Self.expectedSize {
-                state = .failed(message:
-                    "Downloaded \(written) bytes, expected \(Self.expectedSize). Try again.")
-                return
-            }
 
             state = .verifying
             try Task.checkCancellation()
@@ -251,7 +238,92 @@ final class ModelDownloader {
         }
     }
 
-    /// Streaming SHA-256 — never loads the full 770 MB into memory. Marked
+    /// Pumps the URLSession byte stream into the `.part` file on a background
+    /// task. Everything it touches is either a value type, a Sendable
+    /// reference (URL, URLSession created here), or the locally-owned
+    /// FileHandle — nothing crosses back to the MainActor except via the
+    /// `onProgress` callback, which marshals its own hop.
+    ///
+    /// Throws `CancellationError` when the parent task is cancelled (the
+    /// `try Task.checkCancellation()` inside the loop is the propagation
+    /// point), `DownloadError.badStatus(_)` on a non-200/206 response, and
+    /// `DownloadError.noHTTPResponse` when the URL loading system hands us
+    /// back something that isn't an `HTTPURLResponse`.
+    nonisolated private static func performDownload(
+        sourceURL: URL,
+        partPath: URL,
+        resumeOffset: Int64,
+        expectedSize: Int64,
+        requestTimeout: TimeInterval,
+        resourceTimeout: TimeInterval,
+        writeBufferBytes: Int,
+        progressInterval: TimeInterval,
+        onProgress: @escaping @Sendable (Double, Int64, Int64) -> Void
+    ) async throws -> Int64 {
+        var request = URLRequest(url: sourceURL)
+        request.timeoutInterval = requestTimeout
+        if resumeOffset > 0 {
+            request.setValue("bytes=\(resumeOffset)-", forHTTPHeaderField: "Range")
+        }
+        // Polite identity. HuggingFace serves unauthenticated requests with
+        // tighter rate limits — not relevant for a single multi-GB download.
+        request.setValue("Halen-Mac/0.1", forHTTPHeaderField: "User-Agent")
+
+        let config = URLSessionConfiguration.default
+        config.waitsForConnectivity = true
+        config.timeoutIntervalForResource = resourceTimeout
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw DownloadError.noHTTPResponse
+        }
+        // 206 on resume, 200 on a fresh download (or when the server ignored
+        // our Range — treat as fresh and rewrite the part file).
+        let startingFresh = http.statusCode == 200
+        if !startingFresh && http.statusCode != 206 {
+            throw DownloadError.badStatus(http.statusCode)
+        }
+
+        let fm = FileManager.default
+        if startingFresh || !fm.fileExists(atPath: partPath.path) {
+            fm.createFile(atPath: partPath.path, contents: nil)
+        }
+        let handle = try FileHandle(forWritingTo: partPath)
+        if startingFresh {
+            try handle.truncate(atOffset: 0)
+        } else {
+            try handle.seekToEnd()
+        }
+        defer { try? handle.close() }
+
+        var written: Int64 = startingFresh ? 0 : resumeOffset
+        var buffer = Data(capacity: writeBufferBytes)
+        var lastReport = Date()
+
+        for try await byte in bytes {
+            buffer.append(byte)
+            if buffer.count >= writeBufferBytes {
+                try handle.write(contentsOf: buffer)
+                written += Int64(buffer.count)
+                buffer.removeAll(keepingCapacity: true)
+                if Date().timeIntervalSince(lastReport) > progressInterval {
+                    onProgress(Double(written) / Double(expectedSize), written, expectedSize)
+                    lastReport = Date()
+                }
+            }
+            try Task.checkCancellation()
+        }
+        if !buffer.isEmpty {
+            try handle.write(contentsOf: buffer)
+            written += Int64(buffer.count)
+        }
+        try handle.close()
+        return written
+    }
+
+    /// Streaming SHA-256 — never loads the full GGUF into memory. Marked
     /// `nonisolated static` so it can be invoked from `Task.detached` without
     /// hopping back to the MainActor; capturing only the file path + the
     /// `Data` chunks it reads keeps the call genuinely off-main.
@@ -269,4 +341,12 @@ final class ModelDownloader {
             .map { String(format: "%02x", $0) }
             .joined()
     }
+}
+
+/// Errors thrown by the detached download body that `run(installingTo:)`
+/// translates into user-facing `.failed(message:)` states. Distinct from
+/// `URLError` etc. so the outer dispatch knows which message is appropriate.
+enum DownloadError: Error {
+    case noHTTPResponse
+    case badStatus(Int)
 }
