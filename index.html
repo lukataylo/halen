@@ -793,34 +793,37 @@ img { display: block; max-width: 100%; }
 <!-- ============ MANIFESTO ============ -->
 <section class="story">
 
-  <p class="st">For years, software moved in one direction: away from the user.</p>
+  <p class="st">For years, software has been pulling away from you.</p>
 
   <div class="stanza">
     <p class="st">Into the <span class="kw" data-swarm="cloud">cloud</span>.</p>
     <p class="st">Into <span class="kw" data-swarm="subs">subscriptions</span>.</p>
-    <p class="st">Into platforms that quietly turned personal computing into rented computing.</p>
+    <p class="st">Into platforms that quietly turned your computer into rented space.</p>
   </div>
 
-  <p class="st">But modern <span class="kw" data-swarm="apps">Macs</span> can now run real AI <span class="kw" data-swarm="models">locally</span> &mdash; fast enough to assist in real time.</p>
+  <p class="st">But something changed.</p>
 
-  <p class="st">So why send your thoughts anywhere else?</p>
+  <p class="st">Modern <span class="kw" data-swarm="apps">Macs</span> are now powerful enough to run real AI on your <span class="kw" data-swarm="models">machine</span> &mdash; instantly, privately, right where you&rsquo;re <span class="kw" data-swarm="caret">typing</span>.</p>
 
-  <p class="st">Halen runs beside your <span class="kw" data-swarm="caret">cursor</span>, not somewhere across the internet.</p>
+  <p class="st">So why hand your thoughts to someone else&rsquo;s server?</p>
+
+  <p class="st">Halen runs on-device, beside your workflow.</p>
 
   <div class="stanza">
     <p class="st">No <span class="kw" data-swarm="cloud">cloud APIs</span>.</p>
     <p class="st">No uploads.</p>
-    <p class="st">No waiting for someone else&rsquo;s server.</p>
+    <p class="st">No waiting on someone else&rsquo;s server.</p>
   </div>
 
-  <div class="stanza">
-    <p class="st">Not because privacy is a feature.</p>
-    <p class="st">Because ownership matters.</p>
-  </div>
+  <p class="st">Just fast, local intelligence that stays quiet until you need it.</p>
 
-  <p class="st">Apple shipped local LLMs on every modern Mac. But no real way to shape them &mdash; no way to teach them your snippets, your tone, your rules.</p>
+  <p class="st">Not because privacy is a feature.</p>
 
-  <p class="st">Halen is that missing surface.</p>
+  <p class="st">Because ownership matters.</p>
+
+  <p class="st">Apple shipped local AI on every modern Mac.</p>
+
+  <p class="st">Halen is the missing layer that lets you shape it around your own writing, snippets, and rules.</p>
 
   <div class="stanza">
     <p class="st">Take control.</p>
@@ -1165,6 +1168,31 @@ function despawn(els) {
   });
 }
 
+// Auto-despawn timer registry. On mobile, `mouseleave` never fires after a
+// synthetic mouseenter from a tap — items would stick forever. The timer
+// guarantees they always go away, and gets reset on every fresh enter.
+const despawnTimers = new WeakMap();
+const AUTO_DESPAWN_MS = 4200;
+
+function scheduleAutoDespawn(kw, els) {
+  const existing = despawnTimers.get(kw);
+  if (existing) clearTimeout(existing);
+  despawnTimers.set(kw, setTimeout(() => {
+    despawn(els);
+    activeMap.delete(kw);
+    despawnTimers.delete(kw);
+  }, AUTO_DESPAWN_MS));
+}
+
+function clearActiveSwarms() {
+  activeMap.forEach((els, kw) => {
+    despawn(els);
+    const t = despawnTimers.get(kw);
+    if (t) { clearTimeout(t); despawnTimers.delete(kw); }
+  });
+  activeMap.clear();
+}
+
 document.querySelectorAll('.kw').forEach(kw => {
   const swarm = kw.dataset.swarm;
   kw.addEventListener('mouseenter', () => {
@@ -1179,14 +1207,28 @@ document.querySelectorAll('.kw').forEach(kw => {
     else if (swarm === 'pulse') {
       /* no overlay — hover styles handle it */
     }
-    if (els) activeMap.set(kw, els);
+    if (els) {
+      activeMap.set(kw, els);
+      scheduleAutoDespawn(kw, els);
+    }
   });
   kw.addEventListener('mouseleave', () => {
     if (swarm === 'pulse') return;
     const els = activeMap.get(kw);
-    if (els) { despawn(els); activeMap.delete(kw); }
+    if (els) {
+      despawn(els);
+      activeMap.delete(kw);
+      const t = despawnTimers.get(kw);
+      if (t) { clearTimeout(t); despawnTimers.delete(kw); }
+    }
   });
 });
+
+// Scrolling is the user telling us "I'm done with this beat, moving on."
+// Dismiss every floating swarm so the swarm-stage (position: fixed) doesn't
+// trap stale emoji over the next section. Passive listener — we never
+// preventDefault — so scrolling stays snappy on iOS.
+window.addEventListener('scroll', clearActiveSwarms, { passive: true });
 
 // reveal
 const io = new IntersectionObserver(es => es.forEach(e => {
