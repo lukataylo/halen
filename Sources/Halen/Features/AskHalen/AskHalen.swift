@@ -93,9 +93,10 @@ final class AskHalen: HalenPlugin {
     }
 
     private func openPalette() {
-        // Snapshot context BEFORE the palette steals focus. Once our panel
-        // becomes key, the focused element changes and AX reads would point
-        // at the palette's text field, not the user's source app.
+        // Snapshot context BEFORE the palette steals focus. The captured
+        // `AXUIElement` survives focus changes (AX is per-pid, not per
+        // first-responder), so Insert can still write back even when the
+        // source app loses key-window status while the palette is up.
         state.context = AskHalenContext.capture(via: caretObserver)
         state.question = ""
         state.response = ""
@@ -103,20 +104,31 @@ final class AskHalen: HalenPlugin {
         state.isStreaming = false
 
         let size = NSSize(width: 640, height: 220)
-        let p = NSPanel(
+        // `FocusablePanel` (subclass below) forces `canBecomeKey = true`
+        // even for borderless windows — without it, NSPanel + .borderless
+        // returns NO from canBecomeKey and the SwiftUI `TextField`'s
+        // `@FocusState` never fires, leaving the palette uneditable and
+        // un-dismissable. `.nonactivatingPanel` is gone for the same
+        // reason: it doesn't reliably yield key status to SwiftUI's input
+        // pipeline in macOS 14+.
+        let p = FocusablePanel(
             contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.borderless, .nonactivatingPanel],
+            styleMask: [.borderless, .titled, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
+        p.titleVisibility = .hidden
+        p.titlebarAppearsTransparent = true
+        p.standardWindowButton(.closeButton)?.isHidden = true
+        p.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        p.standardWindowButton(.zoomButton)?.isHidden = true
         p.level = .floating
         p.isOpaque = false
         p.backgroundColor = .clear
         p.hasShadow = true
         p.isMovableByWindowBackground = true
         p.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
-        // The non-activating panel doesn't yield the source app's key-window
-        // status — text writes via AX still target the field the user was in.
+        p.isReleasedWhenClosed = false
 
         let view = AskHalenPalette(
             state: state,
@@ -137,8 +149,12 @@ final class AskHalen: HalenPlugin {
             )
             p.setFrame(NSRect(origin: origin, size: size), display: true)
         }
-        p.orderFrontRegardless()
-        p.makeKey()
+        // Activate Halen so the palette becomes both key window and focus
+        // owner for SwiftUI's input pipeline. The source app loses
+        // foreground status, which is fine: AX writes are pid-targeted, not
+        // first-responder-targeted, so Insert still lands in the right field.
+        NSApp.activate()
+        p.makeKeyAndOrderFront(nil)
         panel = p
     }
 
@@ -239,6 +255,15 @@ final class AskHalen: HalenPlugin {
             caretObserver?.replaceRange(range, with: response, in: element)
         }
     }
+}
+
+/// NSPanel subclass that forces `canBecomeKey` (the default returns `false`
+/// for borderless panels, which kills SwiftUI's `@FocusState` and key-press
+/// handlers inside the hosted view tree). `canBecomeMain` stays `false` so
+/// the panel doesn't claim the App's "main window" status — only key.
+final class FocusablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
 }
 
 /// View-side reactive bundle for the palette. `@Observable` so the SwiftUI

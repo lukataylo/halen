@@ -76,6 +76,19 @@ struct AskHalenPalette: View {
                 .disabled(state.question.isEmpty)
                 .keyboardShortcut(.return, modifiers: [])
             }
+
+            // Always-visible click escape. Esc is the primary path, but if
+            // anything ever breaks the keyboard handler (focus race, future
+            // overlay panel hijack) the user still has a way out without
+            // having to kill the app from Activity Monitor.
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.cancelAction)   // also binds ⎋ at button level
+            .help("Close (⎋)")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
