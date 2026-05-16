@@ -70,6 +70,10 @@ final class AskHalen: HalenPlugin {
             MainActor.assumeIsolated { self?.togglePalette() }
         }
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+            // No unconditional logging here — this closure fires for EVERY
+            // keystroke the user types in EVERY app, and putting their text
+            // into Halen's log would be a privacy regression. The handler
+            // already logs at debug level when ⌃H specifically is detected.
             handler(event)
         }
         if globalMonitor == nil {
@@ -78,8 +82,7 @@ final class AskHalen: HalenPlugin {
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             // Only consume the event when it's our hotkey — every other
             // keystroke must pass through untouched or we'd hijack Halen's
-            // own text fields. Returning `nil` consumes; the explicit guard
-            // mirrors the global handler so the two paths stay aligned.
+            // own text fields. Returning `nil` consumes.
             if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .control,
                event.charactersIgnoringModifiers?.lowercased() == "h" {
                 handler(event)
@@ -106,7 +109,9 @@ final class AskHalen: HalenPlugin {
     // MARK: - Palette
 
     private func togglePalette() {
-        if panel != nil { closePalette() } else { openPalette() }
+        let wasOpen = panel != nil
+        Log.info("AskHalen.toggle: \(wasOpen ? "open→close" : "nil→open")")
+        if wasOpen { closePalette() } else { openPalette() }
     }
 
     private func openPalette() {
@@ -173,6 +178,7 @@ final class AskHalen: HalenPlugin {
         NSApp.activate()
         p.makeKeyAndOrderFront(nil)
         panel = p
+        Log.info("AskHalen.open: panel shown frame=\(p.frame) isKey=\(p.isKeyWindow) isVisible=\(p.isVisible) screen=\(NSScreen.main?.frame ?? .zero)")
     }
 
     private func closePalette() {
