@@ -4,6 +4,7 @@ import Carbon.HIToolbox
 import Observation
 import ApplicationServices
 import IOKit.hid
+import UserNotifications
 
 /// ⌃H anywhere → a floating palette that asks the local AI a one-shot
 /// question, with the user's current context (focused app, selected text,
@@ -124,6 +125,7 @@ final class AskHalen: HalenPlugin {
         state.response = ""
         state.errorMessage = nil
         state.isStreaming = false
+        state.hasSubmitted = false
 
         let size = NSSize(width: 640, height: 220)
         // `FocusablePanel` (subclass below) forces `canBecomeKey = true`
@@ -204,6 +206,7 @@ final class AskHalen: HalenPlugin {
         let question = state.question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else { return }
         inflightTask?.cancel()
+        state.hasSubmitted = true
         state.isStreaming = true
         state.response = ""
         state.errorMessage = nil
@@ -217,10 +220,15 @@ final class AskHalen: HalenPlugin {
             do {
                 let response = try await services.inference.complete(request)
                 guard let self, !Task.isCancelled else { return }
-                self.state.response = response.text
+                let trimmed = response.text
                     .trimmingCharacters(in: .whitespacesAndNewlines)
+                self.state.response = trimmed
                 self.state.isStreaming = false
-                Log.info("AskHalen: response (\(response.latencyMs)ms, model=\(response.modelId))")
+                // `debugDescription` escapes control chars / unicode, so a
+                // response of "\n\n</s>" shows up as such in the log rather
+                // than appearing as 6 invisible bytes.
+                let preview = trimmed.prefix(80).debugDescription
+                Log.info("AskHalen: response (\(response.latencyMs)ms, model=\(response.modelId), chars=\(trimmed.count), preview=\(preview))")
             } catch is CancellationError {
                 // User pressed Esc or fired another query — silent.
             } catch {
@@ -249,40 +257,90 @@ final class AskHalen: HalenPlugin {
         }
         guard let element = state.context.focusedElement,
               let originalPID = state.context.appPID else {
-            copyResponse()
+            copyResponseWithToast(reason: "no text field was focused when the palette opened")
             closePalette()
             return
         }
         // Capture before closePalette nukes `state.response` via cancel paths.
         let response = state.response
         closePalette()
-        // Tiny delay so the palette has actually relinquished key-window and
-        // any deferred focus restoration has settled.
-        Task { @MainActor [caretObserver] in
-            try? await Task.sleep(for: .milliseconds(80))
 
-            // If the user ⌘Tabbed away after opening the palette, writing to
-            // the captured element lands in a window they can no longer see.
-            // Copy instead so the response is still recoverable.
+        // Explicitly re-activate the source app. Without this, dismissing a
+        // panel does NOT synchronously hand frontmost-status back to whoever
+        // had it before — Halen lingers as the active app, the front-pid
+        // check below would fail, and Insert would silently fall back to
+        // clipboard. The user perceives "nothing happened" because:
+        //   (a) the clipboard write is invisible, and
+        //   (b) the caret is in their original app, not Halen.
+        // Activating with empty options uses the default behaviour, which
+        // for foreground apps brings them back to front.
+        if let app = NSRunningApplication(processIdentifier: originalPID) {
+            app.activate(options: [])
+        }
+
+        Task { @MainActor [weak self, caretObserver] in
+            // 150ms — longer than the previous 80ms because the activate()
+            // round-trip to WindowServer needs more headroom than just
+            // panel-orderOut did. Empirically 80ms was insufficient in
+            // Chrome; 150ms is reliable without being user-perceptible.
+            try? await Task.sleep(for: .milliseconds(150))
+
+            // If the user ⌘Tabbed away after opening the palette OR the
+            // re-activation didn't take, write to the captured element would
+            // land in a window the user can't see. Copy and tell them.
             let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
             guard frontPID == originalPID else {
-                Log.info("AskHalen: focus moved (was pid \(originalPID), now \(frontPID ?? -1)) — copying instead of inserting")
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(response, forType: .string)
+                Log.info("AskHalen: focus moved (was pid \(originalPID), now \(frontPID ?? -1)) — falling back to clipboard")
+                self?.copyResponseToClipboard(response)
+                self?.notifyClipboardFallback(reason: "couldn't return to the original app")
                 return
             }
 
             // Re-read the AX selection NOW rather than using {0, 0}. In
-            // native AppKit apps, passing range {0, 0} to AX would set the
-            // caret to position 0 and insert there — i.e., at the top of
-            // the user's email, not at their actual caret. Re-reading gets
-            // the live position; falling through to {0, 0} only happens in
-            // apps where AX can't tell us (Electron, web fields), and the
-            // clipboard ⌘V fallback in that path uses the OS-tracked caret
-            // anyway.
+            // native AppKit apps, {0, 0} would insert at the TOP of the
+            // text, not at the user's actual caret. Falling through to
+            // {0, 0} only happens in apps where AX can't tell us (Electron,
+            // web fields), where the clipboard ⌘V fallback uses the
+            // OS-tracked caret anyway.
             let cf = axReadSelectedRange(element) ?? CFRange(location: 0, length: 0)
             let range = NSRange(location: cf.location, length: cf.length)
             caretObserver?.replaceRange(range, with: response, in: element)
+            Log.info("AskHalen: inserted \(response.count) chars at caret")
+        }
+    }
+
+    /// Copy the response and post a system notification so the user knows
+    /// where the text actually went. Used when the AX insert path can't
+    /// take (no element captured, focus moved, etc.) — otherwise the user
+    /// just sees the palette vanish and assumes Insert was a no-op.
+    private func copyResponseWithToast(reason: String) {
+        copyResponseToClipboard(state.response)
+        notifyClipboardFallback(reason: reason)
+    }
+
+    private func copyResponseToClipboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    /// Post a transient system notification so the user knows the response
+    /// is on their clipboard. Inlined here (rather than via a notification
+    /// service) because Halen doesn't have one yet — MeetingPrep posts via
+    /// `UNUserNotificationCenter` directly with the same pattern.
+    /// Authorisation is already requested up front by MeetingPrep; on the
+    /// off-chance it's denied, the add() call fails silently and the user
+    /// still has the text on their clipboard.
+    private func notifyClipboardFallback(reason: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Copied to clipboard"
+        content.body  = "Halen couldn't insert directly (\(reason)). Press ⌘V to paste."
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+        )
+        Task {
+            try? await UNUserNotificationCenter.current().add(request)
         }
     }
 }
@@ -296,17 +354,25 @@ final class FocusablePanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// View-side reactive bundle for the palette. `@Observable` so the SwiftUI
-/// palette updates as the response streams in (today: arrives whole) and the
-/// streaming flag toggles.
+/// View-side reactive bundle for the palette.
+///
+/// **Why `ObservableObject` not `@Observable`:** the modern `@Observable` +
+/// `@Bindable` chain silently failed to re-render the response text inside
+/// an `NSHostingView`-backed panel — the model returned a perfect 39-char
+/// answer (confirmed in logs: `chars=39, preview="filetype:pdf …"`) but the
+/// `Text(state.response)` view stayed blank. `ObservableObject` + `@Published`
+/// + `@ObservedObject` is the older API but it's rock-solid in NSHostingView.
 @MainActor
-@Observable
-final class AskHalenState {
-    var question: String = ""
-    var response: String = ""
-    var errorMessage: String?
-    var isStreaming: Bool = false
-    var context: AskHalenContext = .empty
+final class AskHalenState: ObservableObject {
+    @Published var question: String = ""
+    @Published var response: String = ""
+    @Published var errorMessage: String?
+    @Published var isStreaming: Bool = false
+    @Published var context: AskHalenContext = .empty
+    /// Set true once the user has pressed Enter at least once this session.
+    /// Lets the palette tell "haven't asked yet" apart from "asked, got an
+    /// empty response" without making either case look like a UI bug.
+    @Published var hasSubmitted: Bool = false
 }
 
 /// Default detail view — Ask Halen has nothing to configure today; the hotkey

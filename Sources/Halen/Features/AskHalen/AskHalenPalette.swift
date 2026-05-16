@@ -1,10 +1,23 @@
 import SwiftUI
 
 /// SwiftUI floating palette: text field on top, response below, action row at
-/// the bottom. The whole panel is hosted in an `NSPanel` by `AskHalen`, so
-/// SwiftUI-side just needs to read `state` and call the action closures.
+/// the bottom. The whole panel is hosted in an `NSPanel` by `AskHalen`.
+///
+/// **Why `@ObservedObject` not `@Bindable`:** the @Observable+@Bindable chain
+/// silently failed to re-render `Text(state.response)` inside the panel's
+/// `NSHostingView`, even though logs proved the model returned a 39-char
+/// response. The classic `@Published`+`@ObservedObject` chain is older but
+/// rock-solid in NSHostingView contexts. See `AskHalenState` doc for detail.
+///
+/// **Why the output area always renders:** previously the output area was
+/// mounted conditionally (`if hasOutput { … }`). Conditional mounting +
+/// observation can produce a state where the parent re-renders but the newly
+/// mounted child doesn't pick up the latest values for a tick. We avoid the
+/// whole class of bug by always rendering the output area and switching its
+/// *content* based on state — every body evaluation reads every relevant
+/// field, so observation tracking is guaranteed.
 struct AskHalenPalette: View {
-    @Bindable var state: AskHalenState
+    @ObservedObject var state: AskHalenState
     let onSubmit: () -> Void
     let onCopy: () -> Void
     let onInsert: () -> Void
@@ -13,16 +26,26 @@ struct AskHalenPalette: View {
     @FocusState private var inputFocused: Bool
 
     var body: some View {
+        // Local lets up front so SwiftUI's observation tracking always sees
+        // these reads on every body evaluation, regardless of which branch
+        // the view ends up rendering. Defensive — `@Published` should track
+        // already, but this makes the contract explicit and grep-able.
+        let isStreaming = state.isStreaming
+        let response = state.response
+        let errorMessage = state.errorMessage
+        let hasSubmitted = state.hasSubmitted
+
         VStack(spacing: 0) {
             inputRow
-            if hasOutput {
-                Divider().opacity(0.4)
-                outputArea
-                Divider().opacity(0.4)
-                actionRow
-            } else {
-                contextHint
-            }
+            Divider().opacity(0.4)
+            outputArea(
+                isStreaming: isStreaming,
+                response: response,
+                errorMessage: errorMessage,
+                hasSubmitted: hasSubmitted
+            )
+            Divider().opacity(0.4)
+            actionRow(response: response)
         }
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -33,13 +56,17 @@ struct AskHalenPalette: View {
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .onAppear { inputFocused = true }
+        // Focus the input *after* the panel has had time to become key.
+        // `NSApp.activate(ignoringOtherApps:)` + `makeKeyAndOrderFront` is
+        // async, so a synchronous `inputFocused = true` in `.onAppear` would
+        // be silently dropped if the window isn't key yet. The short hop on
+        // the main actor gives the AppKit transition time to settle.
+        .task {
+            try? await Task.sleep(for: .milliseconds(80))
+            inputFocused = true
+        }
         // Esc anywhere closes the palette.
         .onKeyPress(.escape) { onClose(); return .handled }
-    }
-
-    private var hasOutput: Bool {
-        state.isStreaming || !state.response.isEmpty || state.errorMessage != nil
     }
 
     private var insertButtonLabel: String {
@@ -78,46 +105,70 @@ struct AskHalenPalette: View {
             }
 
             // Always-visible click escape. Esc is the primary path, but if
-            // anything ever breaks the keyboard handler (focus race, future
-            // overlay panel hijack) the user still has a way out without
-            // having to kill the app from Activity Monitor.
+            // anything ever breaks the keyboard handler the user still has
+            // a way out without having to kill the app.
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 18))
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .keyboardShortcut(.cancelAction)   // also binds ⎋ at button level
+            .keyboardShortcut(.cancelAction)
             .help("Close (⎋)")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
     }
 
-    private var outputArea: some View {
+    /// One always-mounted block that flips its content based on state.
+    /// Selectable text, scrollable when long. Min height keeps the layout
+    /// stable so the palette doesn't visibly jump as states change.
+    private func outputArea(
+        isStreaming: Bool,
+        response: String,
+        errorMessage: String?,
+        hasSubmitted: Bool
+    ) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                if let error = state.errorMessage {
+                if let error = errorMessage {
                     Text(error)
                         .font(.system(size: 12))
                         .foregroundStyle(.red)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    Text(state.response.isEmpty ? " " : state.response)
+                } else if isStreaming && response.isEmpty {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Thinking…")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else if !response.isEmpty {
+                    // `Text(verbatim:)` to ensure no markdown / format string
+                    // interpretation eats unusual content.
+                    Text(verbatim: response)
                         .font(.system(size: 13))
                         .foregroundStyle(.primary)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                } else if hasSubmitted && !isStreaming {
+                    Text("Model returned an empty response. Try rephrasing, or check Settings → Inference for the active backend.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    contextHintBody
                 }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
         }
-        .frame(maxHeight: 280)
+        .frame(minHeight: 64, maxHeight: 280)
     }
 
-    private var actionRow: some View {
+    private func actionRow(response: String) -> some View {
         HStack(spacing: 8) {
             contextChip
             Spacer()
@@ -126,17 +177,14 @@ struct AskHalenPalette: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-            .disabled(state.response.isEmpty)
+            .disabled(response.isEmpty)
 
             Button(action: onInsert) {
-                // Switches labels when there's no AX target so the user
-                // understands the keyboard shortcut still does *something*
-                // (copy-and-close) rather than appearing inert.
                 Label(insertButtonLabel, systemImage: insertButtonIcon)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
-            .disabled(state.response.isEmpty)
+            .disabled(response.isEmpty)
             .keyboardShortcut(.return, modifiers: [.command])
             .help(state.context.focusedElement == nil
                   ? "No text field focused — ⌘⏎ copies to clipboard."
@@ -146,8 +194,7 @@ struct AskHalenPalette: View {
         .padding(.vertical, 8)
     }
 
-    /// Tiny "you're working in Slack, X selected" chip. Tells the user what
-    /// context Halen captured without making them guess.
+    /// Tiny "you're working in Slack, X selected" chip in the action row.
     private var contextChip: some View {
         Group {
             if let chip = contextSummary {
@@ -179,10 +226,9 @@ struct AskHalenPalette: View {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// What you see BEFORE submitting — a hint at the rich context Halen
-    /// already has, so the user doesn't have to over-explain in the question.
-    private var contextHint: some View {
-        VStack(spacing: 8) {
+    /// Pre-submit hint, rendered inside the always-mounted output area.
+    private var contextHintBody: some View {
+        VStack(alignment: .leading, spacing: 6) {
             if let chip = contextSummary {
                 HStack(spacing: 4) {
                     Image(systemName: "scope")
@@ -200,7 +246,6 @@ struct AskHalenPalette: View {
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(.tertiary)
         }
-        .padding(.horizontal, 14)
-        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

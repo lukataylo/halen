@@ -51,9 +51,12 @@ final class SnippetStore {
         guard !normalisedTrigger.isEmpty,
               !displayName.trimmingCharacters(in: .whitespaces).isEmpty,
               !value.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        // Replace if trigger exists (and isn't a builtin)
-        if let idx = snippets.firstIndex(where: { $0.trigger.lowercased() == normalisedTrigger.lowercased() }) {
-            if snippets[idx].builtin { return }
+        // Replace if a non-builtin trigger exists, else append. Builtins get
+        // overridden via `update(_:)` which writes a custom entry that
+        // `ensureBuiltins` then suppresses the builtin for.
+        if let idx = snippets.firstIndex(where: {
+            $0.trigger.lowercased() == normalisedTrigger.lowercased() && !$0.builtin
+        }) {
             snippets[idx] = Snippet(
                 trigger: normalisedTrigger,
                 kind: kind,
@@ -61,6 +64,21 @@ final class SnippetStore {
                 displayName: displayName,
                 builtin: false
             )
+        } else if snippets.contains(where: {
+            $0.trigger.lowercased() == normalisedTrigger.lowercased() && $0.builtin
+        }) {
+            // Same trigger as a builtin and the user is "adding" — treat as
+            // an override. Suppress the builtin and append a custom.
+            snippets.removeAll {
+                $0.trigger.lowercased() == normalisedTrigger.lowercased() && $0.builtin
+            }
+            snippets.append(Snippet(
+                trigger: normalisedTrigger,
+                kind: kind,
+                value: value,
+                displayName: displayName,
+                builtin: false
+            ))
         } else {
             snippets.append(Snippet(
                 trigger: normalisedTrigger,
@@ -72,6 +90,14 @@ final class SnippetStore {
         }
         save()
         Log.info("SnippetStore: added \(normalisedTrigger) (\(kind.rawValue))")
+    }
+
+    /// Edit an existing snippet's value / name / kind. Editing a builtin
+    /// converts it to a custom override — the original prompt-engineered
+    /// builtin is suppressed at load time as long as the override exists.
+    /// Resetting the snippet (via reset) restores the builtin.
+    func update(trigger: String, kind: Snippet.Kind, value: String, displayName: String) {
+        addCustom(trigger: trigger, kind: kind, value: value, displayName: displayName)
     }
 
     func remove(_ trigger: String) {
@@ -123,10 +149,16 @@ final class SnippetStore {
     /// Refresh built-in snippets on every launch so prompt tweaks, new
     /// triggers (e.g. ;casual), and the replacesPrior flag propagate without
     /// requiring users to wipe their snippets.json. User-added (builtin=false)
-    /// entries are preserved untouched.
+    /// entries are preserved untouched. Builtins are suppressed if a custom
+    /// snippet with the same trigger exists (the user "overrode" them via
+    /// edit) — that's how editing a builtin sticks across launches.
     private func ensureBuiltins() {
         let custom = snippets.filter { !$0.builtin }
-        snippets = Self.builtins + custom
+        let overriddenTriggers = Set(custom.map { $0.trigger.lowercased() })
+        let activeBuiltins = Self.builtins.filter {
+            !overriddenTriggers.contains($0.trigger.lowercased())
+        }
+        snippets = activeBuiltins + custom
         save()
     }
 
