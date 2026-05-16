@@ -818,16 +818,20 @@ img { display: block; max-width: 100%; }
 }
 .cta .stamp::before, .cta .stamp::after { content: ""; width: 26px; height: 1px; background: rgba(255,255,255,0.45); }
 .cta h2 {
-  font-size: clamp(52px, 7vw, 104px);
+  /* Match the hero h1 size scale so both display headlines on the page
+     have the same typographic weight (clamp values copied verbatim). */
+  font-size: clamp(54px, 8.4vw, 132px);
   font-weight: 600;
   letter-spacing: -0.045em;
-  line-height: 0.98;
+  line-height: 1.0;
   margin-bottom: 24px;
   max-width: 16ch;
   margin-left: auto; margin-right: auto;
   color: #fff;
 }
-.cta h2 .quiet { color: rgba(255,255,255,0.55); font-style: italic; font-weight: 400; }
+/* `quiet` keeps the dimmed colour for vertical hierarchy between the two
+   lines, but no longer italic — same weight and posture as the line above. */
+.cta h2 .quiet { color: rgba(255,255,255,0.55); font-weight: 600; }
 .download-stack { display: inline-flex; flex-direction: column; align-items: center; gap: 14px; }
 
 /* Minimal pill button — keep the focal weight on the headline + the
