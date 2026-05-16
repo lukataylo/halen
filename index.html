@@ -4,17 +4,61 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Halen | The future of AI is personal</title>
-<meta name="description" content="Halen is a local-first AI companion for macOS. Runs Gemma 4 on-device. Plugin marketplace, JSON-RPC extensions, no cloud, no upload." />
+<meta name="description" content="Halen is a local-first AI companion for macOS. Runs Gemma 4 on-device beside your cursor. No cloud, no uploads, no waiting on someone else's server." />
+<meta name="keywords" content="local AI, on-device AI, macOS AI, Gemma 4, private AI, local LLM, Apple Intelligence, AI writing assistant, snippet expansion, voice dictation" />
+<meta name="author" content="Halen Labs" />
+<meta name="theme-color" content="#1635D6" />
+<link rel="canonical" href="https://halen.dev/" />
+
+<!-- Open Graph / Facebook / LinkedIn -->
 <meta property="og:type" content="website" />
+<meta property="og:site_name" content="Halen" />
 <meta property="og:title" content="Halen | The future of AI is personal" />
-<meta property="og:description" content="Local-first AI companion for macOS. Runs on-device. No cloud. No upload." />
-<meta property="og:image" content="https://halen.dev/hero-illustration.png" />
+<meta property="og:description" content="Local-first AI companion for macOS. Runs on-device beside your cursor. No cloud, no uploads." />
 <meta property="og:url" content="https://halen.dev/" />
+<meta property="og:image" content="https://halen.dev/assets/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Halen: at your cursor, all on-device. Floating mockups of typing, tone selection, snippets, and model picker on a cobalt background." />
+<meta property="og:locale" content="en_US" />
+
+<!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Halen | The future of AI is personal" />
-<meta name="twitter:description" content="Local-first AI companion for macOS. Runs on-device. No cloud. No upload." />
-<meta name="twitter:image" content="https://halen.dev/hero-illustration.png" />
+<meta name="twitter:description" content="Local-first AI companion for macOS. Runs on-device beside your cursor. No cloud, no uploads." />
+<meta name="twitter:image" content="https://halen.dev/assets/og-image.png" />
+<meta name="twitter:image:alt" content="Halen: at your cursor, all on-device." />
+
 <link rel="icon" type="image/svg+xml" href="assets/halen-icon.svg" />
+<link rel="apple-touch-icon" href="assets/halen-icon.svg" />
+
+<!-- Structured data: identifies the page as a downloadable SoftwareApplication
+     so Google can render a rich result with the icon, price, OS, and direct
+     download link instead of a plain blue link. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Halen",
+  "description": "Local-first AI companion for macOS. Runs Gemma 4 on-device beside your cursor.",
+  "applicationCategory": "ProductivityApplication",
+  "operatingSystem": "macOS 14+",
+  "url": "https://halen.dev/",
+  "downloadUrl": "https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/Halen.dmg",
+  "softwareVersion": "0.1.0-alpha",
+  "image": "https://halen.dev/assets/og-image.png",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Halen Labs",
+    "url": "https://halen.dev/"
+  }
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -770,6 +814,225 @@ img { display: block; max-width: 100%; }
 
 .cta .bg-mark { display: none; }
 
+/* ============ CTA floating cards ============ */
+/* Six product-mockup windows that drift gently around the headline +
+   download button. Pure decoration: pointer-events:none so they never
+   eat clicks meant for the CTA itself. Hidden below 1100px so the
+   button stays the focal point on tablets/phones (the cards would
+   crash into the headline at narrower widths). */
+.cta-cards {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+.cta-card {
+  position: absolute;
+  background: #fff;
+  color: var(--accent);
+  border-radius: 14px;
+  box-shadow: 0 22px 60px rgba(0,0,0,0.22), 0 0 0 1px rgba(255,255,255,0.04);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12.5px;
+  overflow: hidden;
+  will-change: transform;
+}
+.cta-card .cc-titlebar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(22,53,214,0.08);
+}
+.cta-card .cc-dots { display: inline-flex; gap: 5px; }
+.cta-card .cc-dots span {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(22,53,214,0.22);
+}
+.cta-card .cc-title {
+  font-size: 11.5px; font-weight: 500; color: var(--accent);
+  letter-spacing: 0.02em;
+}
+.cta-card .cc-end {
+  margin-left: auto; color: rgba(22,53,214,0.45);
+  display: inline-flex; gap: 3px;
+}
+.cta-card .cc-end span {
+  width: 3px; height: 3px; border-radius: 50%;
+  background: currentColor;
+}
+.cta-card .cc-body { padding: 14px 14px 12px; }
+
+/* Typing card — top-left */
+.cta-card.c-typing {
+  width: 290px; top: 6%; left: 3%;
+  animation: ctaFloatA 7s ease-in-out infinite;
+}
+.cta-card.c-typing .cc-text {
+  font-size: 13px; line-height: 1.5;
+  min-height: 64px;
+}
+.cta-card.c-typing .cc-caret {
+  display: inline-block; width: 6px; height: 14px;
+  background: var(--accent); vertical-align: -2px;
+  margin-left: 1px;
+  animation: ctaCaret 1s steps(2,start) infinite;
+}
+.cta-card.c-typing .cc-foot {
+  display: flex; justify-content: space-between;
+  font-size: 10.5px; color: rgba(22,53,214,0.55);
+  border-top: 1px solid rgba(22,53,214,0.06);
+  padding-top: 8px; margin-top: 10px;
+}
+
+/* Local Assistant — left middle */
+.cta-card.c-assistant {
+  width: 270px; top: 42%; left: 6%;
+  animation: ctaFloatB 9s ease-in-out infinite;
+}
+.cta-card.c-assistant .cc-greet {
+  font-size: 13px; padding: 4px 0 10px;
+  color: var(--accent); font-weight: 500;
+}
+.cta-card.c-assistant .cc-list { list-style: none; padding: 0; margin: 0; font-size: 11.5px; }
+.cta-card.c-assistant .cc-list li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(22,53,214,0.06);
+  color: rgba(22,53,214,0.85);
+}
+.cta-card.c-assistant .cc-list li .ic {
+  width: 14px; opacity: 0.55; text-align: center;
+}
+
+/* Model card — bottom-left */
+.cta-card.c-model {
+  width: 210px; bottom: 8%; left: 2%;
+  animation: ctaFloatC 8s ease-in-out infinite;
+}
+.cta-card.c-model .cc-radio { padding: 4px 0; }
+.cta-card.c-model .cc-radio div {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 0; font-size: 12px;
+  color: rgba(22,53,214,0.7);
+}
+.cta-card.c-model .cc-radio .dot {
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 1.4px solid rgba(22,53,214,0.4);
+  flex-shrink: 0;
+}
+.cta-card.c-model .cc-radio div.active { color: var(--accent); }
+.cta-card.c-model .cc-radio div.active .dot {
+  border-color: var(--accent);
+  background:
+    radial-gradient(circle, var(--accent) 35%, transparent 38%);
+}
+
+/* Tone card — top-right */
+.cta-card.c-tone {
+  width: 260px; top: 4%; right: 3%;
+  animation: ctaFloatD 8s ease-in-out infinite;
+}
+.cta-card.c-tone .cc-opt {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px;
+  font-size: 13px; color: rgba(22,53,214,0.7);
+  transition: background 0.4s ease, color 0.4s ease;
+}
+.cta-card.c-tone .cc-opt .dot {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 1.5px solid rgba(22,53,214,0.4);
+  flex-shrink: 0;
+  transition: all 0.4s ease;
+}
+.cta-card.c-tone .cc-opt.active {
+  background: rgba(22,53,214,0.08);
+  color: var(--accent); font-weight: 500;
+}
+.cta-card.c-tone .cc-opt.active .dot {
+  border-color: var(--accent);
+  background:
+    radial-gradient(circle, var(--accent) 35%, transparent 38%);
+}
+.cta-card.c-tone .cc-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 10.5px; color: rgba(22,53,214,0.55);
+  border-top: 1px solid rgba(22,53,214,0.06);
+  padding: 10px 4px 2px; margin-top: 6px;
+}
+
+/* Improve card — right middle */
+.cta-card.c-improve {
+  width: 240px; top: 44%; right: 6%;
+  animation: ctaFloatE 7.5s ease-in-out infinite;
+}
+.cta-card.c-improve .cc-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 8px; border-radius: 6px;
+  font-size: 12.5px; color: rgba(22,53,214,0.75);
+  transition: background 0.45s ease, color 0.45s ease;
+}
+.cta-card.c-improve .cc-item .ic { width: 14px; opacity: 0.55; text-align: center; }
+.cta-card.c-improve .cc-item.active {
+  background: rgba(22,53,214,0.08);
+  color: var(--accent);
+}
+.cta-card.c-improve .cc-item.active .ic { opacity: 1; }
+
+/* Snippets card — bottom-right */
+.cta-card.c-snippets {
+  width: 280px; bottom: 6%; right: 2%;
+  animation: ctaFloatF 9s ease-in-out infinite;
+}
+.cta-card.c-snippets .cc-side {
+  display: flex; gap: 12px;
+}
+.cta-card.c-snippets .cc-side .cc-icons {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 4px 0 0; color: rgba(22,53,214,0.5);
+}
+.cta-card.c-snippets .cc-side .cc-icons .ic {
+  width: 18px; text-align: center; opacity: 0.6;
+}
+.cta-card.c-snippets .cc-snip {
+  flex: 1; padding: 6px 0; border-bottom: 1px solid rgba(22,53,214,0.06);
+}
+.cta-card.c-snippets .cc-snip:last-child { border-bottom: none; }
+.cta-card.c-snippets .cc-snip .t { font-size: 12px; font-weight: 500; color: var(--accent); }
+.cta-card.c-snippets .cc-snip .p { font-size: 10.5px; color: rgba(22,53,214,0.55); margin-top: 1px; }
+.cta-card.c-snippets .cc-foot {
+  display: flex; justify-content: space-between;
+  font-size: 10.5px; color: rgba(22,53,214,0.55);
+  border-top: 1px solid rgba(22,53,214,0.06);
+  padding: 10px 0 0; margin-top: 8px;
+}
+
+/* Each card gets its own keyframe so they drift independently —
+   if they all shared one animation the screen would breathe in
+   unison and feel mechanical. Translate-only (no rotate inside
+   the keyframe) so rotation set in the base rule sticks. */
+.cta-card.c-typing    { transform: rotate(-4deg); }
+.cta-card.c-assistant { transform: rotate(2deg);  }
+.cta-card.c-model     { transform: rotate(-3deg); }
+.cta-card.c-tone      { transform: rotate(3deg);  }
+.cta-card.c-improve   { transform: rotate(-2deg); }
+.cta-card.c-snippets  { transform: rotate(3deg);  }
+
+@keyframes ctaFloatA { 0%,100% { transform: rotate(-4deg) translateY(0); } 50% { transform: rotate(-4deg) translateY(-12px); } }
+@keyframes ctaFloatB { 0%,100% { transform: rotate(2deg)  translateY(0); } 50% { transform: rotate(2deg)  translateY(10px);  } }
+@keyframes ctaFloatC { 0%,100% { transform: rotate(-3deg) translateY(0); } 50% { transform: rotate(-3deg) translateY(-9px);  } }
+@keyframes ctaFloatD { 0%,100% { transform: rotate(3deg)  translateY(0); } 50% { transform: rotate(3deg)  translateY(12px);  } }
+@keyframes ctaFloatE { 0%,100% { transform: rotate(-2deg) translateY(0); } 50% { transform: rotate(-2deg) translateY(-11px); } }
+@keyframes ctaFloatF { 0%,100% { transform: rotate(3deg)  translateY(0); } 50% { transform: rotate(3deg)  translateY(9px);   } }
+@keyframes ctaCaret  { 50% { opacity: 0; } }
+
+@media (max-width: 1100px) {
+  .cta-cards { display: none; }
+  .cta { padding: 120px 28px 120px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cta-card { animation: none !important; }
+}
+
 .foot {
   padding: 26px 28px;
   background: var(--accent);
@@ -997,6 +1260,116 @@ img { display: block; max-width: 100%; }
 <!-- ============ CTA ============ -->
 <section class="cta" id="download">
   <span class="bg-mark" aria-hidden="true"></span>
+
+  <!-- Floating product mockups. Pure decoration (aria-hidden, pointer-events
+       off); content is illustrative not real UI. -->
+  <div class="cta-cards" aria-hidden="true">
+
+    <div class="cta-card c-typing">
+      <div class="cc-titlebar">
+        <span class="cc-dots"><span></span><span></span><span></span></span>
+        <span class="cc-title">Typing</span>
+        <span class="cc-end"><span></span><span></span><span></span></span>
+      </div>
+      <div class="cc-body">
+        <div class="cc-text"><span id="ctaTypeText"></span><span class="cc-caret"></span></div>
+        <div class="cc-foot">
+          <span id="ctaWordCount">0 words</span>
+          <span>On-device · Private</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-card c-assistant">
+      <div class="cc-titlebar">
+        <span class="cc-dots"><span></span><span></span><span></span></span>
+        <span class="cc-title">Local Assistant</span>
+      </div>
+      <div class="cc-body">
+        <div class="cc-greet">Ready when you are.</div>
+        <ul class="cc-list">
+          <li><span class="ic">⌖</span>Private by design</li>
+          <li><span class="ic">⚙</span>Runs on-device</li>
+          <li><span class="ic">∅</span>No cloud, ever</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="cta-card c-model">
+      <div class="cc-titlebar">
+        <span class="cc-dots"><span></span><span></span><span></span></span>
+        <span class="cc-title">Model</span>
+      </div>
+      <div class="cc-body">
+        <div class="cc-radio">
+          <div class="active"><span class="dot"></span>Gemma 4 E2B</div>
+          <div><span class="dot"></span>Gemma 4 E4B</div>
+          <div><span class="dot"></span>Gemma 4 27B</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-card c-tone">
+      <div class="cc-titlebar">
+        <span class="cc-dots"><span></span><span></span><span></span></span>
+        <span class="cc-title">Tone</span>
+      </div>
+      <div class="cc-body" id="ctaToneBody">
+        <div class="cc-opt" data-tone="0"><span class="dot"></span>Professional</div>
+        <div class="cc-opt active" data-tone="1"><span class="dot"></span>Friendly</div>
+        <div class="cc-opt" data-tone="2"><span class="dot"></span>Concise</div>
+        <div class="cc-foot"><span>Adjust the tone</span><span>≡</span></div>
+      </div>
+    </div>
+
+    <div class="cta-card c-improve">
+      <div class="cc-titlebar">
+        <span class="cc-dots"><span></span><span></span><span></span></span>
+        <span class="cc-title">Improve</span>
+      </div>
+      <div class="cc-body" id="ctaImproveBody">
+        <div class="cc-item active"><span class="ic">✦</span>Improve writing</div>
+        <div class="cc-item"><span class="ic">≡</span>Summarise</div>
+        <div class="cc-item"><span class="ic">✓</span>Fix spelling &amp; grammar</div>
+        <div class="cc-item"><span class="ic">−</span>Make shorter</div>
+        <div class="cc-item"><span class="ic">+</span>Make longer</div>
+      </div>
+    </div>
+
+    <div class="cta-card c-snippets">
+      <div class="cc-titlebar">
+        <span class="cc-dots"><span></span><span></span><span></span></span>
+        <span class="cc-title">Snippets</span>
+        <span class="cc-end"><span></span><span></span><span></span></span>
+      </div>
+      <div class="cc-body">
+        <div class="cc-side">
+          <div class="cc-icons">
+            <span class="ic">▣</span>
+            <span class="ic">⌖</span>
+            <span class="ic">◷</span>
+          </div>
+          <div style="flex:1">
+            <div class="cc-snip">
+              <div class="t">Meeting Follow-up</div>
+              <div class="p">Thanks for your time today…</div>
+            </div>
+            <div class="cc-snip">
+              <div class="t">Project Update</div>
+              <div class="p">Here's a quick update on…</div>
+            </div>
+            <div class="cc-snip">
+              <div class="t">Bug Report</div>
+              <div class="p">Steps to reproduce:</div>
+            </div>
+          </div>
+        </div>
+        <div class="cc-foot"><span>12 snippets</span><span>All local ✓</span></div>
+      </div>
+    </div>
+
+  </div>
+
   <h2>Take control.<br/><span class="quiet">Keep it local.</span></h2>
   <div class="download-stack">
     <a class="dl" href="https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/Halen.dmg" data-dmg>
@@ -1266,6 +1639,69 @@ const io = new IntersectionObserver(es => es.forEach(e => {
   if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
 }), { threshold: 0.18 });
 document.querySelectorAll('.st, .st-brand').forEach(el => io.observe(el));
+
+// ---------- CTA floating-card animations ----------
+// Three small loops that keep the mockup cards feeling alive without
+// being noisy: a typing loop in the Typing card, a slow rotation
+// through the Tone radios, and a highlight that rolls down the Improve
+// menu. All three are no-ops if the cards aren't in the DOM (e.g.
+// mobile breakpoint hides them) so removing the cards never breaks JS.
+(function () {
+  // Typing card: types a sentence, blinks, deletes, repeats.
+  const typeEl = document.getElementById('ctaTypeText');
+  const wcEl = document.getElementById('ctaWordCount');
+  if (typeEl) {
+    const phrases = [
+      'Halen helps you write with clarity, wherever you are.',
+      'Local intelligence beside your cursor, all the time.',
+      'No cloud, no uploads. Your words stay yours.'
+    ];
+    let pi = 0;
+    async function tloop() {
+      while (true) {
+        const phrase = phrases[pi];
+        // type in
+        for (let i = 0; i <= phrase.length; i++) {
+          typeEl.textContent = phrase.slice(0, i);
+          if (wcEl) wcEl.textContent = (phrase.slice(0, i).trim().split(/\s+/).filter(Boolean).length) + ' words';
+          await new Promise(r => setTimeout(r, 40 + Math.random() * 30));
+        }
+        await new Promise(r => setTimeout(r, 2200));
+        // delete out
+        for (let i = phrase.length; i >= 0; i--) {
+          typeEl.textContent = phrase.slice(0, i);
+          if (wcEl) wcEl.textContent = (phrase.slice(0, i).trim().split(/\s+/).filter(Boolean).length) + ' words';
+          await new Promise(r => setTimeout(r, 14));
+        }
+        await new Promise(r => setTimeout(r, 400));
+        pi = (pi + 1) % phrases.length;
+      }
+    }
+    tloop();
+  }
+
+  // Tone card: cycle the active radio every 3.5s.
+  const toneBody = document.getElementById('ctaToneBody');
+  if (toneBody) {
+    const opts = toneBody.querySelectorAll('.cc-opt');
+    let ti = 1;
+    setInterval(() => {
+      ti = (ti + 1) % opts.length;
+      opts.forEach((o, i) => o.classList.toggle('active', i === ti));
+    }, 3500);
+  }
+
+  // Improve card: roll the highlight down the menu.
+  const impBody = document.getElementById('ctaImproveBody');
+  if (impBody) {
+    const items = impBody.querySelectorAll('.cc-item');
+    let ii = 0;
+    setInterval(() => {
+      ii = (ii + 1) % items.length;
+      items.forEach((it, i) => it.classList.toggle('active', i === ii));
+    }, 1600);
+  }
+})();
 
 // brand: type 'Halen' then fade in icon
 (function() {
