@@ -23,8 +23,9 @@ The signature `'HALN'` (`0x48414c4e`) is used as the `EventHotKeyID`.
 
 ```swift
 let cmdOpt = UInt32(cmdKey | optionKey)
-let space = UInt32(kVK_Space)
-hotkey.register(keyCode: space, modifiers: cmdOpt) { [weak self] in
+let h = UInt32(kVK_ANSI_H)
+hotkey.register(keyCode: h, modifiers: cmdOpt,
+                id: HotkeyID.voiceDictation.rawValue) { [weak self] in
     self?.toggleRecording()
 }
 ```

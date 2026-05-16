@@ -42,6 +42,14 @@ struct AskHalenPalette: View {
         state.isStreaming || !state.response.isEmpty || state.errorMessage != nil
     }
 
+    private var insertButtonLabel: String {
+        state.context.focusedElement == nil ? "Copy" : "Insert"
+    }
+
+    private var insertButtonIcon: String {
+        state.context.focusedElement == nil ? "doc.on.doc" : "arrow.down.to.line"
+    }
+
     // MARK: - Sections
 
     private var inputRow: some View {
@@ -108,12 +116,18 @@ struct AskHalenPalette: View {
             .disabled(state.response.isEmpty)
 
             Button(action: onInsert) {
-                Label("Insert", systemImage: "arrow.down.to.line")
+                // Switches labels when there's no AX target so the user
+                // understands the keyboard shortcut still does *something*
+                // (copy-and-close) rather than appearing inert.
+                Label(insertButtonLabel, systemImage: insertButtonIcon)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
-            .disabled(state.response.isEmpty || state.context.focusedElement == nil)
+            .disabled(state.response.isEmpty)
             .keyboardShortcut(.return, modifiers: [.command])
+            .help(state.context.focusedElement == nil
+                  ? "No text field focused — ⌘⏎ copies to clipboard."
+                  : "Insert at your caret.")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

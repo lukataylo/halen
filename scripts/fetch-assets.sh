@@ -1,26 +1,29 @@
 #!/usr/bin/env bash
 #
 # Fetches the large build inputs that are *not* tracked in git:
-#   - Assets/Models/gemma-3-1b-it-Q4_K_M.gguf   (downloaded + checksum-verified)
+#   - Assets/Models/gemma-4-E4B-it-Q4_K_M.gguf  (downloaded + checksum-verified)
 #   - Vendor/llama.xcframework                  (rebuilt from the pinned tag)
 #
-# Run once on a fresh checkout, before scripts/build-app.sh.
+# Only needed for `BUNDLE_MODEL=1` builds — the default slim build downloads
+# the GGUF on first use via the in-app `ModelDownloader`. Run once on a fresh
+# checkout before `BUNDLE_MODEL=1 ./scripts/build-app.sh`.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 # ---------------------------------------------------------------------------
-# 1. Bundled model — Gemma 3 1B (Q4_K_M GGUF)
+# 1. Bundled model — Gemma 4 E4B (Q4_K_M GGUF, ~4.98 GB)
+#    Constants must match Sources/Halen/Inference/LlamaCpp/ModelDownloader.swift
 # ---------------------------------------------------------------------------
-GGUF_PATH="Assets/Models/gemma-3-1b-it-Q4_K_M.gguf"
-GGUF_URL="https://huggingface.co/ggml-org/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf"
-GGUF_SHA="8ccc5cd1f1b3602548715ae25a66ed73fd5dc68a210412eea643eb20eb75a135"
+GGUF_PATH="Assets/Models/gemma-4-E4B-it-Q4_K_M.gguf"
+GGUF_URL="https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf"
+GGUF_SHA="519b9793ed6ce0ff530f1b7c96e848e08e49e7af4d57bb97f76215963a54146d"
 
 if [[ -f "$GGUF_PATH" ]] && shasum -a 256 "$GGUF_PATH" | grep -q "$GGUF_SHA"; then
     echo "✓ $GGUF_PATH (checksum OK)"
 else
-    echo "→ downloading $GGUF_PATH (~770 MB)"
+    echo "→ downloading $GGUF_PATH (~4.98 GB)"
     mkdir -p "$(dirname "$GGUF_PATH")"
     curl -L --fail -o "$GGUF_PATH.partial" "$GGUF_URL"
     actual="$(shasum -a 256 "$GGUF_PATH.partial" | awk '{print $1}')"

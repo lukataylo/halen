@@ -74,6 +74,27 @@
 
   // --- DOM helpers ----------------------------------------------------------
 
+  // Sensitive input-name / autocomplete patterns we never ship upstream.
+  // Halen's plugins have no business seeing credit cards, OTP codes, SSNs or
+  // freshly-typed passwords just because they're in an `<input type="text">`.
+  const SENSITIVE_AUTOCOMPLETE = [
+    "cc-", "current-password", "new-password",
+    "one-time-code", "otp"
+  ];
+  const SENSITIVE_NAME_PATTERN =
+    /(^|[-_.])(cc|card|cardnum|ccnum|cvv|cvc|otp|ssn|sin|pin|password|passcode)([-_.]|$|number)/i;
+
+  function isSensitiveInput(el) {
+    const ac = (el.getAttribute("autocomplete") || "").toLowerCase();
+    if (SENSITIVE_AUTOCOMPLETE.some(p => ac.startsWith(p) || ac.includes(p))) return true;
+    const name = el.getAttribute("name") || el.id || "";
+    if (SENSITIVE_NAME_PATTERN.test(name)) return true;
+    // Inputs inside `<form autocomplete="off">` are explicitly opting out of
+    // any cross-form text capture — respect that signal.
+    if (el.form && (el.form.getAttribute("autocomplete") || "").toLowerCase() === "off") return true;
+    return false;
+  }
+
   /// Pull text + caret out of whatever the user is typing into. Returns null
   /// for non-editable elements (so we don't spam events for, e.g., a search
   /// field the user just clicked into).
@@ -86,9 +107,11 @@
       const type = (el.type || "text").toLowerCase();
       if (type === "password") return null;
       if (!["text", "search", "email", "url", "tel", "number"].includes(type)) return null;
+      if (isSensitiveInput(el)) return null;
       return { text: el.value || "", caretOffset: el.selectionStart || 0 };
     }
     if (tag === "TEXTAREA") {
+      if (isSensitiveInput(el)) return null;
       return { text: el.value || "", caretOffset: el.selectionStart || 0 };
     }
     if (el.isContentEditable) {

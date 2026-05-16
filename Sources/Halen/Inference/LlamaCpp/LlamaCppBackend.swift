@@ -10,9 +10,9 @@ import Foundation
 ///   * `BUNDLE_MODEL=1` build → the GGUF ships inside the .app, so the
 ///     backend is `.available` with zero download.
 ///
-/// The 1B model is strong at classification/extraction but weak at open-ended
-/// generation, so `capability.strongAt` is `.classification` only — the router
-/// still *can* route generation here (degraded) when nothing better exists.
+/// E4B is comparable in capability to Apple's Foundation Models default, so
+/// `capability.strongAt` includes both classification and generation — the
+/// router can prefer it for both task kinds when Apple FM is unavailable.
 ///
 /// An `actor`: the underlying `LlamaContext` is loaded lazily and reused, and
 /// must never be touched concurrently.
@@ -20,7 +20,7 @@ actor LlamaCppBackend: InferenceBackend {
     nonisolated let kind: BackendKind = .bundledLlama
     nonisolated let capability = BackendCapability(
         servesTiers: [.small, .medium],
-        strongAt: [.classification],
+        strongAt: [.classification, .generation],
         basePriority: 5
     )
 
@@ -85,7 +85,7 @@ actor LlamaCppBackend: InferenceBackend {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw LlamaBackendError.emptyResponse }
         let latency = Int(Date().timeIntervalSince(start) * 1000)
-        return InferenceResponse(text: text, modelId: "bundled/gemma-3-1b", latencyMs: latency)
+        return InferenceResponse(text: text, modelId: "bundled/gemma-4-e4b", latencyMs: latency)
     }
 
     /// Loads the bundled model on first use and keeps it warm. Loading is slow

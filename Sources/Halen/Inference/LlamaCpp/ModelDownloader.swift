@@ -2,35 +2,36 @@ import Foundation
 import CryptoKit
 import Observation
 
-/// Downloads the bundled-Gemma GGUF on demand from the canonical HuggingFace
-/// mirror into `ModelLocation.downloaded`. Resumable (HTTP Range requests),
-/// verified by SHA-256 against a pinned hash, atomically installed (.part
-/// staging file is moved into place only after the hash matches).
+/// Downloads the bundled Gemma 4 E4B GGUF on demand from the canonical
+/// HuggingFace mirror into `ModelLocation.downloaded`. ~4.98 GB, so the
+/// download is resumable (HTTP Range requests), verified by SHA-256
+/// against a pinned hash, atomically installed (.part staging file is moved
+/// into place only after the hash matches).
 ///
 /// `@Observable` so SwiftUI can drive a download UI off `state` without an
 /// explicit Combine pipeline.
 @MainActor
 @Observable
 final class ModelDownloader {
-    /// Canonical download URL — the `ggml-org/gemma-3-1b-it-GGUF` mirror,
-    /// confirmed byte-identical to the previously-bundled file. No auth token
-    /// required; supports HTTP Range; HuggingFace 302s to a CloudFront/xet
-    /// signed URL which `URLSession` follows automatically.
+    /// Canonical download URL — the `unsloth/gemma-4-E4B-it-GGUF` mirror.
+    /// Unsloth's Q4_K_M packs ~400 MB smaller than bartowski's for the same
+    /// nominal quant. No auth token required; supports HTTP Range;
+    /// HuggingFace 302s to a CloudFront/xet signed URL which `URLSession`
+    /// follows automatically.
     static let sourceURL = URL(string:
-        "https://huggingface.co/ggml-org/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf"
+        "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf"
     )!
 
     /// Expected file size in bytes. Used for the progress denominator before
     /// the body even starts streaming, and as a fast sanity check before the
-    /// (~3 s) SHA-256 verification.
-    static let expectedSize: Int64 = 806_058_240
+    /// SHA-256 verification.
+    static let expectedSize: Int64 = 4_977_169_568   // ~4.98 GB
 
-    /// Pinned content hash. Cross-verified against the existing bundled file
-    /// and HuggingFace's `x-linked-etag`. If this ever fails to match, the
-    /// upstream file changed — bump the hash here and the user is forced to
-    /// re-download.
+    /// Pinned content hash from HuggingFace's `x-linked-etag`. If this ever
+    /// fails to match, the upstream file changed — bump the hash here and
+    /// the user is forced to re-download.
     static let expectedSHA256 =
-        "8ccc5cd1f1b3602548715ae25a66ed73fd5dc68a210412eea643eb20eb75a135"
+        "519b9793ed6ce0ff530f1b7c96e848e08e49e7af4d57bb97f76215963a54146d"
 
     // MARK: - Tunables
 

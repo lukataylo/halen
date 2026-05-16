@@ -131,7 +131,14 @@ final class PluginInstance {
 
         readerTask?.cancel()
         stderrTask?.cancel()
+        // Close every pipe end we own. AsyncBytes on FileHandle.bytes.lines
+        // doesn't always observe Task cancellation while parked in `read(2)`;
+        // closing the read end forces the for-await to error out and the
+        // task to actually exit. Closing stdin lets the plugin's stdin
+        // read() return 0 (EOF) cleanly on the polite-shutdown path.
         try? stdinPipe.fileHandleForWriting.close()
+        try? stdoutPipe.fileHandleForReading.close()
+        try? stderrPipe.fileHandleForReading.close()
         Log.info("PluginInstance[\(manifest.id)]: terminated")
     }
 

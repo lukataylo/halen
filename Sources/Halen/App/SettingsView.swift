@@ -247,7 +247,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text("The 770 MB Gemma 3 1B GGUF runs locally as a fallback when Apple Intelligence isn't available. Downloads on demand into Application Support — never bundled in the .app unless you build with BUNDLE_MODEL=1.")
+                Text("The 4.98 GB Gemma 4 E4B GGUF runs locally as a fallback when Apple Intelligence isn't available. Downloads on demand into Application Support — never bundled in the .app unless you build with BUNDLE_MODEL=1.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -282,10 +282,13 @@ struct SettingsView: View {
 
     private var modelStatusKind: StatusKind {
         switch modelDownloader.state {
-        case .ready:                              return .ok
+        case .ready:                                return .ok
         case .downloading, .verifying, .installing: return .warning
-        case .notDownloaded:                       return .warning
-        case .failed:                              return .error
+        // Not downloaded is the *default* on a fresh install — Apple Intelligence
+        // covers most requests on its own, so a missing local fallback is not an
+        // alarm condition. Neutral, not warning.
+        case .notDownloaded:                         return .neutral
+        case .failed:                                return .error
         }
     }
 
@@ -311,7 +314,7 @@ struct SettingsView: View {
         case .installing:
             return "Moving into Application Support."
         case .ready:
-            return "Gemma 3 1B Q4_K_M, ~770 MB on disk."
+            return "Gemma 4 E4B Q4_K_M, ~4.98 GB on disk."
         case .failed(let message):
             return message
         }
@@ -361,14 +364,15 @@ struct SettingsView: View {
 
     // MARK: - Helpers
 
-    private enum StatusKind { case ok, warning, error }
+    private enum StatusKind { case ok, warning, error, neutral }
 
     private func statusDot(_ kind: StatusKind) -> some View {
         let color: Color = {
             switch kind {
-            case .ok: return Color(red: 0.20, green: 0.78, blue: 0.35)
+            case .ok:      return Color(red: 0.20, green: 0.78, blue: 0.35)
             case .warning: return Color.orange
-            case .error: return Color.red
+            case .error:   return Color.red
+            case .neutral: return Color.secondary
             }
         }()
         return ZStack {

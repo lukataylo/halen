@@ -13,8 +13,9 @@ import Foundation
 /// The downloaded copy takes precedence so a user-initiated re-download or a
 /// future model update can be picked up without rebuilding the app.
 enum ModelLocation {
-    /// Canonical filename. Matches the source HuggingFace asset.
-    static let filename = "gemma-3-1b-it-Q4_K_M.gguf"
+    /// Canonical filename. Matches the source HuggingFace asset
+    /// (`unsloth/gemma-4-E4B-it-GGUF`).
+    static let filename = "gemma-4-E4B-it-Q4_K_M.gguf"
 
     /// Best-available URL for the GGUF, or `nil` if neither location has it
     /// (fresh install on a Mac without Apple Intelligence — `ModelDownloader`
@@ -40,7 +41,7 @@ enum ModelLocation {
     /// `Contents/Resources/Models/<filename>` inside the .app — only present in
     /// `BUNDLE_MODEL=1` builds. `nil` in the default slim build.
     static var bundled: URL? {
-        Bundle.main.url(forResource: "gemma-3-1b-it-Q4_K_M",
+        Bundle.main.url(forResource: "gemma-4-E4B-it-Q4_K_M",
                         withExtension: "gguf",
                         subdirectory: "Models")
     }

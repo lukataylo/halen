@@ -19,7 +19,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // `applicationShouldTerminate` (below) is the one that actually waits
+        // on the async cleanup; this hook fires after we've already replied
+        // `.terminateNow`, so all the polite plumbing has finished.
         coordinator.stop()
+    }
+
+    /// Defer termination until the async plugin-host + WS-bridge shutdown
+    /// actually finishes. Without this, `applicationWillTerminate` returns
+    /// synchronously and the process dies before the `Task { await
+    /// pluginHost.stop() }` ladder (shutdown → exit → SIGTERM → SIGKILL) can
+    /// complete — leaving plugin child processes orphaned and connected WS
+    /// clients with a half-closed socket.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Already shutting down — let it through.
+        if coordinator.isShuttingDown { return .terminateNow }
+
+        Task { @MainActor in
+            await coordinator.shutdown()
+            // Hard cap of ~3 s — past that the user's "Quit" feels stuck.
+            // `coordinator.shutdown()` itself respects its own deadlines, so
+            // this is just a defensive backstop.
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 }
 

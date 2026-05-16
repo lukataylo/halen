@@ -4,18 +4,22 @@ import Carbon.HIToolbox
 import Observation
 import ApplicationServices
 
-/// ⌥Space anywhere → a floating palette that asks the local AI a one-shot
+/// ⌘H anywhere → a floating palette that asks the local AI a one-shot
 /// question, with the user's current context (focused app, selected text,
 /// recent clipboard, current paragraph) automatically attached.
 ///
 /// Designed to be **the** "I'd reach for ChatGPT here" surface but local and
 /// contextual: the user doesn't have to copy-paste the email/code/draft they
 /// want help with — Halen sees what's on their screen already.
+///
+/// Hotkey note: registering ⌘H globally takes precedence over the per-app
+/// "Hide window" binding that macOS apps inherit from `Cmd-H`. Users who
+/// rely on that should disable this plugin or rebind via Settings (future).
 @MainActor
 final class AskHalen: HalenPlugin {
     let id = "com.halen.ask-halen"
     let name = "Ask Halen"
-    let summary = "⌥Space anywhere to ask your local AI with the page's context attached."
+    let summary = "⌘H anywhere to ask your local AI with the page's context attached."
     let icon = "sparkles.rectangle.stack"
     let category: PluginCategory = .productivity
 
@@ -34,14 +38,14 @@ final class AskHalen: HalenPlugin {
     }
 
     func start() {
-        let modifiers = UInt32(optionKey)
-        let space = UInt32(kVK_Space)
-        let ok = hotkey.register(keyCode: space, modifiers: modifiers,
+        let modifiers = UInt32(cmdKey)
+        let key = UInt32(kVK_ANSI_H)
+        let ok = hotkey.register(keyCode: key, modifiers: modifiers,
                                  id: HotkeyID.askHalen.rawValue) { [weak self] in
             MainActor.assumeIsolated { self?.togglePalette() }
         }
         if !ok {
-            Log.warn("AskHalen: ⌥Space registration failed (another app may already own it)")
+            Log.warn("AskHalen: ⌘H registration failed (another app may already own it)")
         }
     }
 
@@ -163,10 +167,16 @@ final class AskHalen: HalenPlugin {
     }
 
     /// Insert at whatever element was focused when the palette opened. Closes
-    /// the palette so the user's previous focus regains the keyboard.
+    /// the palette so the user's previous focus regains the keyboard. If there
+    /// is no captured element OR the user has switched apps since opening the
+    /// palette, falls back to a clipboard copy so the response isn't lost.
     private func insertAtCaret() {
-        guard !state.response.isEmpty,
-              let element = state.context.focusedElement else {
+        guard !state.response.isEmpty else {
+            closePalette()
+            return
+        }
+        guard let element = state.context.focusedElement,
+              let originalPID = state.context.appPID else {
             copyResponse()
             closePalette()
             return
@@ -178,6 +188,17 @@ final class AskHalen: HalenPlugin {
         // any deferred focus restoration has settled.
         Task { @MainActor [caretObserver] in
             try? await Task.sleep(for: .milliseconds(80))
+
+            // If the user ⌘Tabbed away after opening the palette, writing to
+            // the captured element lands in a window they can no longer see.
+            // Copy instead so the response is still recoverable.
+            let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            guard frontPID == originalPID else {
+                Log.info("AskHalen: focus moved (was pid \(originalPID), now \(frontPID ?? -1)) — copying instead of inserting")
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(response, forType: .string)
+                return
+            }
 
             // Re-read the AX selection NOW rather than using {0, 0}. In
             // native AppKit apps, passing range {0, 0} to AX would set the
@@ -215,9 +236,9 @@ private struct AskHalenDetailView: View {
             Image(systemName: "sparkles.rectangle.stack")
                 .font(.system(size: 32, weight: .light))
                 .foregroundStyle(Color.halenCobalt)
-            Text("Press ⌥Space anywhere")
+            Text("Press ⌘H anywhere")
                 .font(.system(.callout, weight: .medium))
-            Text("A floating palette opens with your focused app, selected text, and recent clipboard already in context. Ask anything — Halen answers locally using whichever backend is active.")
+            Text("A floating palette opens with your focused app, selected text, and recent clipboard already in context. Ask anything — Halen answers locally using whichever backend is active. Note: this overrides macOS's per-app ⌘H (Hide window) shortcut.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

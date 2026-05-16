@@ -8,6 +8,11 @@ import ApplicationServices
 struct AskHalenContext {
     let appName: String?
     let appBundleId: String?
+    /// Process id of the source app at capture time. Used by Insert to verify
+    /// the user hasn't ⌘Tabbed away before writing back — otherwise the AX
+    /// write lands in a no-longer-foreground app and the user can't see what
+    /// happened.
+    let appPID: pid_t?
     /// AX-selected text in the focused field, if any.
     let selectedText: String?
     /// Paragraph around the caret — useful when the user wants help with what
@@ -19,16 +24,24 @@ struct AskHalenContext {
     /// "Insert at caret" to write back to the source field, not the palette.
     let focusedElement: AXUIElement?
 
-    static let empty = AskHalenContext(appName: nil, appBundleId: nil,
+    static let empty = AskHalenContext(appName: nil, appBundleId: nil, appPID: nil,
                                        selectedText: nil, currentParagraph: nil,
                                        clipboardText: nil, focusedElement: nil)
 
     /// Snapshot the user's current state. Reads AX + frontmost app + clipboard
-    /// synchronously — runs in microseconds, safe to do at hotkey-fire time.
+    /// synchronously — runs in microseconds for healthy apps; a 200 ms cap on
+    /// AX reads keeps a hung Electron app from freezing the palette.
     @MainActor
     static func capture(via caretObserver: CaretObserver?) -> AskHalenContext {
         let frontApp = NSWorkspace.shared.frontmostApplication
         let element = caretObserver?.currentElement
+
+        // Cap AX read timeout at 200 ms. The default is several seconds;
+        // a hung Electron app or browser tab can otherwise block the
+        // hotkey→palette path long enough that the user thinks Halen crashed.
+        if let element {
+            AXUIElementSetMessagingTimeout(element, 0.2)
+        }
 
         var selection: String?
         var paragraph: String?
@@ -58,6 +71,7 @@ struct AskHalenContext {
         return AskHalenContext(
             appName: frontApp?.localizedName,
             appBundleId: frontApp?.bundleIdentifier,
+            appPID: frontApp?.processIdentifier,
             selectedText: selection,
             currentParagraph: paragraph,
             clipboardText: clipboard,

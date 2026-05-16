@@ -78,6 +78,13 @@ final class AppCoordinator {
         }
     }
 
+    /// Set once `shutdown()` has begun, observed by `AppDelegate` so a second
+    /// "Quit" press during the async ladder doesn't kick off a parallel one.
+    private(set) var isShuttingDown = false
+
+    /// Synchronous teardown — kept for backwards compatibility with the
+    /// in-process pieces that don't need async work. Out-of-process cleanup
+    /// (plugin host, WS clients) requires `shutdown()` below.
     func stop() {
         Log.info("Halen stopping")
         isStopped = true
@@ -88,13 +95,24 @@ final class AppCoordinator {
         for plugin in registry.plugins {
             plugin.stop()
         }
-        // Out-of-process plugins get a polite shutdown → exit → SIGTERM ladder.
-        if let pluginHost {
-            Task { await pluginHost.stop() }
-        }
         webSocketBridge?.stop()
         caretObserver?.stop()
         overlay?.stop()
+    }
+
+    /// Async cleanup — runs the out-of-process plugin shutdown ladder
+    /// (shutdown → exit → SIGTERM → SIGKILL) and only returns once every
+    /// plugin process is dead or unresponsive past its grace period. Called
+    /// from `applicationShouldTerminate` with a `.terminateLater` reply so
+    /// the process doesn't exit before this finishes.
+    func shutdown() async {
+        if isShuttingDown { return }
+        isShuttingDown = true
+        Log.info("Halen shutdown: async ladder")
+        if let pluginHost {
+            await pluginHost.stop()
+        }
+        stop()
     }
 
     private func startObservers() {

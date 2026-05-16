@@ -57,10 +57,20 @@ actor RouterInferenceClient: InferenceClient {
 
     /// Clear the availability cache and re-probe every backend now. Called by the
     /// Settings backend picker's Refresh button and its periodic poll.
+    ///
+    /// As a side benefit: any backend that flipped from `.unavailable` to
+    /// `.available` (Apple Intelligence finishing its initial model download,
+    /// Ollama daemon being started) is prewarmed here so the first inference
+    /// after the flip doesn't pay the cold-start tax.
     func refreshAvailability() async {
+        let previous = availabilityCache.mapValues(\.value)
         availabilityCache.removeAll()
         for backend in backends {
-            _ = await cachedAvailability(backend)
+            let now = await cachedAvailability(backend)
+            let wasAvailable = previous[backend.kind]?.isAvailable ?? false
+            if !wasAvailable && now.isAvailable {
+                await InferenceBackends.prewarmAll([backend])
+            }
         }
     }
 

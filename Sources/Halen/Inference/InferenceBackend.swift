@@ -21,7 +21,7 @@ enum BackendKind: String, Sendable, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .bundledLlama:          return "Built-in (Gemma 3 1B)"
+        case .bundledLlama:          return "Built-in (Gemma 4 E4B)"
         case .appleFoundationModels: return "Apple Intelligence"
         case .ollama:                return "Ollama"
         }
