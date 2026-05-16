@@ -356,8 +356,15 @@ final class CaretObserver {
     }
 
     private func emitCaretMoved(element: AXUIElement) {
-        guard let app = observedApp,
-              let axRect = axReadCaretBounds(element) else { return }
+        guard let app = observedApp else { return }
+        guard let axRect = axReadCaretBounds(element) else {
+            // Diagnostic: surfaces apps whose AX tree refuses to expose
+            // caret bounds (rich-text views like Notes' WebKit pane often
+            // do) so the overlay-indicator silence has a paper trail in
+            // the log instead of being invisible.
+            Log.info("caret.moved skipped — no AX bounds for \(app.localizedName ?? "?")")
+            return
+        }
         let cocoa = axRectToCocoa(axRect)
         eventBus.publish(.caretMoved(.init(
             appBundleId: app.bundleIdentifier ?? "",
