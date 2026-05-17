@@ -387,9 +387,9 @@ final class ModelDownloader {
     /// Parse `Content-Range: bytes <start>-<end>/<total|*>`. Returns the
     /// numeric start, end, and total (or nil for `*`). Returns nil if the
     /// header doesn't match the canonical bytes-range form.
-    /// `internal` (not file-private) so tests can pin the parser without
-    /// reaching through download orchestration.
-    static func parseContentRange(_ header: String) -> (start: Int64, end: Int64, total: Int64?)? {
+    /// `nonisolated static` so tests (and any future caller) can invoke it
+    /// from any context — the function is pure.
+    nonisolated static func parseContentRange(_ header: String) -> (start: Int64, end: Int64, total: Int64?)? {
         // Canonical shape per RFC 7233: "bytes 1024-4977169567/4977169568"
         // or "bytes 1024-4977169567/*". Anything else (multipart, "bytes */N"
         // satisfiable-range responses, malformed) is rejected — we don't use

@@ -257,6 +257,8 @@ final class MeetingPrep: HalenPlugin {
     // MARK: - Persistence
 
     private func loadProcessed() {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: processedURL.path) else { return }  // first launch
         do {
             let data = try Data(contentsOf: processedURL)
             let list = try JSONDecoder().decode([String].self, from: data)
@@ -273,10 +275,16 @@ final class MeetingPrep: HalenPlugin {
                 return ts >= cutoff
             })
         } catch {
-            // First launch (file missing) or corrupt JSON — start clean. We
-            // could distinguish the two and back up the corrupt file, but
-            // re-briefing today's already-briefed meetings is the worst case
-            // and it self-heals as the day progresses.
+            // The file existed but couldn't be decoded — corruption (disk
+            // error, partial write from a previous crash, manual edit gone
+            // wrong). Re-briefing today's already-briefed meetings is the
+            // worst case and self-heals through the day, so we start clean.
+            // Move the corrupt file aside rather than silently overwriting —
+            // it stays available for diagnosis without blocking re-creation
+            // of a fresh `processed.json`.
+            Log.warn("MeetingPrep: processed.json failed to decode (\(error.localizedDescription)); quarantining and starting clean")
+            let backup = processedURL.appendingPathExtension("corrupt-\(Int(Date().timeIntervalSince1970))")
+            try? fm.moveItem(at: processedURL, to: backup)
         }
     }
 
