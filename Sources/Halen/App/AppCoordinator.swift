@@ -21,6 +21,10 @@ final class AppCoordinator {
     let inference: RouterInferenceClient
     let typoStore = TypoStore()
     let registry = PluginRegistry()
+    /// Surfaced to Settings via HalenApp → HalenCenterView. Lives at app
+    /// scope (not view scope) so its observable status survives the
+    /// menubar popup closing and re-opening.
+    let launchAtLogin = LaunchAtLoginController()
 
     /// Kept around so we can prewarm Apple FM at launch and re-probe
     /// availability from the Settings UI without going through the router.
@@ -48,6 +52,11 @@ final class AppCoordinator {
 
     func start() {
         Log.info("Halen starting")
+        // Hard ceiling on every AX call's blocking duration. Set process-wide
+        // before any AX read happens so a frozen target app can't wedge the
+        // main thread — `CaretObserver` re-applies per app element on each
+        // focus change as belt-and-suspenders.
+        axInstallGlobalMessagingTimeout()
         startEventLogger()
         // Best-effort prewarm of Apple Foundation Models so the first inference
         // call (typo classify, snippet expansion, Ask Halen) doesn't pay the
@@ -185,8 +194,11 @@ final class AppCoordinator {
                 case .appFocused(let payload):
                     Log.info("evt app.focused \(payload.appName)")
                 case .textPaused(let payload):
-                    let preview = payload.text.prefix(40).replacingOccurrences(of: "\n", with: "↵")
-                    Log.info("evt text.pause app=\(payload.appName) chars=\(payload.text.count) offset=\(payload.caretOffset) preview=\"\(preview)\"")
+                    // Never write the user's text (or any prefix of it) to the
+                    // system log. `Log.redact` emits an unforgeable fingerprint
+                    // good enough to correlate two events involving the same
+                    // content but not reverse-engineer the content itself.
+                    Log.info("evt text.pause app=\(payload.appName) chars=\(payload.text.count) offset=\(payload.caretOffset) text=\(Log.redact(payload.text))")
                 case .caretMoved(let payload):
                     // INFO (not debug) so we can confirm from the system log
                     // whether the overlay's caret-indicator is failing to

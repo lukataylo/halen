@@ -13,7 +13,8 @@ struct HalenApp: App {
                 inferenceSettings: appDelegate.coordinator.inferenceSettings,
                 router: appDelegate.coordinator.inference,
                 modelDownloader: appDelegate.coordinator.modelDownloader,
-                webSocketBridge: appDelegate.coordinator.webSocketBridge
+                webSocketBridge: appDelegate.coordinator.webSocketBridge,
+                launchAtLogin: appDelegate.coordinator.launchAtLogin
             )
         } label: {
             Image(nsImage: Self.menubarIcon)

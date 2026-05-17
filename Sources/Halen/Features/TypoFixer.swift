@@ -166,13 +166,16 @@ final class TypoFixer: HalenPlugin {
             $0.correction.lowercased() == typo.lowercased()
         }) {
             let reverted = recentAutoFixes[idx]
-            Log.info("TypoFixer: user reverted auto-fix \"\(reverted.typo)\" → \"\(reverted.correction)\" — demoting entry")
+            Log.info("TypoFixer: user reverted auto-fix \(Log.redact(reverted.typo)) → \(Log.redact(reverted.correction)) — demoting entry")
             store.demote(typo: reverted.typo)
             recentAutoFixes.remove(at: idx)
             return
         }
 
-        Log.info("TypoFixer learned: \"\(typo)\" → \"\(correction)\" (dist=\(distance))")
+        // Words being learned came straight out of the user's text. Log a
+        // fingerprint so a sequence of `learned` and `applied` lines can be
+        // correlated by hash without writing the word itself to disk.
+        Log.info("TypoFixer learned: \(Log.redact(typo)) → \(Log.redact(correction)) (dist=\(distance))")
         store.observe(typo: typo, correction: correction)
     }
 
@@ -213,7 +216,7 @@ final class TypoFixer: HalenPlugin {
         }
 
         let range = NSRange(location: start, length: end - start)
-        Log.info("TypoFixer applied: \"\(word)\" → \"\(cased)\"")
+        Log.info("TypoFixer applied: \(Log.redact(word)) → \(Log.redact(cased))")
 
         recentSelfEdits.append(SelfEdit(typo: word, correction: cased, timestamp: now))
         recentAutoFixes.append(SelfEdit(typo: word, correction: cased, timestamp: now))

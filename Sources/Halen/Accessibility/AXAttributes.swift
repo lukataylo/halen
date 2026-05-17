@@ -1,6 +1,40 @@
 import AppKit
 import ApplicationServices
 
+/// Hard ceiling on how long any single AX call may block. Without this every
+/// `AXUIElementCopyAttributeValue*` runs synchronously on the calling thread
+/// — and we call them from the main thread, so a frozen Electron renderer or
+/// a slow screen-reader bridge can wedge the whole UI. The system default is
+/// 6 s, which is plenty of time for the user to feel "Halen is broken." 500 ms
+/// is short enough that a hung app shaves to half a second and long enough
+/// that legitimate writes (the slowest path; replacing 4 KB in a slow renderer
+/// can hit ~150 ms) have plenty of headroom — typical AX reads finish in <5 ms.
+///
+/// Apple-blessed mechanism: setting the timeout on the system-wide AX element
+/// establishes a process default; setting it on an app element overrides for
+/// that app. Children inherit from their app. We do both — global at startup,
+/// per-app on focus change — so no AX call can outrun the budget.
+let axMessagingTimeoutSeconds: Float = 0.5
+
+/// Apply `axMessagingTimeoutSeconds` as the process-wide default. Call once
+/// from `AppCoordinator.start()`. Safe to call again; `AXUIElementSetMessagingTimeout`
+/// is idempotent.
+func axInstallGlobalMessagingTimeout() {
+    let systemWide = AXUIElementCreateSystemWide()
+    let status = AXUIElementSetMessagingTimeout(systemWide, axMessagingTimeoutSeconds)
+    if status != .success {
+        Log.warn("AX: AXUIElementSetMessagingTimeout (system-wide) returned \(status.rawValue)")
+    }
+}
+
+/// Apply the timeout to a specific app element. Child elements (focused field,
+/// windows) inherit from the app. Call from `CaretObserver.switchToApp` after
+/// `AXUIElementCreateApplication`. Errors are logged but non-fatal — the
+/// global timeout is the backstop.
+func axApplyMessagingTimeout(to element: AXUIElement) {
+    _ = AXUIElementSetMessagingTimeout(element, axMessagingTimeoutSeconds)
+}
+
 /// Read a string-valued AX attribute, returning `nil` if absent or wrong type.
 func axReadString(_ element: AXUIElement, _ name: String) -> String? {
     var value: CFTypeRef?

@@ -19,5 +19,10 @@ let package = Package(
             name: "llama",
             path: "Vendor/llama.xcframework"
         ),
+        .testTarget(
+            name: "HalenTests",
+            dependencies: ["Halen"],
+            path: "Tests/HalenTests"
+        ),
     ]
 )

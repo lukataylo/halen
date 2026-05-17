@@ -77,7 +77,10 @@ struct PluginManifest: Codable, Equatable {
     }
 
     /// Resolve `executable` against the manifest directory if it's relative,
-    /// returning the absolute URL.
+    /// returning the absolute URL. **Always pair with `validate(at:)`** —
+    /// untrusted manifests can specify path-traversal segments (`../../../`)
+    /// or absolute paths pointing outside the plugin directory; resolution
+    /// alone does not check containment.
     func resolvedExecutable(in pluginDir: URL) -> URL {
         let path = (executable as NSString).expandingTildeInPath
         if path.hasPrefix("/") {
@@ -86,11 +89,56 @@ struct PluginManifest: Codable, Equatable {
         return pluginDir.appending(path: path)
     }
 
-    private func validate(at pluginDir: URL) throws {
+    /// Reverse-DNS-ish identifier. We persist user prefs and TCC state keyed
+    /// off this, and create on-disk paths from it — so anything that could
+    /// turn into a path separator, a parent-directory escape, or an empty
+    /// component is rejected up front.
+    static func isValidID(_ id: String) -> Bool {
+        guard !id.isEmpty, id.count <= 128 else { return false }
+        if id == "." || id == ".." { return false }
+        // No path separators, no whitespace, no NUL.
+        let bad: Set<Character> = ["/", "\\", " ", "\t", "\n", "\u{00}"]
+        for ch in id where bad.contains(ch) { return false }
+        // Forbid any literal `..` segment between dots so a clever id like
+        // `com.foo..bar` can't surprise the on-disk layout.
+        if id.contains("..") { return false }
+        return true
+    }
+
+    /// Validate that `pluginDir.appending(path: relative).standardized` stays
+    /// inside `pluginDir.standardized`. Defends against a manifest that ships
+    /// `executable: "../../../usr/bin/python3"` and trusts us not to look.
+    /// Absolute paths bypass this — the user installed the plugin, so an
+    /// explicit absolute path is taken at face value (still surfaced to the
+    /// user via the install sheet's permissions list).
+    static func isExecutablePathContained(_ candidate: URL, in pluginDir: URL) -> Bool {
+        // Compare standardized representations — `standardized` resolves
+        // `..` and `.` components without hitting the filesystem, so symlink
+        // shenanigans inside the plugin dir are still permitted (they're a
+        // legitimate way to point at a venv binary) but lexical escapes
+        // outside the dir are caught.
+        let candidateStd = candidate.standardized.path
+        let baseStd = pluginDir.standardized.path
+        return candidateStd == baseStd || candidateStd.hasPrefix(baseStd + "/")
+    }
+
+    func validate(at pluginDir: URL) throws {
         guard Self.supportedApiVersions.contains(halenApiVersion) else {
             throw ManifestError.unsupportedApiVersion(halenApiVersion)
         }
+        guard Self.isValidID(id) else {
+            throw ManifestError.invalidID(id)
+        }
         let exec = resolvedExecutable(in: pluginDir)
+        // Relative paths must stay within pluginDir. Absolute paths are
+        // user-trusted (the user dragged the plugin into place; surfacing
+        // an absolute path in the install sheet is the UX gate).
+        let executablePath = (executable as NSString).expandingTildeInPath
+        if !executablePath.hasPrefix("/") {
+            guard Self.isExecutablePathContained(exec, in: pluginDir) else {
+                throw ManifestError.executableOutsidePluginDir(exec.path)
+            }
+        }
         let fm = FileManager.default
         guard fm.fileExists(atPath: exec.path) else {
             throw ManifestError.executableMissing(exec.path)
@@ -101,10 +149,12 @@ struct PluginManifest: Codable, Equatable {
     }
 }
 
-enum ManifestError: Error, LocalizedError {
+enum ManifestError: Error, LocalizedError, Equatable {
     case unsupportedApiVersion(String)
     case executableMissing(String)
     case notExecutable(String)
+    case invalidID(String)
+    case executableOutsidePluginDir(String)
 
     var errorDescription: String? {
         switch self {
@@ -114,6 +164,10 @@ enum ManifestError: Error, LocalizedError {
             return "Plugin executable missing: \(path)"
         case .notExecutable(let path):
             return "Plugin file is not executable (chmod +x): \(path)"
+        case .invalidID(let id):
+            return "Plugin id \"\(id)\" is invalid (must be non-empty, contain no path separators, no `..` segments, ≤128 chars)"
+        case .executableOutsidePluginDir(let path):
+            return "Plugin executable resolves outside the plugin directory: \(path)"
         }
     }
 }

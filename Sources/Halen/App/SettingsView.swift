@@ -11,16 +11,27 @@ struct SettingsView: View {
     let router: RouterInferenceClient
     @Bindable var modelDownloader: ModelDownloader
     let webSocketBridge: WebSocketBridge?
+    @Bindable var launchAtLogin: LaunchAtLoginController
     let onBack: () -> Void
 
     @State private var pollTask: Task<Void, Never>?
     @State private var confirmingModelRemove = false
     @State private var confirmingTokenRotate = false
     @State private var tokenCopied = false
+    /// Owned at view scope — the data is cheap to re-query and shouldn't
+    /// be retained across menubar-popup close/reopen where it could go
+    /// stale under us. `refresh()` runs on every `onAppear`.
+    @State private var permissions = SystemPermissionsModel()
     @AppStorage(OverlayController.showDotKey) private var showCaretIndicator: Bool = true
     /// Two-way binding to the WS bridge's enabled preference. Toggling
     /// here also calls into the bridge to actually start/stop it live.
     @AppStorage(WebSocketBridge.enabledKey) private var webSocketEnabled: Bool = true
+    /// Persisted Ollama endpoint. The TextField edits `ollamaURLDraft` and
+    /// only writes through to this key on commit — typing "http://localh"
+    /// mid-edit shouldn't put a half-URL into UserDefaults.
+    @AppStorage(OllamaSettings.baseURLKey) private var ollamaURLStored: String = OllamaSettings.defaultBaseURLString
+    @State private var ollamaURLDraft: String = OllamaSettings.defaultBaseURLString
+    @State private var ollamaURLInvalid: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,9 +39,11 @@ struct SettingsView: View {
             Divider()
             ScrollView {
                 VStack(spacing: 10) {
-                    accessibilityCard
+                    startupCard
+                    permissionsCard
                     overlayCard
                     aiCard
+                    ollamaCard
                     builtInModelCard
                     if webSocketBridge != nil { webSocketCard }
                     aboutCard
@@ -38,7 +51,18 @@ struct SettingsView: View {
                 .padding(12)
             }
         }
-        .onAppear { startPolling() }
+        .onAppear {
+            startPolling()
+            // Refresh anything macOS doesn't push notifications for — the
+            // user might have toggled launch-at-login or a system
+            // permission between visits.
+            launchAtLogin.refresh()
+            permissions.refresh()
+            // Seed the in-progress draft from the persisted value. Without
+            // this the TextField would render empty on first open and the
+            // user would think no URL was configured.
+            ollamaURLDraft = ollamaURLStored
+        }
         .onDisappear { pollTask?.cancel() }
     }
 
@@ -74,26 +98,152 @@ struct SettingsView: View {
 
     // MARK: - Cards
 
-    private var accessibilityCard: some View {
+    private var startupCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                cardLabel("Accessibility")
-                HStack(spacing: 10) {
-                    statusDot(state.permissionStatus == .granted ? .ok : .warning)
-                    Text(accessibilityStatusText)
-                        .font(.system(.callout))
-                    Spacer()
-                    Button("Open Settings") {
-                        AXPermissions.openSettings()
+                cardLabel("Startup")
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: "power.dotted")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 22, height: 22)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Launch at login")
+                            .font(.system(.callout, weight: .medium))
+                        Text(startupDetailText)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    Spacer(minLength: 6)
+                    Toggle("", isOn: launchAtLoginBinding)
+                        .toggleStyle(.switch)
+                        .controlSize(.regular)
+                        .labelsHidden()
+                        // .requiresApproval means the user has disabled the
+                        // registration under System Settings; the toggle alone
+                        // can't re-enable it. Disabling the control prevents
+                        // a confusing "toggle does nothing" experience — the
+                        // deep-link button below carries the action.
+                        .disabled(launchAtLogin.requiresApproval)
                 }
-                Text("Required for cursor tracking and inline corrections. All processing stays on this Mac.")
+                if launchAtLogin.requiresApproval {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                        Text("Disabled under System Settings → Login Items. Re-enable there.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Open Settings") {
+                            LaunchAtLoginController.openLoginItemsSettings()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+                if let error = launchAtLogin.lastError {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.octagon.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.red)
+                        Text(error)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Two-way binding for the launch-at-login toggle. The getter reads the
+    /// effective status from the controller; the setter delegates to
+    /// `setEnabled(_:)` which handles errors and refresh in one shot.
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { launchAtLogin.isEnabled },
+            set: { launchAtLogin.setEnabled($0) }
+        )
+    }
+
+    private var startupDetailText: String {
+        if launchAtLogin.requiresApproval {
+            return "Disabled by the system. Re-enable from Login Items."
+        }
+        return launchAtLogin.isEnabled
+            ? "Halen will open when you log in."
+            : "Halen will only run when you launch it."
+    }
+
+    private var permissionsCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                cardLabel("Permissions")
+                ForEach(SystemPermission.allCases) { permission in
+                    permissionRow(permission)
+                    if permission != SystemPermission.allCases.last {
+                        Divider().padding(.leading, 30)
+                    }
+                }
+                Text("Halen runs entirely on this Mac. Granting a permission lets a specific feature work; revoking it disables only that feature.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
+        }
+    }
+
+    private func permissionRow(_ permission: SystemPermission) -> some View {
+        let grant = permissions.grants[permission] ?? .checking
+        return HStack(alignment: .center, spacing: 10) {
+            Image(systemName: permission.iconName)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 20, height: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(permission.displayName)
+                        .font(.system(.callout, weight: .medium))
+                    statusDot(statusKind(for: grant))
+                    Text(label(for: grant))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                Text(permission.purpose)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 6)
+            Button("Open") {
+                permission.openSystemSettings()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func statusKind(for grant: PermissionGrant) -> StatusKind {
+        switch grant {
+        case .granted:      return .ok
+        // Not-requested isn't an alarm — it's just "Halen hasn't asked yet."
+        // The relevant plugin will trigger the prompt on first use.
+        case .notRequested: return .neutral
+        case .denied:       return .warning
+        case .checking:     return .neutral
+        }
+    }
+
+    private func label(for grant: PermissionGrant) -> String {
+        switch grant {
+        case .granted:      return "Granted"
+        case .denied:       return "Not granted"
+        case .notRequested: return "Not requested"
+        case .checking:     return "Checking…"
         }
     }
 
@@ -248,6 +398,117 @@ struct SettingsView: View {
         let item = order.remove(at: from)
         order.insert(item, at: to)
         inferenceSettings.preferenceOrder = order
+    }
+
+    // MARK: - Ollama card
+
+    private var ollamaCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                cardLabel("Ollama")
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Server URL")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        TextField("http://localhost:11434", text: $ollamaURLDraft)
+                            .textFieldStyle(.roundedBorder)
+                            .controlSize(.small)
+                            .autocorrectionDisabled(true)
+                            .textContentType(.URL)
+                            .onSubmit { commitOllamaURL() }
+                            // Mirror upstream changes (Reset button, or a
+                            // change made from another Settings instance)
+                            // into the in-progress draft so the field stays
+                            // in sync without a manual reload.
+                            .onChange(of: ollamaURLStored) { _, new in
+                                ollamaURLDraft = new
+                                ollamaURLInvalid = false
+                            }
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(ollamaURLInvalid ? Color.red : Color.clear,
+                                            lineWidth: 1)
+                            )
+                        Button {
+                            commitOllamaURL()
+                        } label: {
+                            Text("Save")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .disabled(ollamaURLDraft == ollamaURLStored)
+                        Button {
+                            ollamaURLStored = OllamaSettings.defaultBaseURLString
+                            ollamaURLDraft = OllamaSettings.defaultBaseURLString
+                            ollamaURLInvalid = false
+                            Task { await router.refreshAvailability() }
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("Reset to \(OllamaSettings.defaultBaseURLString)")
+                    }
+                }
+
+                ollamaStatusLine
+
+                Text("Where Halen sends Ollama requests. Change this if you've started `ollama serve` on a non-default port (`OLLAMA_HOST=…`). The Built-in model and Apple Intelligence backends are unaffected.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
+        }
+    }
+
+    /// Sub-row under the URL field: validation error if the draft is bad,
+    /// otherwise a "loopback / remote" indicator describing the saved URL.
+    @ViewBuilder
+    private var ollamaStatusLine: some View {
+        if ollamaURLInvalid {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.red)
+                Text("Not a valid http/https URL with a host.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+        } else if let url = OllamaSettings.validate(ollamaURLStored) {
+            HStack(spacing: 6) {
+                let loopback = OllamaSettings.isLoopback(url)
+                statusDot(loopback ? .ok : .warning)
+                Text(loopback
+                     ? "Loopback — requests stay on this Mac."
+                     : "Remote host — requests leave this Mac. Halen markets itself as local-first.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Validate the in-progress draft. On success, write to UserDefaults and
+    /// kick a fresh availability probe so the backends card updates
+    /// immediately. On failure, flag the field; the user keeps editing.
+    private func commitOllamaURL() {
+        guard OllamaSettings.validate(ollamaURLDraft) != nil else {
+            ollamaURLInvalid = true
+            return
+        }
+        ollamaURLInvalid = false
+        // Normalize the stored form (trimmed) so the badge state and the
+        // backend agree on what's persisted, then sync the draft so the
+        // Save button correctly reads as "no pending changes" and the
+        // user doesn't see trailing whitespace.
+        let normalized = ollamaURLDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        ollamaURLStored = normalized
+        ollamaURLDraft = normalized
+        Task { await router.refreshAvailability() }
     }
 
     private var builtInModelCard: some View {
@@ -521,14 +782,6 @@ struct SettingsView: View {
             Circle()
                 .fill(color)
                 .frame(width: 7, height: 7)
-        }
-    }
-
-    private var accessibilityStatusText: String {
-        switch state.permissionStatus {
-        case .granted: return "Granted"
-        case .denied: return "Not granted"
-        case .unknown: return "Checking…"
         }
     }
 

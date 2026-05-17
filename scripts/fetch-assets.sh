@@ -15,12 +15,16 @@ cd "$ROOT"
 # ---------------------------------------------------------------------------
 # 1. Bundled model — Gemma 4 E4B (Q4_K_M GGUF, ~4.98 GB)
 #    Constants must match Sources/Halen/Inference/LlamaCpp/ModelDownloader.swift
+#    Set SKIP_GGUF=1 when only the xcframework is needed (CI build/test, dev
+#    flows that rely on the in-app ModelDownloader to fetch on first use).
 # ---------------------------------------------------------------------------
 GGUF_PATH="assets/Models/gemma-4-E4B-it-Q4_K_M.gguf"
 GGUF_URL="https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf"
 GGUF_SHA="519b9793ed6ce0ff530f1b7c96e848e08e49e7af4d57bb97f76215963a54146d"
 
-if [[ -f "$GGUF_PATH" ]] && shasum -a 256 "$GGUF_PATH" | grep -q "$GGUF_SHA"; then
+if [[ "${SKIP_GGUF:-0}" == "1" ]]; then
+    echo "→ SKIP_GGUF=1 — skipping bundled model download"
+elif [[ -f "$GGUF_PATH" ]] && shasum -a 256 "$GGUF_PATH" | grep -q "$GGUF_SHA"; then
     echo "✓ $GGUF_PATH (checksum OK)"
 else
     echo "→ downloading $GGUF_PATH (~4.98 GB)"

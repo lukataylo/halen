@@ -33,12 +33,26 @@ func computeDiff(old: NSString, new: NSString) -> StringDiff? {
         suffix += 1
     }
 
-    // Snap the boundaries outward to word boundaries so we report the whole
-    // surrounding word(s) instead of the minimal byte-level diff.
-    while prefix > 0, !isSeparator(old.character(at: prefix - 1)) {
+    // Snap the boundaries outward to word boundaries so a one-character edit
+    // inside a word still reports the whole surrounding word.
+    //
+    // Only snap when the boundary is *inside* a word — i.e. both the matched
+    // character (`prefix - 1`) and the first differing character (`prefix`)
+    // are non-separators. If the diff already starts at a word edge
+    // (separator on either side, or end-of-string), don't snap; otherwise a
+    // pure deletion like "hello world" → "hello" would gobble back through
+    // "hello" and report the whole string as the diff. Same shape for the
+    // trailing suffix snap.
+    while prefix > 0,
+          prefix < oldLen,
+          !isSeparator(old.character(at: prefix - 1)),
+          !isSeparator(old.character(at: prefix)) {
         prefix -= 1
     }
-    while suffix > 0, !isSeparator(old.character(at: oldLen - suffix)) {
+    while suffix > 0,
+          suffix < oldLen - prefix,
+          !isSeparator(old.character(at: oldLen - suffix)),
+          !isSeparator(old.character(at: oldLen - suffix - 1)) {
         suffix -= 1
     }
 

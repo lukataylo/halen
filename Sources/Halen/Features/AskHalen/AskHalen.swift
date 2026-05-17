@@ -224,11 +224,11 @@ final class AskHalen: HalenPlugin {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 self.state.response = trimmed
                 self.state.isStreaming = false
-                // `debugDescription` escapes control chars / unicode, so a
-                // response of "\n\n</s>" shows up as such in the log rather
-                // than appearing as 6 invisible bytes.
-                let preview = trimmed.prefix(80).debugDescription
-                Log.info("AskHalen: response (\(response.latencyMs)ms, model=\(response.modelId), chars=\(trimmed.count), preview=\(preview))")
+                // The response is whatever the model wrote in reply to the
+                // user's prompt — both directions are treated as PII. Log
+                // size + a non-reversible fingerprint; the model id and
+                // latency stay in the clear for diagnostics.
+                Log.info("AskHalen: response (\(response.latencyMs)ms, model=\(response.modelId), chars=\(trimmed.count), text=\(Log.redact(trimmed)))")
             } catch is CancellationError {
                 // User pressed Esc or fired another query — silent.
             } catch {

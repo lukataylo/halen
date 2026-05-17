@@ -217,6 +217,11 @@ final class CaretObserver {
         tearDownObserver()
         let pid = app.processIdentifier
         let appElement = AXUIElementCreateApplication(pid)
+        // Bound every subsequent AX read against this app to the hard ceiling
+        // (see `axMessagingTimeoutSeconds`). Children inherit from the app, so
+        // one call here covers the focused element + its windows. Frozen apps
+        // will time out fast instead of wedging the main thread.
+        axApplyMessagingTimeout(to: appElement)
 
         var newObserver: AXObserver?
         let result = AXObserverCreate(pid, axCallback, &newObserver)
