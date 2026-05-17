@@ -48,6 +48,11 @@ final class AppCoordinator {
 
     func start() {
         Log.info("Halen starting")
+        // Hard ceiling on every AX call's blocking duration. Set process-wide
+        // before any AX read happens so a frozen target app can't wedge the
+        // main thread — `CaretObserver` re-applies per app element on each
+        // focus change as belt-and-suspenders.
+        axInstallGlobalMessagingTimeout()
         startEventLogger()
         // Best-effort prewarm of Apple Foundation Models so the first inference
         // call (typo classify, snippet expansion, Ask Halen) doesn't pay the
