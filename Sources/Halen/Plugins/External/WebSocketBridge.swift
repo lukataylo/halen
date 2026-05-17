@@ -290,9 +290,7 @@ final class WebSocketBridge {
             // the cap is more useful having the start of its paragraph reach
             // plugins than having the event dropped entirely. The native path
             // already windows around the caret, so this is the same shape.
-            let clipped: String = (text.utf16.count > Self.maxInjectedTextLength)
-                ? String(text.prefix(Self.maxInjectedTextLength))
-                : text
+            let clipped = Self.truncateUTF16(text, maxUnits: Self.maxInjectedTextLength)
             if clipped.utf16.count != text.utf16.count {
                 Log.warn("WebSocketBridge: clipped injected text.pause from \(text.utf16.count) to \(clipped.utf16.count) UTF-16 units (cap \(Self.maxInjectedTextLength))")
             }
@@ -306,6 +304,27 @@ final class WebSocketBridge {
         default:
             break
         }
+    }
+
+    /// Return the longest grapheme-cluster prefix of `text` whose UTF-16
+    /// length is ≤ `maxUnits`. `String.prefix(Int)` counts grapheme clusters,
+    /// not UTF-16 units, and would let emoji-heavy text exceed the cap (each
+    /// emoji is at least 2 UTF-16 units). Walking by Character keeps us
+    /// grapheme-safe — we never split inside a surrogate pair or a combining
+    /// sequence.
+    /// `nonisolated` so tests can pin the boundary cases without hopping to
+    /// MainActor; the function is pure.
+    nonisolated static func truncateUTF16(_ text: String, maxUnits: Int) -> String {
+        if text.utf16.count <= maxUnits { return text }
+        var out = ""
+        var used = 0
+        for ch in text {
+            let chLen = ch.utf16.count
+            if used + chLen > maxUnits { break }
+            out.append(ch)
+            used += chLen
+        }
+        return out
     }
 
     /// Validate the client's `subscribe` notification against the persisted
