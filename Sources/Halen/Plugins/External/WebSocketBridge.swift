@@ -34,6 +34,26 @@ final class WebSocketBridge {
         UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
     }
 
+    /// Maximum bytes accepted per incoming WebSocket frame. JSON-RPC requests
+    /// here are tiny — a `subscribe` is ~200 B, an injected `text.pause` is
+    /// at most the windowed-paragraph size (~8 KB). The cap is large enough
+    /// for any legitimate client, small enough that a hostile loopback peer
+    /// can't OOM us by streaming a multi-GB frame. Clients exceeding this
+    /// are disconnected.
+    nonisolated static let maxIncomingFrameBytes = 256 * 1024
+
+    /// Cap on the number of topics a single client can subscribe to. Loose
+    /// enough to never restrict a legitimate client (there are 3 valid
+    /// topics today), tight enough that a malicious payload with 10⁶
+    /// strings can't be used to chew main-actor time on the filter pass.
+    nonisolated static let maxSubscribeTopics = 32
+
+    /// Cap on the injected `text.pause` payload length (UTF-16 code units).
+    /// Matches the radius used by CaretObserver's windowAroundCaret — text
+    /// larger than that is already truncated upstream in the native path,
+    /// so a remote client has no legitimate reason to exceed it.
+    nonisolated static let maxInjectedTextLength = 32 * 1024
+
     private let services: HalenServices
     private let bridge: HostBridge
     private let port: UInt16
@@ -159,6 +179,13 @@ final class WebSocketBridge {
                       let resolved = self.clients.first(where: { $0.id == clientID })
                 else { return }
                 if let data, !data.isEmpty {
+                    // Defensive size cap — loopback or not, a peer that
+                    // sends a 1 GB frame should not be able to wedge us.
+                    if data.count > Self.maxIncomingFrameBytes {
+                        Log.warn("WebSocketBridge: client \(resolved.id.uuidString.prefix(8)) sent \(data.count) B frame — disconnecting (cap \(Self.maxIncomingFrameBytes))")
+                        self.removeClient(resolved)
+                        return
+                    }
                     self.handleIncoming(data: data, from: resolved)
                 }
                 if error != nil {
@@ -258,12 +285,23 @@ final class WebSocketBridge {
         switch topic {
         case "text.pause":
             guard let text = payloadObj["text"]?.stringValue else { return }
+            // Truncate over-long injected text rather than rejecting outright —
+            // a legitimate client (browser extension on a long article) hitting
+            // the cap is more useful having the start of its paragraph reach
+            // plugins than having the event dropped entirely. The native path
+            // already windows around the caret, so this is the same shape.
+            let clipped: String = (text.utf16.count > Self.maxInjectedTextLength)
+                ? String(text.prefix(Self.maxInjectedTextLength))
+                : text
+            if clipped.utf16.count != text.utf16.count {
+                Log.warn("WebSocketBridge: clipped injected text.pause from \(text.utf16.count) to \(clipped.utf16.count) UTF-16 units (cap \(Self.maxInjectedTextLength))")
+            }
             let bundle = payloadObj["appBundleId"]?.stringValue ?? "ext.unknown"
             let name = payloadObj["appName"]?.stringValue ?? "Browser tab"
-            let offset = payloadObj["caretOffset"]?.intValue ?? text.utf16.count
+            let offset = payloadObj["caretOffset"]?.intValue ?? clipped.utf16.count
             services.eventBus.publish(.textPaused(.init(
                 appBundleId: bundle, appName: name,
-                text: text, caretOffset: offset, timestamp: Date()
+                text: clipped, caretOffset: min(offset, clipped.utf16.count), timestamp: Date()
             )))
         default:
             break
@@ -287,6 +325,13 @@ final class WebSocketBridge {
         guard let expected = BridgeTokenStore.tokenOrCreate(),
               providedToken == expected else {
             Log.warn("WebSocketBridge: rejected subscribe from \(client.id.uuidString.prefix(8)) — token mismatch")
+            return
+        }
+        // Cap the input list before the Set/intersection pass — a malicious
+        // payload with millions of strings would otherwise hash through to
+        // the main actor for no useful purpose.
+        if topicsAny.count > Self.maxSubscribeTopics {
+            Log.warn("WebSocketBridge: rejected subscribe from \(client.id.uuidString.prefix(8)) — \(topicsAny.count) topics (cap \(Self.maxSubscribeTopics))")
             return
         }
         let valid: Set<String> = ["text.pause", "caret.moved", "app.focused"]
