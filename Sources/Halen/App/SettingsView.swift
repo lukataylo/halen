@@ -26,6 +26,12 @@ struct SettingsView: View {
     /// Two-way binding to the WS bridge's enabled preference. Toggling
     /// here also calls into the bridge to actually start/stop it live.
     @AppStorage(WebSocketBridge.enabledKey) private var webSocketEnabled: Bool = true
+    /// Persisted Ollama endpoint. The TextField edits `ollamaURLDraft` and
+    /// only writes through to this key on commit — typing "http://localh"
+    /// mid-edit shouldn't put a half-URL into UserDefaults.
+    @AppStorage(OllamaSettings.baseURLKey) private var ollamaURLStored: String = OllamaSettings.defaultBaseURLString
+    @State private var ollamaURLDraft: String = OllamaSettings.defaultBaseURLString
+    @State private var ollamaURLInvalid: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +43,7 @@ struct SettingsView: View {
                     permissionsCard
                     overlayCard
                     aiCard
+                    ollamaCard
                     builtInModelCard
                     if webSocketBridge != nil { webSocketCard }
                     aboutCard
@@ -51,6 +58,10 @@ struct SettingsView: View {
             // permission between visits.
             launchAtLogin.refresh()
             permissions.refresh()
+            // Seed the in-progress draft from the persisted value. Without
+            // this the TextField would render empty on first open and the
+            // user would think no URL was configured.
+            ollamaURLDraft = ollamaURLStored
         }
         .onDisappear { pollTask?.cancel() }
     }
@@ -387,6 +398,117 @@ struct SettingsView: View {
         let item = order.remove(at: from)
         order.insert(item, at: to)
         inferenceSettings.preferenceOrder = order
+    }
+
+    // MARK: - Ollama card
+
+    private var ollamaCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                cardLabel("Ollama")
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Server URL")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        TextField("http://localhost:11434", text: $ollamaURLDraft)
+                            .textFieldStyle(.roundedBorder)
+                            .controlSize(.small)
+                            .autocorrectionDisabled(true)
+                            .textContentType(.URL)
+                            .onSubmit { commitOllamaURL() }
+                            // Mirror upstream changes (Reset button, or a
+                            // change made from another Settings instance)
+                            // into the in-progress draft so the field stays
+                            // in sync without a manual reload.
+                            .onChange(of: ollamaURLStored) { _, new in
+                                ollamaURLDraft = new
+                                ollamaURLInvalid = false
+                            }
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(ollamaURLInvalid ? Color.red : Color.clear,
+                                            lineWidth: 1)
+                            )
+                        Button {
+                            commitOllamaURL()
+                        } label: {
+                            Text("Save")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .disabled(ollamaURLDraft == ollamaURLStored)
+                        Button {
+                            ollamaURLStored = OllamaSettings.defaultBaseURLString
+                            ollamaURLDraft = OllamaSettings.defaultBaseURLString
+                            ollamaURLInvalid = false
+                            Task { await router.refreshAvailability() }
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("Reset to \(OllamaSettings.defaultBaseURLString)")
+                    }
+                }
+
+                ollamaStatusLine
+
+                Text("Where Halen sends Ollama requests. Change this if you've started `ollama serve` on a non-default port (`OLLAMA_HOST=…`). The Built-in model and Apple Intelligence backends are unaffected.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
+        }
+    }
+
+    /// Sub-row under the URL field: validation error if the draft is bad,
+    /// otherwise a "loopback / remote" indicator describing the saved URL.
+    @ViewBuilder
+    private var ollamaStatusLine: some View {
+        if ollamaURLInvalid {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.red)
+                Text("Not a valid http/https URL with a host.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+        } else if let url = OllamaSettings.validate(ollamaURLStored) {
+            HStack(spacing: 6) {
+                let loopback = OllamaSettings.isLoopback(url)
+                statusDot(loopback ? .ok : .warning)
+                Text(loopback
+                     ? "Loopback — requests stay on this Mac."
+                     : "Remote host — requests leave this Mac. Halen markets itself as local-first.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Validate the in-progress draft. On success, write to UserDefaults and
+    /// kick a fresh availability probe so the backends card updates
+    /// immediately. On failure, flag the field; the user keeps editing.
+    private func commitOllamaURL() {
+        guard OllamaSettings.validate(ollamaURLDraft) != nil else {
+            ollamaURLInvalid = true
+            return
+        }
+        ollamaURLInvalid = false
+        // Normalize the stored form (trimmed) so the badge state and the
+        // backend agree on what's persisted, then sync the draft so the
+        // Save button correctly reads as "no pending changes" and the
+        // user doesn't see trailing whitespace.
+        let normalized = ollamaURLDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        ollamaURLStored = normalized
+        ollamaURLDraft = normalized
+        Task { await router.refreshAvailability() }
     }
 
     private var builtInModelCard: some View {
