@@ -180,6 +180,25 @@ final class ModelDownloader {
         } catch DownloadError.noHTTPResponse {
             state = .failed(message: "Unexpected response from server")
             return
+        } catch let DownloadError.unexpectedSize(claimed, expected) {
+            // Server is offering a file of the wrong size. Don't overwrite —
+            // wipe the staging file so a future retry can't silently resume
+            // into a half-and-half corrupt state.
+            try? fm.removeItem(at: partPath)
+            state = .failed(message:
+                "Server is offering a \(claimed)-byte file but Halen expects \(expected). The mirror may be wrong — try again later.")
+            return
+        } catch let DownloadError.badContentRange(reason):
+            // Bad Range response — drop the .part and start fresh next time;
+            // resuming after a bogus range header would corrupt the file.
+            try? fm.removeItem(at: partPath)
+            state = .failed(message: "Couldn't resume the download (\(reason)). Try again to restart from scratch.")
+            return
+        } catch let DownloadError.exceededExpectedSize(written, expected):
+            try? fm.removeItem(at: partPath)
+            state = .failed(message:
+                "Server over-served the download (\(written) > \(expected) bytes). Refusing to fill disk; try again later.")
+            return
         } catch {
             state = .failed(message: error.localizedDescription)
             return
@@ -286,6 +305,37 @@ final class ModelDownloader {
             throw DownloadError.badStatus(http.statusCode)
         }
 
+        // Validate the server's framing claims BEFORE we open the file:
+        //   - Fresh download: Content-Length, if present, must match the
+        //     pinned `expectedSize`. A server returning a different size is
+        //     either confused or hostile — either way we don't want to
+        //     overwrite the on-disk file with whatever they're serving.
+        //   - Resume: Content-Range must say "we are resuming from exactly
+        //     `resumeOffset` for the file of total `expectedSize`." If the
+        //     server returned 206 but seeks from zero, naive `seekToEnd()`
+        //     would write fresh bytes after our partial — silent corruption
+        //     that SHA-256 would catch only after the multi-GB download is
+        //     complete.
+        if startingFresh {
+            if let claimed = http.value(forHTTPHeaderField: "Content-Length"),
+               let claimedSize = Int64(claimed),
+               claimedSize != expectedSize {
+                throw DownloadError.unexpectedSize(claimed: claimedSize, expected: expectedSize)
+            }
+        } else {
+            guard let range = http.value(forHTTPHeaderField: "Content-Range"),
+                  let parsed = parseContentRange(range)
+            else {
+                throw DownloadError.badContentRange("missing or unparseable Content-Range")
+            }
+            if parsed.start != resumeOffset {
+                throw DownloadError.badContentRange("server resumed from \(parsed.start), expected \(resumeOffset)")
+            }
+            if let total = parsed.total, total != expectedSize {
+                throw DownloadError.badContentRange("server reports total \(total), expected \(expectedSize)")
+            }
+        }
+
         let fm = FileManager.default
         if startingFresh || !fm.fileExists(atPath: partPath.path) {
             fm.createFile(atPath: partPath.path, contents: nil)
@@ -308,6 +358,14 @@ final class ModelDownloader {
                 try handle.write(contentsOf: buffer)
                 written += Int64(buffer.count)
                 buffer.removeAll(keepingCapacity: true)
+                // Streaming overflow guard. The Content-Length / Content-Range
+                // checks above bound what we *agreed* to receive; this catches
+                // a server (or man-in-the-middle) that lied and is now writing
+                // past `expectedSize`. Without it, a malicious mirror could
+                // fill the user's disk before any other check fires.
+                if written > expectedSize {
+                    throw DownloadError.exceededExpectedSize(written: written, expected: expectedSize)
+                }
                 if Date().timeIntervalSince(lastReport) > progressInterval {
                     onProgress(Double(written) / Double(expectedSize), written, expectedSize)
                     lastReport = Date()
@@ -318,9 +376,48 @@ final class ModelDownloader {
         if !buffer.isEmpty {
             try handle.write(contentsOf: buffer)
             written += Int64(buffer.count)
+            if written > expectedSize {
+                throw DownloadError.exceededExpectedSize(written: written, expected: expectedSize)
+            }
         }
         try handle.close()
         return written
+    }
+
+    /// Parse `Content-Range: bytes <start>-<end>/<total|*>`. Returns the
+    /// numeric start, end, and total (or nil for `*`). Returns nil if the
+    /// header doesn't match the canonical bytes-range form.
+    /// `internal` (not file-private) so tests can pin the parser without
+    /// reaching through download orchestration.
+    static func parseContentRange(_ header: String) -> (start: Int64, end: Int64, total: Int64?)? {
+        // Canonical shape per RFC 7233: "bytes 1024-4977169567/4977169568"
+        // or "bytes 1024-4977169567/*". Anything else (multipart, "bytes */N"
+        // satisfiable-range responses, malformed) is rejected — we don't use
+        // it, so we don't try to interpret it.
+        let trimmed = header.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("bytes ") else { return nil }
+        let rest = trimmed.dropFirst("bytes ".count)
+        let parts = rest.split(separator: "/", maxSplits: 1)
+        guard parts.count == 2 else { return nil }
+        let rangePart = parts[0]
+        let totalPart = parts[1]
+
+        let bounds = rangePart.split(separator: "-", maxSplits: 1)
+        guard bounds.count == 2,
+              let start = Int64(bounds[0]),
+              let end = Int64(bounds[1]),
+              start >= 0, end >= start
+        else { return nil }
+
+        let total: Int64?
+        if totalPart == "*" {
+            total = nil
+        } else if let parsed = Int64(totalPart), parsed >= 0 {
+            total = parsed
+        } else {
+            return nil
+        }
+        return (start, end, total)
     }
 
     /// Streaming SHA-256 — never loads the full GGUF into memory. Marked
@@ -346,7 +443,17 @@ final class ModelDownloader {
 /// Errors thrown by the detached download body that `run(installingTo:)`
 /// translates into user-facing `.failed(message:)` states. Distinct from
 /// `URLError` etc. so the outer dispatch knows which message is appropriate.
-enum DownloadError: Error {
+enum DownloadError: Error, Equatable {
     case noHTTPResponse
     case badStatus(Int)
+    /// HTTP 200 + Content-Length didn't match `expectedSize`. The server is
+    /// serving a different file than we pinned — refuse rather than overwrite.
+    case unexpectedSize(claimed: Int64, expected: Int64)
+    /// HTTP 206 but Content-Range either absent, malformed, or describing a
+    /// different resume offset / total than we requested. Refuse rather than
+    /// seekToEnd and silently corrupt the .part file.
+    case badContentRange(String)
+    /// Bytes streamed past `expectedSize` — server is over-serving (broken
+    /// mirror or active MITM). Bail before the disk fills.
+    case exceededExpectedSize(written: Int64, expected: Int64)
 }
