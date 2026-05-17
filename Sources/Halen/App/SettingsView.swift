@@ -18,6 +18,10 @@ struct SettingsView: View {
     @State private var confirmingModelRemove = false
     @State private var confirmingTokenRotate = false
     @State private var tokenCopied = false
+    /// Owned at view scope — the data is cheap to re-query and shouldn't
+    /// be retained across menubar-popup close/reopen where it could go
+    /// stale under us. `refresh()` runs on every `onAppear`.
+    @State private var permissions = SystemPermissionsModel()
     @AppStorage(OverlayController.showDotKey) private var showCaretIndicator: Bool = true
     /// Two-way binding to the WS bridge's enabled preference. Toggling
     /// here also calls into the bridge to actually start/stop it live.
@@ -30,7 +34,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 10) {
                     startupCard
-                    accessibilityCard
+                    permissionsCard
                     overlayCard
                     aiCard
                     builtInModelCard
@@ -42,11 +46,11 @@ struct SettingsView: View {
         }
         .onAppear {
             startPolling()
-            // Refresh the launch-at-login status whenever Settings is opened
-            // — the user might have toggled it in System Settings → Login
-            // Items between visits, and SMAppService.status doesn't push us
-            // a notification when that happens.
+            // Refresh anything macOS doesn't push notifications for — the
+            // user might have toggled launch-at-login or a system
+            // permission between visits.
             launchAtLogin.refresh()
+            permissions.refresh()
         }
         .onDisappear { pollTask?.cancel() }
     }
@@ -162,26 +166,73 @@ struct SettingsView: View {
             : "Halen will only run when you launch it."
     }
 
-    private var accessibilityCard: some View {
+    private var permissionsCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                cardLabel("Accessibility")
-                HStack(spacing: 10) {
-                    statusDot(state.permissionStatus == .granted ? .ok : .warning)
-                    Text(accessibilityStatusText)
-                        .font(.system(.callout))
-                    Spacer()
-                    Button("Open Settings") {
-                        AXPermissions.openSettings()
+                cardLabel("Permissions")
+                ForEach(SystemPermission.allCases) { permission in
+                    permissionRow(permission)
+                    if permission != SystemPermission.allCases.last {
+                        Divider().padding(.leading, 30)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
-                Text("Required for cursor tracking and inline corrections. All processing stays on this Mac.")
+                Text("Halen runs entirely on this Mac. Granting a permission lets a specific feature work; revoking it disables only that feature.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
+        }
+    }
+
+    private func permissionRow(_ permission: SystemPermission) -> some View {
+        let grant = permissions.grants[permission] ?? .checking
+        return HStack(alignment: .center, spacing: 10) {
+            Image(systemName: permission.iconName)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 20, height: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(permission.displayName)
+                        .font(.system(.callout, weight: .medium))
+                    statusDot(statusKind(for: grant))
+                    Text(label(for: grant))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                Text(permission.purpose)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 6)
+            Button("Open") {
+                permission.openSystemSettings()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func statusKind(for grant: PermissionGrant) -> StatusKind {
+        switch grant {
+        case .granted:      return .ok
+        // Not-requested isn't an alarm — it's just "Halen hasn't asked yet."
+        // The relevant plugin will trigger the prompt on first use.
+        case .notRequested: return .neutral
+        case .denied:       return .warning
+        case .checking:     return .neutral
+        }
+    }
+
+    private func label(for grant: PermissionGrant) -> String {
+        switch grant {
+        case .granted:      return "Granted"
+        case .denied:       return "Not granted"
+        case .notRequested: return "Not requested"
+        case .checking:     return "Checking…"
         }
     }
 
@@ -609,14 +660,6 @@ struct SettingsView: View {
             Circle()
                 .fill(color)
                 .frame(width: 7, height: 7)
-        }
-    }
-
-    private var accessibilityStatusText: String {
-        switch state.permissionStatus {
-        case .granted: return "Granted"
-        case .denied: return "Not granted"
-        case .unknown: return "Checking…"
         }
     }
 
