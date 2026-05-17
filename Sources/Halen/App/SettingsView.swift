@@ -11,6 +11,7 @@ struct SettingsView: View {
     let router: RouterInferenceClient
     @Bindable var modelDownloader: ModelDownloader
     let webSocketBridge: WebSocketBridge?
+    @Bindable var launchAtLogin: LaunchAtLoginController
     let onBack: () -> Void
 
     @State private var pollTask: Task<Void, Never>?
@@ -28,6 +29,7 @@ struct SettingsView: View {
             Divider()
             ScrollView {
                 VStack(spacing: 10) {
+                    startupCard
                     accessibilityCard
                     overlayCard
                     aiCard
@@ -38,7 +40,14 @@ struct SettingsView: View {
                 .padding(12)
             }
         }
-        .onAppear { startPolling() }
+        .onAppear {
+            startPolling()
+            // Refresh the launch-at-login status whenever Settings is opened
+            // — the user might have toggled it in System Settings → Login
+            // Items between visits, and SMAppService.status doesn't push us
+            // a notification when that happens.
+            launchAtLogin.refresh()
+        }
         .onDisappear { pollTask?.cancel() }
     }
 
@@ -73,6 +82,85 @@ struct SettingsView: View {
     }
 
     // MARK: - Cards
+
+    private var startupCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                cardLabel("Startup")
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: "power.dotted")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 22, height: 22)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Launch at login")
+                            .font(.system(.callout, weight: .medium))
+                        Text(startupDetailText)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 6)
+                    Toggle("", isOn: launchAtLoginBinding)
+                        .toggleStyle(.switch)
+                        .controlSize(.regular)
+                        .labelsHidden()
+                        // .requiresApproval means the user has disabled the
+                        // registration under System Settings; the toggle alone
+                        // can't re-enable it. Disabling the control prevents
+                        // a confusing "toggle does nothing" experience — the
+                        // deep-link button below carries the action.
+                        .disabled(launchAtLogin.requiresApproval)
+                }
+                if launchAtLogin.requiresApproval {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                        Text("Disabled under System Settings → Login Items. Re-enable there.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Open Settings") {
+                            LaunchAtLoginController.openLoginItemsSettings()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+                if let error = launchAtLogin.lastError {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.octagon.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.red)
+                        Text(error)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Two-way binding for the launch-at-login toggle. The getter reads the
+    /// effective status from the controller; the setter delegates to
+    /// `setEnabled(_:)` which handles errors and refresh in one shot.
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { launchAtLogin.isEnabled },
+            set: { launchAtLogin.setEnabled($0) }
+        )
+    }
+
+    private var startupDetailText: String {
+        if launchAtLogin.requiresApproval {
+            return "Disabled by the system. Re-enable from Login Items."
+        }
+        return launchAtLogin.isEnabled
+            ? "Halen will open when you log in."
+            : "Halen will only run when you launch it."
+    }
 
     private var accessibilityCard: some View {
         GlassCard {

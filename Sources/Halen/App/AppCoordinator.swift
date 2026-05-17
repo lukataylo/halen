@@ -21,6 +21,10 @@ final class AppCoordinator {
     let inference: RouterInferenceClient
     let typoStore = TypoStore()
     let registry = PluginRegistry()
+    /// Surfaced to Settings via HalenApp → HalenCenterView. Lives at app
+    /// scope (not view scope) so its observable status survives the
+    /// menubar popup closing and re-opening.
+    let launchAtLogin = LaunchAtLoginController()
 
     /// Kept around so we can prewarm Apple FM at launch and re-probe
     /// availability from the Settings UI without going through the router.

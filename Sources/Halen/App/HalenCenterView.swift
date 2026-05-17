@@ -20,6 +20,9 @@ struct HalenCenterView: View {
     /// (which happens after Accessibility is granted). The Settings card hides
     /// the WS section while it's nil to avoid a half-rendered control.
     let webSocketBridge: WebSocketBridge?
+    /// Owned by AppCoordinator so its observable status survives the menubar
+    /// popup closing — passed through to SettingsView's startup card.
+    @Bindable var launchAtLogin: LaunchAtLoginController
     @State private var nav: CenterNav = .marketplace
 
     var body: some View {
@@ -42,6 +45,7 @@ struct HalenCenterView: View {
                     router: router,
                     modelDownloader: modelDownloader,
                     webSocketBridge: webSocketBridge,
+                    launchAtLogin: launchAtLogin,
                     onBack: { back() }
                 )
                 .transition(.move(edge: .trailing).combined(with: .opacity))
