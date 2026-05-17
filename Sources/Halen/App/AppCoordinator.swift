@@ -190,8 +190,11 @@ final class AppCoordinator {
                 case .appFocused(let payload):
                     Log.info("evt app.focused \(payload.appName)")
                 case .textPaused(let payload):
-                    let preview = payload.text.prefix(40).replacingOccurrences(of: "\n", with: "↵")
-                    Log.info("evt text.pause app=\(payload.appName) chars=\(payload.text.count) offset=\(payload.caretOffset) preview=\"\(preview)\"")
+                    // Never write the user's text (or any prefix of it) to the
+                    // system log. `Log.redact` emits an unforgeable fingerprint
+                    // good enough to correlate two events involving the same
+                    // content but not reverse-engineer the content itself.
+                    Log.info("evt text.pause app=\(payload.appName) chars=\(payload.text.count) offset=\(payload.caretOffset) text=\(Log.redact(payload.text))")
                 case .caretMoved(let payload):
                     // INFO (not debug) so we can confirm from the system log
                     // whether the overlay's caret-indicator is failing to
