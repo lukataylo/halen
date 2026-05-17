@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel a still-running CI run when a new commit is pushed to the same PR —
+# saves macOS runner minutes when iterating quickly.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: swift build + test
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        # Pin Xcode so the toolchain doesn't drift under us when GitHub updates
+        # the runner image. macOS 14 / Xcode 15.x ships swift 5.10, which
+        # Package.swift's swift-tools-version requires.
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Cache llama.xcframework
+        # Keyed on the pinned llama.cpp tag — bumping Vendor/LLAMA_CPP_VERSION
+        # invalidates the cache and forces a rebuild. Build is ~10 min cold,
+        # ~5 s warm.
+        id: cache-llama
+        uses: actions/cache@v4
+        with:
+          path: Vendor/llama.xcframework
+          key: llama-xcframework-${{ runner.os }}-${{ hashFiles('Vendor/LLAMA_CPP_VERSION') }}
+
+      - name: Cache SwiftPM build
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Vendor/LLAMA_CPP_VERSION') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Fetch vendored binaries
+        # SKIP_GGUF=1 — CI doesn't bundle the 4.98 GB model; the in-app
+        # ModelDownloader fetches it on first launch in production. The script
+        # rebuilds Vendor/llama.xcframework from the pinned llama.cpp tag iff
+        # the cache step missed.
+        run: SKIP_GGUF=1 ./scripts/fetch-assets.sh
+
+      - name: Build (debug)
+        run: swift build -c debug
+
+      - name: Test
+        run: swift test -c debug --enable-code-coverage
+
+      - name: Verify release build compiles
+        # Release config catches a different class of warning/error than debug.
+        # Skip running tests at -O so CI stays under 15 min on the macos-14 runner.
+        run: swift build -c release

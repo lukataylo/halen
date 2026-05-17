@@ -107,4 +107,4 @@ scripts/                 # build-app.sh, run-dev.sh, generate-icons.swift
 
 ## License
 
-Apache 2.0 — same as Gemma 4. See `LICENSE` *(coming soon)*.
+MIT — see [`LICENSE`](LICENSE). Gemma 4 itself is Apache 2.0 (governed by Google's [Gemma terms](https://ai.google.dev/gemma/terms)) and is not redistributed in this repository.
