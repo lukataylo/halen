@@ -1261,6 +1261,25 @@ img { display: block; max-width: 100%; }
   .field-body { padding: 28px 28px 36px; font-size: 17px; min-height: 320px; }
   .story { gap: 76px; padding: 60px 24px 140px; }
 }
+/* Mobile nav. On a 390 px phone the four-up layout
+   (brand + Demo/Download/Source links + Download pill) overflows and the
+   pill bleeds into the inline links. The inline links all jump to
+   anchors that are reachable by scrolling on a one-pager — and Download
+   is duplicated as the pill — so hiding them on small viewports is the
+   least-bad trade. The pill (primary CTA) and the brand (anchor back to
+   top) stay. Padding tightens to give the pill room next to the brand. */
+@media (max-width: 600px) {
+  .nav { padding: 12px 18px; }
+  .nav .links { display: none; }
+  .nav .brand { font-size: 15px; }
+  .nav .brand img { width: 20px; height: 20px; }
+  .nav .dl-btn {
+    padding: 8px 12px 8px 10px;
+    font-size: 12.5px;
+    gap: 6px;
+  }
+  .nav .dl-btn svg { width: 11px; height: 11px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .swarm-stage, .pulse-stage { display: none; }
 }
