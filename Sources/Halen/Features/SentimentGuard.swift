@@ -157,7 +157,7 @@ final class SentimentGuard: HalenPlugin {
                                        temperature: 0.1, taskKind: .classification)
         do {
             let response = try await services.inference.complete(request)
-            let label = normalizeLabel(response.text)
+            let label = response.text.modelLabelToken
             Log.info("SentimentGuard: \(label) (\(response.latencyMs)ms)")
             if let matched = enabled.first(where: { $0.label.lowercased() == label }) {
                 showPopup(text: paragraph, rule: matched,
@@ -169,15 +169,6 @@ final class SentimentGuard: HalenPlugin {
         }
     }
 
-    private func normalizeLabel(_ raw: String) -> String {
-        raw
-            .lowercased()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: ".\"' `"))
-            .components(separatedBy: .whitespacesAndNewlines)
-            .first ?? raw.lowercased()
-    }
-
     // MARK: - Popup
 
     private func showPopup(text: String, rule: SentimentRule, hash: String,
@@ -187,18 +178,13 @@ final class SentimentGuard: HalenPlugin {
         activePanel?.orderOut(nil)
         dismissTask?.cancel()
 
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 170),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
+        // Transient popover with two buttons — floating level, interactive.
+        let panel = HalenFloatingPanel.make(
+            size: NSSize(width: 360, height: 170),
+            level: .floating,
+            interactive: true,
+            shadow: true
         )
-        panel.level = .floating
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
-        panel.isMovable = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .stationary]
 
         let view = SentimentGuardPopup(
             text: text,
@@ -392,9 +378,7 @@ final class SentimentGuard: HalenPlugin {
             let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 400, temperature: 0.5, taskKind: .generation)
             do {
                 let response = try await services.inference.complete(request)
-                let rewritten = response.text
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
+                let rewritten = response.text.unwrappedModelText
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(rewritten, forType: .string)
                 Log.info("SentimentGuard: rephrase copied to clipboard (\(response.latencyMs)ms)")

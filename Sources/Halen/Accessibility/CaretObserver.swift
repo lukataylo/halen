@@ -25,6 +25,8 @@ final class CaretObserver {
     private var observedApp: NSRunningApplication?
 
     private var debounceTask: Task<Void, Never>?
+    /// Separate, much shorter debounce for `caret.moved`. See `scheduleCaretMoved`.
+    private var caretMovedTask: Task<Void, Never>?
 
     init(eventBus: EventBus) {
         self.eventBus = eventBus
@@ -65,6 +67,7 @@ final class CaretObserver {
 
     func stop() {
         debounceTask?.cancel()
+        caretMovedTask?.cancel()
         if let token = workspaceToken {
             NSWorkspace.shared.notificationCenter.removeObserver(token)
             workspaceToken = nil
@@ -298,7 +301,9 @@ final class CaretObserver {
         _ = AXObserverAddNotification(observer, element, kAXValueChangedNotification as CFString, refcon)
         focusedElement = element
 
-        emitCaretMoved(element: element)
+        // On focus change emit the caret position immediately (no debounce —
+        // a focus switch is a single discrete event, not a keystroke burst).
+        emitCaretMoved()
         emitTextSnapshot(reason: "focus")
         // The element's AX value often lags the document actually loading — e.g.
         // opening a note in TextEdit, where the focus snapshot reads "" before the
@@ -315,7 +320,7 @@ final class CaretObserver {
         case kAXFocusedUIElementChangedNotification:
             attachToFocusedElement()
         case kAXSelectedTextChangedNotification:
-            emitCaretMoved(element: element)
+            scheduleCaretMoved()
             scheduleDebouncedEmit(reason: "selection")
         case kAXValueChangedNotification:
             scheduleDebouncedEmit(reason: "value")
@@ -360,8 +365,27 @@ final class CaretObserver {
         Log.debug("text.pause reason=\(reason) app=\(app.localizedName ?? "?") fullChars=\(fullText.count) sent=\(text.count) offset=\(caretOffset)")
     }
 
-    private func emitCaretMoved(element: AXUIElement) {
-        guard let app = observedApp else { return }
+    /// `caret.moved` debounce. `kAXSelectedTextChangedNotification` fires once
+    /// per keystroke; emitting on each one means a synchronous parameterized
+    /// AX bounds round-trip (`axReadCaretBounds`) plus a full event-bus
+    /// fan-out per character. 40 ms coalesces a fast typist's keystrokes into
+    /// one emit without the overlay indicator visibly lagging the caret.
+    private static let caretMovedDebounce: Duration = .milliseconds(40)
+
+    private func scheduleCaretMoved() {
+        caretMovedTask?.cancel()
+        caretMovedTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.caretMovedDebounce)
+            guard let self, !Task.isCancelled else { return }
+            self.emitCaretMoved()
+        }
+    }
+
+    /// Reads the *current* focused element rather than a captured one — over
+    /// the 40 ms debounce focus could have changed, and `attachToFocusedElement`
+    /// keeps `focusedElement` current.
+    private func emitCaretMoved() {
+        guard let app = observedApp, let element = focusedElement else { return }
         guard let axRect = axReadCaretBounds(element) else {
             // Diagnostic: surfaces apps whose AX tree refuses to expose
             // caret bounds (rich-text views like Notes' WebKit pane often

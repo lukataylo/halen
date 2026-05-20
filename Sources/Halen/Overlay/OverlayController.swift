@@ -155,21 +155,14 @@ final class OverlayController {
     }
 
     private static func makePanel(size: CGFloat) -> NSPanel {
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: size, height: size),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
+        // Caret indicator: always-on chrome, pure decoration (no shadow under
+        // a 16 pt mark), clicks pass straight through to the app underneath.
+        HalenFloatingPanel.make(
+            size: NSSize(width: size, height: size),
+            level: .statusBar,
+            interactive: false,
+            shadow: false
         )
-        panel.level = .statusBar
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false
-        panel.ignoresMouseEvents = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-        panel.isMovable = false
-        panel.hidesOnDeactivate = false
-        return panel
     }
 
     // MARK: - Caret indicator (the proven original)

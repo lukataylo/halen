@@ -9,3 +9,4 @@ dist/
 # (GGUF download + checksum; llama.xcframework rebuild from the pinned tag).
 assets/Models/*.gguf
 Vendor/llama.xcframework/
+.claude/worktrees/

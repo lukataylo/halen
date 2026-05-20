@@ -16,8 +16,15 @@ enum HotkeyID: UInt32 {
 /// Input Monitoring permission.
 @MainActor
 final class HotkeyRegistrar {
-    private var hotKeyRef: EventHotKeyRef?
-    private var handlerRef: EventHandlerRef?
+    /// `nonisolated(unsafe)` because `deinit` (which runs on whatever thread
+    /// releases the last reference, not necessarily the main actor) must read
+    /// these to tear down the Carbon registration. The access is genuinely
+    /// safe: every other touch is from `register`/`unregister` (both
+    /// `@MainActor`), and `deinit` only runs once no reference remains — so no
+    /// `@MainActor` method can be executing concurrently with it. Same
+    /// reasoning as `registeredID` below.
+    nonisolated(unsafe) private var hotKeyRef: EventHotKeyRef?
+    nonisolated(unsafe) private var handlerRef: EventHandlerRef?
     private var onFire: (() -> Void)?
     /// `registeredID` and `signature` are read from the Carbon C callback,
     /// which can fire on any thread. They're written only from `register`/
@@ -125,6 +132,10 @@ final class HotkeyRegistrar {
         onFire = nil
     }
 
+    /// Safety net only — `VoiceDictation.stop()` calls `unregister()` on the
+    /// main actor as the real teardown path. This catches a registrar that's
+    /// released without `stop()` having run. Reads `hotKeyRef`/`handlerRef`
+    /// off-actor, which is sound: see the `nonisolated(unsafe)` note above.
     deinit {
         if let ref = hotKeyRef { UnregisterEventHotKey(ref) }
         if let ref = handlerRef { RemoveEventHandler(ref) }

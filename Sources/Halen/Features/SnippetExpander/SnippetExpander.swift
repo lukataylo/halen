@@ -118,24 +118,6 @@ final class SnippetExpander: HalenPlugin {
             return
         }
         let selRange = NSRange(location: cfRange.location, length: cfRange.length)
-        let trigger = Self.rephraseHotkeyTrigger
-
-        // Placeholder over the selection — immediate feedback plus a
-        // re-findable marker for the async write-back.
-        let placeholder = "[…]"
-        _ = applyReplacement(placeholder, at: selRange, trigger: trigger, in: element)
-        let placeholderRange = NSRange(location: selRange.location,
-                                       length: (placeholder as NSString).length)
-
-        // Anchor the busy overlay to the placeholder's on-screen bounds.
-        let overlayAnchor: Event.CaretRect? = {
-            guard let axRect = axReadBounds(element, range: CFRange(
-                location: placeholderRange.location, length: placeholderRange.length)) else {
-                return nil
-            }
-            let cocoa = axRectToCocoa(axRect)
-            return .init(x: cocoa.minX, y: cocoa.minY, width: cocoa.width, height: cocoa.height)
-        }()
 
         let prompt = """
         Rewrite the following text more clearly and concisely while keeping its meaning and tone. Output only the rewrite, no preamble, no quotes.
@@ -146,38 +128,15 @@ final class SnippetExpander: HalenPlugin {
         let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 500,
                                        temperature: 0.4, taskKind: .generation)
         Log.info("SnippetExpander: ⌃⌥R rephrasing \(selected.count)-char selection")
-
-        Task { @MainActor [services, overlayAnchor, weak self] in
-            services.eventBus.publish(.inferenceActivity(.init(
-                phase: .started, source: "snippet-rephrase", anchor: overlayAnchor, timestamp: Date())))
-            defer {
-                services.eventBus.publish(.inferenceActivity(.init(
-                    phase: .finished, source: "snippet-rephrase", timestamp: Date())))
-            }
-            do {
-                let response = try await services.inference.complete(request)
-                let cleaned = response.text
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
-                guard let self else { return }
-                guard let writeRange = self.locatePlaceholder(placeholder, expectedAt: placeholderRange, in: element) else {
-                    Log.warn("SnippetExpander: ⌃⌥R placeholder gone from field — skipping write")
-                    return
-                }
-                guard !cleaned.isEmpty else {
-                    Log.warn("SnippetExpander: ⌃⌥R returned empty body — restoring original selection")
-                    self.applyReplacement(selected, at: writeRange, trigger: trigger, in: element)
-                    return
-                }
-                Log.info("SnippetExpander: ⌃⌥R completed (\(response.latencyMs)ms) responseLen=\(cleaned.count)")
-                self.applyReplacement(cleaned, at: writeRange, trigger: trigger, in: element)
-            } catch {
-                Log.warn("SnippetExpander: ⌃⌥R rephrase failed: \(error)")
-                guard let self,
-                      let writeRange = self.locatePlaceholder(placeholder, expectedAt: placeholderRange, in: element) else { return }
-                self.applyReplacement(selected, at: writeRange, trigger: trigger, in: element)
-            }
-        }
+        runPlaceholderInference(
+            range: selRange,
+            in: element,
+            request: request,
+            // On an empty / failed response, restore the original selection.
+            restoreText: selected,
+            label: Self.rephraseHotkeyTrigger,
+            source: "snippet-rephrase"
+        )
     }
 
     func makeDetailView() -> AnyView {
@@ -275,12 +234,9 @@ final class SnippetExpander: HalenPlugin {
             : ""
 
         // The range we'll mutate.
-        let replaceRange: NSRange
-        if replacesPrior {
-            replaceRange = NSRange(location: paragraphStart, length: NSMaxRange(tokenRange) - paragraphStart)
-        } else {
-            replaceRange = tokenRange
-        }
+        let replaceRange: NSRange = replacesPrior
+            ? NSRange(location: paragraphStart, length: NSMaxRange(tokenRange) - paragraphStart)
+            : tokenRange
 
         guard !priorText.isEmpty || !replacesPrior else {
             // No prior text to rewrite — nothing useful to do. Leave the trigger
@@ -288,26 +244,53 @@ final class SnippetExpander: HalenPlugin {
             return
         }
 
-        // Capture the field we're expanding in *now*. The Gemma response is
-        // async and can take several seconds; if the user alt-tabs away in the
-        // meantime we must still write back to this element, not whatever is
-        // focused when the response lands.
-        let targetElement = caretObserver?.currentElement
+        let prompt = """
+        \(snippet.value)
 
-        // Step 1: show a placeholder so something visibly happens immediately.
-        let placeholder = "[…]"
-        let placeholderWritten = applyReplacement(placeholder, at: replaceRange, trigger: snippet.trigger, in: targetElement)
-        let placeholderRange = NSRange(
-            location: replaceRange.location,
-            length: (placeholder as NSString).length
+        Paragraph:
+        \(priorText)
+        """
+        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 500,
+                                       temperature: 0.4, taskKind: .generation)
+        runPlaceholderInference(
+            range: replaceRange,
+            in: caretObserver?.currentElement,
+            request: request,
+            // On an empty / failed response, restore what was there: the prior
+            // paragraph for a replacesPrior snippet, else just the trigger.
+            restoreText: replacesPrior ? priorText : snippet.trigger,
+            label: snippet.trigger,
+            source: "snippet-expander"
         )
-        Log.info("SnippetExpander: \(snippet.trigger) placeholder write=\(placeholderWritten) priorTextLen=\(priorText.count) range=\(replaceRange.location),\(replaceRange.length)")
+    }
+
+    /// Shared "AI write" choreography for both `;` AI snippets and the ⌃⌥R
+    /// rephrase hotkey. Drops a `[…]` placeholder over `range` for immediate
+    /// feedback, anchors the caret overlay's busy indicator to it, runs
+    /// `request` against the inference router, then re-locates the placeholder
+    /// (the user may have edited the field during the multi-second call) and
+    /// replaces it with the cleaned response — or with `restoreText` when the
+    /// model returns nothing or the call fails. `label` is used for the
+    /// self-edit suppression key and log lines.
+    private func runPlaceholderInference(
+        range: NSRange,
+        in element: AXUIElement?,
+        request: InferenceRequest,
+        restoreText: String,
+        label: String,
+        source: String
+    ) {
+        let placeholder = "[…]"
+        let placeholderWritten = applyReplacement(placeholder, at: range, trigger: label, in: element)
+        let placeholderRange = NSRange(location: range.location,
+                                       length: (placeholder as NSString).length)
+        Log.info("SnippetExpander: \(label) placeholder write=\(placeholderWritten) range=\(range.location),\(range.length)")
 
         // Anchor the overlay's busy state to the placeholder's real on-screen
         // bounds — more reliable than the overlay's racy last-known caret.
         let overlayAnchor: Event.CaretRect? = {
-            guard let targetElement,
-                  let axRect = axReadBounds(targetElement, range: CFRange(
+            guard let element,
+                  let axRect = axReadBounds(element, range: CFRange(
                       location: placeholderRange.location, length: placeholderRange.length)) else {
                 return nil
             }
@@ -315,53 +298,41 @@ final class SnippetExpander: HalenPlugin {
             return .init(x: cocoa.minX, y: cocoa.minY, width: cocoa.width, height: cocoa.height)
         }()
 
-        let prompt = """
-        \(snippet.value)
-
-        Paragraph:
-        \(priorText)
-        """
-        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 500, temperature: 0.4, taskKind: .generation)
-
         Task { @MainActor [services, overlayAnchor, weak self] in
             // Tell the caret overlay we're working so the user sees a busy
             // indicator during the multi-second Gemma call. `defer` guarantees
             // the matching "finished" fires on every exit path below.
             services.eventBus.publish(.inferenceActivity(.init(
-                phase: .started, source: "snippet-expander", anchor: overlayAnchor, timestamp: Date())))
+                phase: .started, source: source, anchor: overlayAnchor, timestamp: Date())))
             defer {
                 services.eventBus.publish(.inferenceActivity(.init(
-                    phase: .finished, source: "snippet-expander", timestamp: Date())))
+                    phase: .finished, source: source, timestamp: Date())))
             }
             do {
                 let response = try await services.inference.complete(request)
-                let cleaned = response.text
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
+                let cleaned = response.text.unwrappedModelText
                 guard let self else { return }
                 // Re-find the placeholder before writing — the user may have
                 // edited the field during the multi-second call, shifting it.
-                guard let writeRange = self.locatePlaceholder(placeholder, expectedAt: placeholderRange, in: targetElement) else {
-                    Log.warn("SnippetExpander: \(snippet.trigger) placeholder gone from field — skipping write")
+                guard let writeRange = self.locatePlaceholder(placeholder, expectedAt: placeholderRange, in: element) else {
+                    Log.warn("SnippetExpander: \(label) placeholder gone from field — skipping write")
                     return
                 }
                 guard !cleaned.isEmpty else {
-                    Log.warn("SnippetExpander: \(snippet.trigger) returned empty body, restoring trigger")
-                    self.applyReplacement(replacesPrior ? priorText : snippet.trigger,
-                                          at: writeRange, trigger: snippet.trigger, in: targetElement)
+                    Log.warn("SnippetExpander: \(label) returned empty body — restoring")
+                    self.applyReplacement(restoreText, at: writeRange, trigger: label, in: element)
                     return
                 }
-                Log.info("SnippetExpander: \(snippet.trigger) completed (\(response.latencyMs)ms) responseLen=\(cleaned.count)")
-                let wrote = self.applyReplacement(cleaned, at: writeRange, trigger: snippet.trigger, in: targetElement)
+                Log.info("SnippetExpander: \(label) completed (\(response.latencyMs)ms) responseLen=\(cleaned.count)")
+                let wrote = self.applyReplacement(cleaned, at: writeRange, trigger: label, in: element)
                 if !wrote {
-                    Log.warn("SnippetExpander: \(snippet.trigger) response AX write failed at range \(writeRange.location),\(writeRange.length) — target element stale or unsupported")
+                    Log.warn("SnippetExpander: \(label) response AX write failed at \(writeRange.location),\(writeRange.length) — target element stale or unsupported")
                 }
             } catch {
-                Log.warn("SnippetExpander: AI snippet \(snippet.trigger) failed: \(error)")
+                Log.warn("SnippetExpander: \(label) failed: \(error)")
                 guard let self,
-                      let writeRange = self.locatePlaceholder(placeholder, expectedAt: placeholderRange, in: targetElement) else { return }
-                self.applyReplacement(replacesPrior ? priorText : snippet.trigger,
-                                      at: writeRange, trigger: snippet.trigger, in: targetElement)
+                      let writeRange = self.locatePlaceholder(placeholder, expectedAt: placeholderRange, in: element) else { return }
+                self.applyReplacement(restoreText, at: writeRange, trigger: label, in: element)
             }
         }
     }

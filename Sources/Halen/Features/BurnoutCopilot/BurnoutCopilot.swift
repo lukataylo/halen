@@ -138,10 +138,7 @@ final class BurnoutCopilot: HalenPlugin {
                                        temperature: 0.1, taskKind: .classification)
         do {
             let response = try await services.inference.complete(request)
-            let answer = response.text
-                .lowercased()
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .trimmingCharacters(in: CharacterSet(charactersIn: ".\""))
+            let answer = response.text.modelLabelToken
             tone.record(answer.hasPrefix("yes") ? .sharp : .calm)
             refreshSnapshot()
             evaluate()
@@ -191,19 +188,13 @@ final class BurnoutCopilot: HalenPlugin {
         activePanel?.orderOut(nil)
         let width: CGFloat = 360
         let height: CGFloat = 220
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
+        // Transient suggestion popover with Accept/Dismiss — floating, interactive.
+        let panel = HalenFloatingPanel.make(
+            size: NSSize(width: width, height: height),
+            level: .floating,
+            interactive: true,
+            shadow: true
         )
-        panel.level = .floating
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
-        panel.isMovable = false
-        panel.ignoresMouseEvents = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
 
         let message = makeMessage(signalA: signalA, signalB: signalB, signalC: signalC)
         let view = BurnoutCopilotPopup(

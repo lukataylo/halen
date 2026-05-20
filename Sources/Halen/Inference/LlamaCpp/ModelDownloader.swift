@@ -35,9 +35,6 @@ final class ModelDownloader {
 
     // MARK: - Tunables
 
-    /// Bytes flushed to disk per write. Larger ⇒ fewer syscalls, smaller ⇒
-    /// finer-grained progress updates. 64 KiB is the empirical sweet spot.
-    private static let writeBufferBytes = 64 * 1024
     /// Minimum interval between `state = .downloading(…)` updates. Keeps the
     /// SwiftUI progress card smooth without flooding the MainActor.
     private static let progressReportInterval: TimeInterval = 0.1
@@ -155,7 +152,6 @@ final class ModelDownloader {
                     expectedSize: Self.expectedSize,
                     requestTimeout: Self.requestTimeout,
                     resourceTimeout: Self.resourceTimeout,
-                    writeBufferBytes: Self.writeBufferBytes,
                     progressInterval: Self.progressReportInterval,
                     onProgress: { fraction, bytes, total in
                         Task { @MainActor in
@@ -257,17 +253,20 @@ final class ModelDownloader {
         }
     }
 
-    /// Pumps the URLSession byte stream into the `.part` file on a background
-    /// task. Everything it touches is either a value type, a Sendable
-    /// reference (URL, URLSession created here), or the locally-owned
-    /// FileHandle — nothing crosses back to the MainActor except via the
-    /// `onProgress` callback, which marshals its own hop.
+    /// Streams the model body into the `.part` file via a delegate-driven
+    /// `URLSessionDataTask` — the OS delivers the body in network-sized `Data`
+    /// chunks, which the delegate writes straight to disk.
+    ///
+    /// Replaced an earlier `URLSession.bytes(for:)` loop that iterated the
+    /// ~5 GB body one `UInt8` at a time: billions of async-sequence steps,
+    /// each doing a single-byte `Data.append` and a `Task.checkCancellation()`
+    /// — that turned an I/O-bound download into a CPU-bound one.
     ///
     /// Throws `CancellationError` when the parent task is cancelled (the
-    /// `try Task.checkCancellation()` inside the loop is the propagation
-    /// point), `DownloadError.badStatus(_)` on a non-200/206 response, and
-    /// `DownloadError.noHTTPResponse` when the URL loading system hands us
-    /// back something that isn't an `HTTPURLResponse`.
+    /// `withTaskCancellationHandler` cancels the URLSession task, which the
+    /// delegate maps from `NSURLErrorCancelled`), `DownloadError.badStatus(_)`
+    /// on a non-200/206 response, `DownloadError.noHTTPResponse` for a
+    /// non-HTTP response, and the framing errors from `ChunkedDownloadDelegate`.
     nonisolated private static func performDownload(
         sourceURL: URL,
         partPath: URL,
@@ -275,7 +274,6 @@ final class ModelDownloader {
         expectedSize: Int64,
         requestTimeout: TimeInterval,
         resourceTimeout: TimeInterval,
-        writeBufferBytes: Int,
         progressInterval: TimeInterval,
         onProgress: @escaping @Sendable (Double, Int64, Int64) -> Void
     ) async throws -> Int64 {
@@ -291,97 +289,29 @@ final class ModelDownloader {
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = true
         config.timeoutIntervalForResource = resourceTimeout
-        let session = URLSession(configuration: config)
+
+        let delegate = ChunkedDownloadDelegate(
+            partPath: partPath,
+            expectedSize: expectedSize,
+            resumeOffset: resumeOffset,
+            progressInterval: progressInterval,
+            onProgress: onProgress
+        )
+        // The session retains its delegate until invalidated; `invalidateAndCancel`
+        // in the defer releases it and tears down any in-flight task.
+        let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
         defer { session.invalidateAndCancel() }
 
-        let (bytes, response) = try await session.bytes(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw DownloadError.noHTTPResponse
+        let task = session.dataTask(with: request)
+        return try await withTaskCancellationHandler {
+            task.resume()
+            // `delegate.result()` resolves from `didCompleteWithError`, which
+            // fires for every resumed task — success, failure, or cancel — so
+            // the continuation can't leak.
+            return try await delegate.result()
+        } onCancel: {
+            task.cancel()
         }
-        // 206 on resume, 200 on a fresh download (or when the server ignored
-        // our Range — treat as fresh and rewrite the part file).
-        let startingFresh = http.statusCode == 200
-        if !startingFresh && http.statusCode != 206 {
-            throw DownloadError.badStatus(http.statusCode)
-        }
-
-        // Validate the server's framing claims BEFORE we open the file:
-        //   - Fresh download: Content-Length, if present, must match the
-        //     pinned `expectedSize`. A server returning a different size is
-        //     either confused or hostile — either way we don't want to
-        //     overwrite the on-disk file with whatever they're serving.
-        //   - Resume: Content-Range must say "we are resuming from exactly
-        //     `resumeOffset` for the file of total `expectedSize`." If the
-        //     server returned 206 but seeks from zero, naive `seekToEnd()`
-        //     would write fresh bytes after our partial — silent corruption
-        //     that SHA-256 would catch only after the multi-GB download is
-        //     complete.
-        if startingFresh {
-            if let claimed = http.value(forHTTPHeaderField: "Content-Length"),
-               let claimedSize = Int64(claimed),
-               claimedSize != expectedSize {
-                throw DownloadError.unexpectedSize(claimed: claimedSize, expected: expectedSize)
-            }
-        } else {
-            guard let range = http.value(forHTTPHeaderField: "Content-Range"),
-                  let parsed = parseContentRange(range)
-            else {
-                throw DownloadError.badContentRange("missing or unparseable Content-Range")
-            }
-            if parsed.start != resumeOffset {
-                throw DownloadError.badContentRange("server resumed from \(parsed.start), expected \(resumeOffset)")
-            }
-            if let total = parsed.total, total != expectedSize {
-                throw DownloadError.badContentRange("server reports total \(total), expected \(expectedSize)")
-            }
-        }
-
-        let fm = FileManager.default
-        if startingFresh || !fm.fileExists(atPath: partPath.path) {
-            fm.createFile(atPath: partPath.path, contents: nil)
-        }
-        let handle = try FileHandle(forWritingTo: partPath)
-        if startingFresh {
-            try handle.truncate(atOffset: 0)
-        } else {
-            try handle.seekToEnd()
-        }
-        defer { try? handle.close() }
-
-        var written: Int64 = startingFresh ? 0 : resumeOffset
-        var buffer = Data(capacity: writeBufferBytes)
-        var lastReport = Date()
-
-        for try await byte in bytes {
-            buffer.append(byte)
-            if buffer.count >= writeBufferBytes {
-                try handle.write(contentsOf: buffer)
-                written += Int64(buffer.count)
-                buffer.removeAll(keepingCapacity: true)
-                // Streaming overflow guard. The Content-Length / Content-Range
-                // checks above bound what we *agreed* to receive; this catches
-                // a server (or man-in-the-middle) that lied and is now writing
-                // past `expectedSize`. Without it, a malicious mirror could
-                // fill the user's disk before any other check fires.
-                if written > expectedSize {
-                    throw DownloadError.exceededExpectedSize(written: written, expected: expectedSize)
-                }
-                if Date().timeIntervalSince(lastReport) > progressInterval {
-                    onProgress(Double(written) / Double(expectedSize), written, expectedSize)
-                    lastReport = Date()
-                }
-            }
-            try Task.checkCancellation()
-        }
-        if !buffer.isEmpty {
-            try handle.write(contentsOf: buffer)
-            written += Int64(buffer.count)
-            if written > expectedSize {
-                throw DownloadError.exceededExpectedSize(written: written, expected: expectedSize)
-            }
-        }
-        try handle.close()
-        return written
     }
 
     /// Parse `Content-Range: bytes <start>-<end>/<total|*>`. Returns the
@@ -460,4 +390,163 @@ enum DownloadError: Error, Equatable {
     /// Bytes streamed past `expectedSize` — server is over-serving (broken
     /// mirror or active MITM). Bail before the disk fills.
     case exceededExpectedSize(written: Int64, expected: Int64)
+}
+
+/// `URLSessionDataTask` delegate that streams the model body into the `.part`
+/// file in network-sized `Data` chunks. The framing validation (status code,
+/// `Content-Length` / `Content-Range`) runs in `didReceive response` and can
+/// veto the download with `.cancel` before a single byte is written.
+///
+/// Concurrency: a URLSession delivers all callbacks for one task serially on
+/// its (here non-main) delegate queue. With one task per session that serial
+/// guarantee is the synchronisation for the mutable state below — hence
+/// `@unchecked Sendable` with no extra locking.
+private final class ChunkedDownloadDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private let partPath: URL
+    private let expectedSize: Int64
+    private let resumeOffset: Int64
+    private let progressInterval: TimeInterval
+    private let onProgress: @Sendable (Double, Int64, Int64) -> Void
+
+    private var handle: FileHandle?
+    private var written: Int64 = 0
+    private var lastReport = Date()
+    /// First fatal condition hit in a callback. Surfaced to the awaiting
+    /// caller from `didCompleteWithError`; once set, later `didReceive data`
+    /// callbacks are ignored.
+    private var failure: Error?
+    private var continuation: CheckedContinuation<Int64, Error>?
+
+    init(partPath: URL, expectedSize: Int64, resumeOffset: Int64,
+         progressInterval: TimeInterval,
+         onProgress: @escaping @Sendable (Double, Int64, Int64) -> Void) {
+        self.partPath = partPath
+        self.expectedSize = expectedSize
+        self.resumeOffset = resumeOffset
+        self.progressInterval = progressInterval
+        self.onProgress = onProgress
+    }
+
+    /// Suspends until the task finishes. The continuation is resumed exactly
+    /// once, from `didCompleteWithError` (which fires for every resumed task).
+    func result() async throws -> Int64 {
+        try await withCheckedThrowingContinuation { self.continuation = $0 }
+    }
+
+    // MARK: - URLSessionDataDelegate
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
+                    didReceive response: URLResponse,
+                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        do {
+            try openFile(for: response)
+            completionHandler(.allow)
+        } catch {
+            // Record the reason and cancel — `didCompleteWithError` fires next
+            // and surfaces `failure` to the caller.
+            failure = error
+            completionHandler(.cancel)
+        }
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard failure == nil, let handle else { return }
+        do {
+            try handle.write(contentsOf: data)
+            written += Int64(data.count)
+            // Streaming overflow guard. The Content-Length / Content-Range
+            // checks bound what we *agreed* to receive; this catches a server
+            // (or MITM) that lied and is now writing past `expectedSize` —
+            // bail before it fills the user's disk.
+            if written > expectedSize {
+                throw DownloadError.exceededExpectedSize(written: written, expected: expectedSize)
+            }
+            if Date().timeIntervalSince(lastReport) > progressInterval {
+                onProgress(Double(written) / Double(expectedSize), written, expectedSize)
+                lastReport = Date()
+            }
+        } catch {
+            failure = error
+            dataTask.cancel()
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        try? handle?.close()
+        handle = nil
+        let cont = continuation
+        continuation = nil
+        if let failure {
+            cont?.resume(throwing: failure)
+        } else if let error {
+            // URLSession reports cancellation as `NSURLErrorCancelled`; map it
+            // to Swift's `CancellationError` so the router and UI treat a
+            // cancelled download the same as any other cancelled task.
+            if (error as NSError).code == NSURLErrorCancelled {
+                cont?.resume(throwing: CancellationError())
+            } else {
+                cont?.resume(throwing: error)
+            }
+        } else {
+            cont?.resume(returning: written)
+        }
+    }
+
+    // MARK: - File setup
+
+    /// Validate the server's status + framing, then open the `.part` file at
+    /// the correct offset. Throws on any mismatch — the disposition handler
+    /// turns the throw into a `.cancel` so nothing is ever written.
+    ///
+    ///   - Fresh download (200): `Content-Length`, if present, must match the
+    ///     pinned `expectedSize` — a different size means a different file.
+    ///   - Resume (206): `Content-Range` must say the server is resuming from
+    ///     exactly `resumeOffset` for a file of total `expectedSize`. A 206
+    ///     that secretly seeks from zero would, after `seekToEnd()`, append
+    ///     fresh bytes past our partial — corruption SHA-256 only catches
+    ///     after the whole multi-GB transfer completes.
+    private func openFile(for response: URLResponse) throws {
+        guard let http = response as? HTTPURLResponse else {
+            throw DownloadError.noHTTPResponse
+        }
+        // 206 on resume, 200 on a fresh download (or when the server ignored
+        // our Range — treat as fresh and rewrite the part file).
+        let startingFresh = http.statusCode == 200
+        if !startingFresh && http.statusCode != 206 {
+            throw DownloadError.badStatus(http.statusCode)
+        }
+
+        if startingFresh {
+            if let claimed = http.value(forHTTPHeaderField: "Content-Length"),
+               let claimedSize = Int64(claimed),
+               claimedSize != expectedSize {
+                throw DownloadError.unexpectedSize(claimed: claimedSize, expected: expectedSize)
+            }
+        } else {
+            guard let range = http.value(forHTTPHeaderField: "Content-Range"),
+                  let parsed = ModelDownloader.parseContentRange(range)
+            else {
+                throw DownloadError.badContentRange("missing or unparseable Content-Range")
+            }
+            if parsed.start != resumeOffset {
+                throw DownloadError.badContentRange("server resumed from \(parsed.start), expected \(resumeOffset)")
+            }
+            if let total = parsed.total, total != expectedSize {
+                throw DownloadError.badContentRange("server reports total \(total), expected \(expectedSize)")
+            }
+        }
+
+        let fm = FileManager.default
+        if startingFresh || !fm.fileExists(atPath: partPath.path) {
+            fm.createFile(atPath: partPath.path, contents: nil)
+        }
+        let h = try FileHandle(forWritingTo: partPath)
+        if startingFresh {
+            try h.truncate(atOffset: 0)
+        } else {
+            try h.seekToEnd()
+        }
+        handle = h
+        written = startingFresh ? 0 : resumeOffset
+    }
 }

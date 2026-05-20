@@ -200,13 +200,12 @@ final class AppCoordinator {
                     // content but not reverse-engineer the content itself.
                     Log.info("evt text.pause app=\(payload.appName) chars=\(payload.text.count) offset=\(payload.caretOffset) text=\(Log.redact(payload.text))")
                 case .caretMoved(let payload):
-                    // INFO (not debug) so we can confirm from the system log
-                    // whether the overlay's caret-indicator is failing to
-                    // show because the event isn't firing, or because the
-                    // panel isn't ordering front. OSLog drops debug records
-                    // by default; promoting this is the cheapest way to keep
-                    // a paper trail when the indicator misbehaves.
-                    Log.info("evt caret.moved \(Int(payload.rect.x)),\(Int(payload.rect.y)) \(Int(payload.rect.width))x\(Int(payload.rect.height))")
+                    // `.debug` — this fires on every typing burst; keeping it
+                    // at `.info` put a log line in the unified system log per
+                    // keystroke-group, a measurable idle cost. The overlay
+                    // indicator is confirmed working; `caret.moved skipped`
+                    // in CaretObserver still logs at `.info` if bounds fail.
+                    Log.debug("evt caret.moved \(Int(payload.rect.x)),\(Int(payload.rect.y)) \(Int(payload.rect.width))x\(Int(payload.rect.height))")
                 case .inferenceActivity(let payload):
                     Log.debug("evt inference.activity \(payload.phase.rawValue) source=\(payload.source)")
                 }

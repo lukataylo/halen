@@ -192,18 +192,14 @@ final class VoiceDictation: HalenPlugin {
         if listeningPanel != nil { return }
         let width: CGFloat = 300
         let height: CGFloat = 52
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
+        // Listening pill — statusBar level (sits above floating popovers),
+        // interactive (hosts Stop/Cancel buttons).
+        let panel = HalenFloatingPanel.make(
+            size: NSSize(width: width, height: height),
+            level: .statusBar,
+            interactive: true,
+            shadow: true
         )
-        panel.level = .statusBar
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
-        panel.ignoresMouseEvents = false  // need clicks for Stop/Cancel buttons
-        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         panel.contentView = NSHostingView(
             rootView: VoiceListeningIndicator(
                 state: state,
