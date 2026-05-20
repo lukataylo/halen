@@ -13,6 +13,17 @@
       "category": "productivity",
       "sourceURL": "https://github.com/lukataylo/halen/tree/main/plugins/meeting-prep",
       "downloadURL": "https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/com.halen.meeting-prep.zip"
+    },
+    {
+      "id": "com.halen.burnout-copilot",
+      "name": "Burnout Copilot",
+      "summary": "Suggests a break when your apps, tone, and calendar all say you've been at it too long. Watches three signals; nudges when two trip.",
+      "author": "Halen Labs",
+      "version": "1.0.0",
+      "icon": "brain.head.profile",
+      "category": "focus",
+      "sourceURL": "https://github.com/lukataylo/halen/tree/main/plugins/burnout-copilot",
+      "downloadURL": "https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/com.halen.burnout-copilot.zip"
     }
   ]
 }

@@ -17,6 +17,9 @@ import UserNotifications
 @MainActor
 final class HostBridge {
     private let services: HalenServices
+    /// Backs the `ui/prompt` capability — one shared presenter so a second
+    /// prompt supersedes the first rather than stacking popups.
+    private let promptPresenter = PluginPromptPresenter()
 
     init(services: HalenServices) {
         self.services = services
@@ -43,6 +46,8 @@ final class HostBridge {
             return axReadSelection()
         case "ui/toast":
             return uiToast(params: params)
+        case "ui/prompt":
+            return await uiPrompt(params: params)
         case "calendar/upcomingEvents":
             try require("calendar", in: grantedPermissions, for: method)
             return try await calendarUpcomingEvents(params: params)
@@ -161,6 +166,20 @@ final class HostBridge {
             trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
         )
         try? await center.add(request)
+    }
+
+    /// Interactive popup. Unlike `ui/toast` this *blocks* the plugin's RPC
+    /// call until the user picks an action (or dismisses / it times out).
+    /// Ungated — like `ui/toast`, a popup is an annoyance at worst, not a
+    /// privilege; marketplace curation is the real gate on hostile plugins.
+    private func uiPrompt(params: RPCValue?) async -> RPCValue {
+        let obj = params?.objectValue
+        let title = obj?["title"]?.stringValue ?? "Halen"
+        let body = obj?["body"]?.stringValue ?? ""
+        let actions = obj?["actions"]?.arrayValue?.compactMap { $0.stringValue } ?? ["OK"]
+        let choice = await promptPresenter.prompt(title: title, body: body, actions: actions)
+        // `action` is the chosen string, or null on dismiss / timeout.
+        return .object(["action": choice] as [String: Any?])
     }
 
     // MARK: - Calendar (gated on the `calendar` permission)

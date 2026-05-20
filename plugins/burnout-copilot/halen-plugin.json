@@ -1,0 +1,13 @@
+{
+  "id": "com.halen.burnout-copilot",
+  "name": "Burnout Copilot",
+  "summary": "Suggests a break when your apps, tone, and calendar all say you've been at it too long.",
+  "version": "1.0.0",
+  "halenApiVersion": "0.1",
+  "executable": "/usr/bin/python3",
+  "args": ["plugin.py"],
+  "events": ["app.focused", "text.pause"],
+  "permissions": ["calendar", "inference", "notifications"],
+  "icon": "brain.head.profile",
+  "category": "focus"
+}

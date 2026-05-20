@@ -122,6 +122,7 @@ its manifest's `events` array.
 | `ax/replaceRange`         | `location`, `length`, `text`               | `ok: true` |
 | `ax/readSelection`        | —                                          | `text`, `appBundleId` |
 | `ui/toast`                | `title`, `body`                            | `ok: true` — posts a system notification |
+| `ui/prompt`               | `title?`, `body`, `actions: [String]`      | `action` — the chosen action string, or `null` on dismiss / timeout. **Blocks** until the user responds |
 | `calendar/upcomingEvents` | `withinHours?` (default 24), `max?` (default 20) | `events: [{ id, title, start, end, attendees, notes }]` — `start`/`end` are epoch seconds |
 | `calendar/createEvent`    | `title`, `start` (epoch seconds), `durationMinutes?` (default 30) | `id` — the new event's identifier |
 
