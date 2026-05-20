@@ -10,8 +10,10 @@ import AppKit
 ///   - AVAILABLE — external plugins from the fetched registry that aren't
 ///     installed, each with an Install button.
 ///
-/// Matches the app's existing SwiftUI language: `GlassCard`, `cardLabel`,
-/// `halenCobalt`, native materials.
+/// System-native look: an opaque `windowBackgroundColor` window with
+/// `StoreCard` (opaque `controlBackgroundColor`) rows. Deliberately *not*
+/// the translucent `GlassCard` used in the menubar dropdown — in a
+/// standalone window that material vibrancy-samples the desktop wallpaper.
 struct PluginStoreView: View {
     let registry: PluginRegistry
     @Bindable var model: PluginStoreModel
@@ -41,7 +43,12 @@ struct PluginStoreView: View {
         }
         .frame(width: 420)
         .frame(minHeight: 360, maxHeight: 580)
-        .background(.regularMaterial)
+        // Opaque native window background. `.regularMaterial` is translucent
+        // — in a standalone window it let the desktop wallpaper bleed through
+        // and tint the whole store (a warm wallpaper read as "yellow").
+        // `windowBackgroundColor` is the system's own window colour and
+        // adapts to light/dark.
+        .background(Color(nsColor: .windowBackgroundColor))
         .task { await model.refresh() }
         .alert("Remove plugin?", isPresented: removalAlertBinding, presenting: pendingRemoval) { target in
             Button("Remove", role: .destructive) {
@@ -171,7 +178,7 @@ struct PluginStoreView: View {
     }
 
     private var loadingCard: some View {
-        GlassCard {
+        StoreCard {
             HStack(spacing: 10) {
                 ProgressView()
                     .controlSize(.small)
@@ -184,7 +191,7 @@ struct PluginStoreView: View {
     }
 
     private func failureCard(_ message: String) -> some View {
-        GlassCard {
+        StoreCard {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "wifi.slash")
@@ -229,7 +236,7 @@ struct PluginStoreView: View {
     }
 
     private func emptyHint(_ text: String) -> some View {
-        GlassCard {
+        StoreCard {
             Text(text)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
@@ -246,7 +253,7 @@ private struct InstalledPluginRow: View {
     let onRemove: (() -> Void)?
 
     var body: some View {
-        GlassCard {
+        StoreCard {
             HStack(alignment: .center, spacing: 11) {
                 PluginIconBadge(systemName: plugin.icon, tint: tint)
 
@@ -306,7 +313,7 @@ private struct AvailablePluginRow: View {
     let onInstall: () -> Void
 
     var body: some View {
-        GlassCard {
+        StoreCard {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 11) {
                     PluginIconBadge(systemName: entry.iconName, tint: tint)
@@ -406,6 +413,29 @@ private struct PluginIconBadge: View {
                 .foregroundStyle(tint)
         }
         .frame(width: 32, height: 32)
+    }
+}
+
+/// Opaque card surface for the Plugin Store. The shared `GlassCard` uses
+/// `.ultraThinMaterial`, which is translucent — in the store's standalone
+/// window it vibrancy-samples the desktop wallpaper and tints every card.
+/// `StoreCard` uses the system `controlBackgroundColor` instead: an opaque,
+/// light/dark-adaptive native surface that sits cleanly on the window.
+private struct StoreCard<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        content()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(.separator.opacity(0.4), lineWidth: 0.5)
+                    )
+            )
     }
 }
 
