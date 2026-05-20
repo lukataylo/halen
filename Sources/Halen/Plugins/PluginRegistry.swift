@@ -47,16 +47,28 @@ final class PluginRegistry {
         }
     }
 
-    var activeCount: Int {
-        plugins.lazy.filter { self.isEnabled($0.id) }.count
+    /// Remove a plugin from the registry. Stops it first if it was running.
+    /// Used by the Plugin Store's "Remove" action for external plugins — the
+    /// caller is responsible for deleting the on-disk plugin directory after
+    /// this returns. The persisted enabled/disabled flag is left in
+    /// `UserDefaults` intentionally: a reinstall of the same plugin id keeps
+    /// the user's previous on/off choice.
+    func unregister(_ pluginId: String) {
+        guard let plugin = plugins.first(where: { $0.id == pluginId }) else { return }
+        if isEnabled(pluginId) {
+            plugin.stop()
+        }
+        plugins.removeAll { $0.id == pluginId }
+        enabledStates.removeValue(forKey: pluginId)
+        Log.info("PluginRegistry: unregistered \(pluginId)")
     }
 
-    var grouped: [(PluginCategory, [any HalenPlugin])] {
-        let dict = Dictionary(grouping: plugins, by: \.category)
-        return PluginCategory.allCases.compactMap { cat in
-            guard let group = dict[cat], !group.isEmpty else { return nil }
-            return (cat, group)
-        }
+    func contains(_ pluginId: String) -> Bool {
+        plugins.contains { $0.id == pluginId }
+    }
+
+    var activeCount: Int {
+        plugins.lazy.filter { self.isEnabled($0.id) }.count
     }
 
     private func readPersistedEnabled(_ id: String) -> Bool {

@@ -1,0 +1,31 @@
+{
+  "_comment": "Halen Plugin Store curated index. Fetched over HTTPS from https://raw.githubusercontent.com/lukataylo/halen/main/plugin-registry.json by the in-app Plugin Store. Schema is documented in plugin-registry.schema.md (sibling file). The two entries below are illustrative examples — replace `downloadURL` with a real plugin-directory zip before shipping a live registry.",
+  "schemaVersion": 1,
+  "halenApiVersion": "0.1",
+  "plugins": [
+    {
+      "id": "com.example.hello",
+      "name": "Hello (Example)",
+      "summary": "Example registry entry — logs every text.pause event to the unified log.",
+      "author": "Halen Team",
+      "version": "0.1.0",
+      "icon": "hand.wave",
+      "category": "productivity",
+      "sourceURL": "https://github.com/lukataylo/halen-plugin-hello",
+      "downloadURL": "https://github.com/lukataylo/halen-plugin-hello/releases/download/v0.1.0/com.example.hello.zip",
+      "isExample": true
+    },
+    {
+      "id": "com.example.standup-notes",
+      "name": "Standup Notes (Example)",
+      "summary": "Example registry entry — drafts a daily standup summary from your recent activity.",
+      "author": "Halen Team",
+      "version": "0.2.1",
+      "icon": "list.bullet.rectangle",
+      "category": "scheduling",
+      "sourceURL": "https://github.com/lukataylo/halen-plugin-standup-notes",
+      "downloadURL": "https://github.com/lukataylo/halen-plugin-standup-notes/releases/download/v0.2.1/com.example.standup-notes.zip",
+      "isExample": true
+    }
+  ]
+}

@@ -1,0 +1,422 @@
+import SwiftUI
+import AppKit
+
+/// App Store-style modal for browsing, installing, and removing plugins.
+///
+/// Two sections:
+///   - INSTALLED — every registered plugin (first-party built-ins + installed
+///     external plugins). Each row has an enable/disable toggle; external
+///     plugins additionally get a Remove button.
+///   - AVAILABLE — external plugins from the fetched registry that aren't
+///     installed, each with an Install button.
+///
+/// Matches the app's existing SwiftUI language: `GlassCard`, `cardLabel`,
+/// `halenCobalt`, native materials.
+struct PluginStoreView: View {
+    let registry: PluginRegistry
+    @Bindable var model: PluginStoreModel
+    let onClose: () -> Void
+
+    /// Confirmation target for the Remove flow (external plugins only).
+    @State private var pendingRemoval: PendingRemoval?
+    @State private var removalError: String?
+
+    private struct PendingRemoval: Identifiable {
+        let id: String
+        let name: String
+        let directory: URL
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            ScrollView {
+                VStack(spacing: 14) {
+                    installedSection
+                    availableSection
+                }
+                .padding(14)
+            }
+        }
+        .frame(width: 420)
+        .frame(minHeight: 360, maxHeight: 580)
+        .background(.regularMaterial)
+        .task { await model.refresh() }
+        .alert("Remove plugin?", isPresented: removalAlertBinding, presenting: pendingRemoval) { target in
+            Button("Remove", role: .destructive) {
+                if let error = model.remove(id: target.id, directory: target.directory) {
+                    removalError = error
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { target in
+            Text("“\(target.name)” will be stopped and its files deleted from ~/Library/Application Support/Halen/Plugins/. This can't be undone.")
+        }
+        .alert("Couldn't remove plugin",
+               isPresented: Binding(get: { removalError != nil },
+                                    set: { if !$0 { removalError = nil } })) {
+            Button("OK", role: .cancel) { removalError = nil }
+        } message: {
+            Text(removalError ?? "")
+        }
+    }
+
+    private var removalAlertBinding: Binding<Bool> {
+        Binding(get: { pendingRemoval != nil },
+                set: { if !$0 { pendingRemoval = nil } })
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.halenCobalt.opacity(0.16))
+                Image(systemName: "puzzlepiece.extension.fill")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.halenCobalt)
+            }
+            .frame(width: 30, height: 30)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Plugin Store")
+                    .font(.system(.headline, weight: .semibold))
+                Text("Browse, install, and manage Halen plugins")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button {
+                onClose()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(Color.primary.opacity(0.06)))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.cancelAction)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    // MARK: - Installed
+
+    private var installedSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("Installed", count: registry.plugins.count)
+            if registry.plugins.isEmpty {
+                emptyHint("No plugins installed yet.")
+            } else {
+                ForEach(registry.plugins, id: \.id) { plugin in
+                    InstalledPluginRow(
+                        plugin: plugin,
+                        isEnabled: Binding(
+                            get: { registry.isEnabled(plugin.id) },
+                            set: { _ in registry.toggle(plugin.id) }
+                        ),
+                        onRemove: removeRequest(for: plugin)
+                    )
+                }
+            }
+        }
+    }
+
+    /// Returns a Remove closure only for external plugins (built-ins can't be
+    /// uninstalled — they ship inside the app). `nil` hides the Remove button.
+    private func removeRequest(for plugin: any HalenPlugin) -> (() -> Void)? {
+        guard let external = plugin as? ExternalPluginAdapter else { return nil }
+        return {
+            pendingRemoval = PendingRemoval(id: external.id,
+                                            name: external.name,
+                                            directory: external.pluginDir)
+        }
+    }
+
+    // MARK: - Available
+
+    @ViewBuilder
+    private var availableSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            switch model.fetchState {
+            case .idle, .loading:
+                sectionHeader("Available", count: nil)
+                loadingCard
+            case .failed(let message):
+                sectionHeader("Available", count: nil)
+                failureCard(message)
+            case .loaded:
+                let entries = model.notInstalled
+                sectionHeader("Available", count: entries.count)
+                if entries.isEmpty {
+                    emptyHint("You've installed everything in the registry. 🎉")
+                } else {
+                    ForEach(entries) { entry in
+                        AvailablePluginRow(
+                            entry: entry,
+                            state: model.state(for: entry),
+                            onInstall: { Task { await model.install(entry) } }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private var loadingCard: some View {
+        GlassCard {
+            HStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Fetching the plugin registry…")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func failureCard(_ message: String) -> some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "wifi.slash")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.orange)
+                    Text("Registry unavailable")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                Text(message)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    Task { await model.refresh() }
+                } label: {
+                    Label("Try again", systemImage: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .padding(.top, 2)
+            }
+        }
+    }
+
+    // MARK: - Shared bits
+
+    private func sectionHeader(_ title: String, count: Int?) -> some View {
+        HStack(spacing: 6) {
+            cardLabel(title)
+            if let count {
+                Text("\(count)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(Color.primary.opacity(0.08)))
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private func emptyHint(_ text: String) -> some View {
+        GlassCard {
+            Text(text)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Installed row
+
+private struct InstalledPluginRow: View {
+    let plugin: any HalenPlugin
+    @Binding var isEnabled: Bool
+    /// Non-nil only for external plugins, which can be uninstalled.
+    let onRemove: (() -> Void)?
+
+    var body: some View {
+        GlassCard {
+            HStack(alignment: .center, spacing: 11) {
+                PluginIconBadge(systemName: plugin.icon, tint: tint)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(plugin.name)
+                            .font(.system(.body, weight: .medium))
+                        if onRemove != nil {
+                            tag("External")
+                        }
+                    }
+                    Text(plugin.summary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 4)
+
+                VStack(alignment: .trailing, spacing: 6) {
+                    Toggle("", isOn: $isEnabled)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .labelsHidden()
+                    if let onRemove {
+                        Button(role: .destructive, action: onRemove) {
+                            Text("Remove")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                    }
+                }
+            }
+        }
+    }
+
+    private func tag(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 8, weight: .bold))
+            .tracking(0.4)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1.5)
+            .background(Capsule().fill(Color.primary.opacity(0.08)))
+    }
+
+    private var tint: Color { pluginCategoryTint(plugin.category) }
+}
+
+// MARK: - Available row
+
+private struct AvailablePluginRow: View {
+    let entry: PluginRegistryEntry
+    let state: PluginStoreModel.InstallState
+    let onInstall: () -> Void
+
+    var body: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 11) {
+                    PluginIconBadge(systemName: entry.iconName, tint: tint)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(entry.name)
+                                .font(.system(.body, weight: .medium))
+                            if entry.isExampleEntry {
+                                tag("Example")
+                            }
+                        }
+                        Text(entry.summary)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("by \(entry.author) · v\(entry.version)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    installControl
+                }
+
+                if case .failed(let message) = state {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                        Text(message)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if let source = URL(string: entry.sourceURL) {
+                    Button {
+                        NSWorkspace.shared.open(source)
+                    } label: {
+                        Label("View source", systemImage: "arrow.up.right.square")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var installControl: some View {
+        switch state {
+        case .installing:
+            HStack(spacing: 5) {
+                ProgressView().controlSize(.small)
+                Text("Installing…")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+        case .available, .failed:
+            Button(action: onInstall) {
+                Text(isRetry ? "Retry" : "Install")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(Color.halenCobalt))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var isRetry: Bool {
+        if case .failed = state { return true }
+        return false
+    }
+
+    private var tint: Color { pluginCategoryTint(entry.resolvedCategory) }
+}
+
+// MARK: - Shared visual helpers
+
+private struct PluginIconBadge: View {
+    let systemName: String
+    let tint: Color
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(tint.opacity(0.18))
+            Image(systemName: systemName)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(tint)
+        }
+        .frame(width: 32, height: 32)
+    }
+}
+
+/// Per-category tint, shared by the Store rows and (via `PluginRow`) the
+/// menubar list. Category no longer groups the UI — it's purely a colour cue.
+func pluginCategoryTint(_ category: PluginCategory) -> Color {
+    switch category {
+    case .writing:      return Color(red: 0.20, green: 0.55, blue: 0.96)
+    case .voice:        return Color(red: 0.93, green: 0.31, blue: 0.55)
+    case .scheduling:   return Color(red: 0.97, green: 0.60, blue: 0.20)
+    case .focus:        return Color(red: 0.62, green: 0.36, blue: 0.92)
+    case .productivity: return Color(red: 0.20, green: 0.74, blue: 0.45)
+    }
+}
