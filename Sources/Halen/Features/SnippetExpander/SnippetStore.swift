@@ -158,7 +158,13 @@ final class SnippetStore {
         let activeBuiltins = Self.builtins.filter {
             !overriddenTriggers.contains($0.trigger.lowercased())
         }
-        snippets = activeBuiltins + custom
+        let merged = activeBuiltins + custom
+        // Only persist when the merge actually changed something — the common
+        // case (no new builtins since last launch, no overrides) is a no-op,
+        // and an unconditional `save()` here was a main-thread disk write on
+        // every launch. `Snippet` is `Equatable`, so this is an exact compare.
+        guard merged != snippets else { return }
+        snippets = merged
         save()
     }
 

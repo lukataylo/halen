@@ -147,33 +147,18 @@ final class SnippetExpander: HalenPlugin {
 
     private func handle(text: String, caretOffset: Int) {
         let ns = text as NSString
-        let length = ns.length
-        guard caretOffset > 0, caretOffset <= length else { return }
+        guard var tokenRange = wordRange(in: ns, endingBefore: caretOffset) else { return }
 
-        // Trigger when the char just before the caret is a separator (the canonical
-        // "user finished a word" signal — same as TypoFixer).
-        guard let lastChar = character(ns, at: caretOffset - 1),
-              lastChar.isWhitespace || lastChar.isPunctuation else { return }
+        // Extend backward to include the snippet sentinel ';' — the word
+        // scan stops *after* it (semicolons count as punctuation), so the
+        // trigger token itself would otherwise be missing its leading ';'.
+        if tokenRange.location > 0,
+           let preceding = character(ns, at: tokenRange.location - 1), preceding == ";" {
+            tokenRange = NSRange(location: tokenRange.location - 1,
+                                 length: tokenRange.length + 1)
+        }
 
-        var end = caretOffset - 1
-        while end > 0, let ch = character(ns, at: end - 1),
-              ch.isWhitespace || ch.isPunctuation {
-            end -= 1
-        }
-        var start = end
-        while start > 0, let ch = character(ns, at: start - 1),
-              !ch.isWhitespace, !ch.isPunctuation {
-            start -= 1
-        }
-        // Extend backward to include the snippet sentinel ';' — otherwise the
-        // word-boundary scan stops *after* it (semicolons count as punctuation)
-        // and we never see the trigger.
-        if start > 0, let preceding = character(ns, at: start - 1), preceding == ";" {
-            start -= 1
-        }
-        guard start < end else { return }
-
-        let token = ns.substring(with: NSRange(location: start, length: end - start))
+        let token = ns.substring(with: tokenRange)
         guard token.hasPrefix(";") else { return }
 
         // Suppress our own self-edits within 3s
@@ -182,7 +167,6 @@ final class SnippetExpander: HalenPlugin {
         if recentWrites.contains(where: { $0.trigger == token }) { return }
 
         guard let snippet = store.snippet(for: token) else { return }
-        let tokenRange = NSRange(location: start, length: end - start)
         expand(snippet, at: tokenRange, fullText: ns)
     }
 

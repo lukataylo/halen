@@ -38,6 +38,15 @@ final class OverlayController {
 
     /// In-flight inference calls. The loader stays up until this returns to 0.
     private var busyDepth = 0
+    /// Force-resets `busyDepth` if no `.finished` arrives in time. The
+    /// EventBus has a bounded buffer that drops oldest on overflow — if a
+    /// `.finished` were ever dropped, `busyDepth` would stay positive and the
+    /// loader panel would hang up forever. This is the recovery valve.
+    private var busyWatchdog: Task<Void, Never>?
+    /// Longer than any realistic inference (debounced classification +
+    /// generation top out well under this); only a genuinely stuck/lost
+    /// `.finished` reaches it.
+    private static let busyWatchdogTimeout: Duration = .seconds(25)
     /// Most recent caret rect — fallback anchor for the loader.
     private var lastCaretRect: Event.CaretRect?
     /// Explicit anchor from the active inference source (e.g. a placeholder's
@@ -106,9 +115,11 @@ final class OverlayController {
                         if let anchor = payload.anchor { self.busyAnchor = anchor }
                         self.busyDepth += 1
                         if self.busyDepth == 1 { self.enterBusy() }
+                        self.armBusyWatchdog()
                     case .finished:
                         self.busyDepth = max(0, self.busyDepth - 1)
                         if self.busyDepth == 0 { self.exitBusy() }
+                        else { self.armBusyWatchdog() }   // still busy — re-arm
                     }
                 default:
                     break
@@ -138,6 +149,8 @@ final class OverlayController {
         hideTask = nil
         hideDeadline = nil
         lastCaretFrame = nil
+        busyWatchdog?.cancel()
+        busyWatchdog = nil
         if let observer = defaultsObserver {
             NotificationCenter.default.removeObserver(observer)
             defaultsObserver = nil
@@ -242,11 +255,28 @@ final class OverlayController {
 
     /// Leave the busy state: hide the loader and hand back to the caret indicator.
     private func exitBusy() {
+        busyWatchdog?.cancel()
+        busyWatchdog = nil
         removeGlow()
         busyAnchor = nil
         busyPanel?.orderOut(nil)
         if let caret = lastCaretRect {
             showCaret(at: caret)
+        }
+    }
+
+    /// (Re)arm the watchdog that recovers a stuck busy state — see
+    /// `busyWatchdog`. Called on every `.started` and on every `.finished`
+    /// that leaves `busyDepth` still positive, so the timeout is measured
+    /// from the most recent activity, not the first.
+    private func armBusyWatchdog() {
+        busyWatchdog?.cancel()
+        busyWatchdog = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.busyWatchdogTimeout)
+            guard let self, !Task.isCancelled, self.busyDepth > 0 else { return }
+            Log.warn("OverlayController: busy watchdog fired — \(self.busyDepth) inference(s) never reported finished; force-clearing the loader")
+            self.busyDepth = 0
+            self.exitBusy()
         }
     }
 

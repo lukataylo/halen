@@ -154,6 +154,36 @@ func character(_ ns: NSString, at index: Int) -> Character? {
     return Character(scalar)
 }
 
+/// The UTF-16 range of the word that ends just before `caretOffset` in `ns`.
+///
+/// The character immediately before the caret must be a separator
+/// (whitespace / punctuation) — that's the "user just finished a word"
+/// signal; a mid-word caret returns `nil`. From there it walks back past the
+/// trailing separator run, then past the word's non-separator characters.
+///
+/// Shared by TypoFixer (the word to look up in the typo dictionary) and
+/// SnippetExpander (the `;trigger` token, which then extends one char left
+/// to swallow the `;` sentinel). Both used to carry an identical hand-rolled
+/// copy of this scan with comments cross-referencing each other.
+func wordRange(in ns: NSString, endingBefore caretOffset: Int) -> NSRange? {
+    guard caretOffset > 0, caretOffset <= ns.length else { return nil }
+    guard let last = character(ns, at: caretOffset - 1),
+          last.isWhitespace || last.isPunctuation else { return nil }
+
+    var end = caretOffset - 1
+    while end > 0, let ch = character(ns, at: end - 1),
+          ch.isWhitespace || ch.isPunctuation {
+        end -= 1
+    }
+    var start = end
+    while start > 0, let ch = character(ns, at: start - 1),
+          !ch.isWhitespace, !ch.isPunctuation {
+        start -= 1
+    }
+    guard start < end else { return nil }
+    return NSRange(location: start, length: end - start)
+}
+
 /// What we consider a "word" for correction-learning purposes: 3–30 chars,
 /// only letters (plus apostrophes and hyphens). Filters out single letters,
 /// numbers, code identifiers, and other false-positive sources.

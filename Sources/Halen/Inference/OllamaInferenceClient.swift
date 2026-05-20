@@ -1,16 +1,13 @@
 import Foundation
 
-/// HTTP client for a local Ollama daemon (default `http://localhost:11434`).
-/// Maps `ModelTier` to the local Gemma 4 model name. Used internally by
-/// `OllamaBackend`, never directly by plugin code (every consumer talks to
-/// the router via `InferenceClient`, which routes to `OllamaBackend` which
-/// owns this concrete client).
+/// Thin HTTP client for a local Ollama daemon (default
+/// `http://localhost:11434`). Maps `ModelTier` to the local Gemma 4 model
+/// name. Owned by `OllamaBackend`; plugin code never touches it directly —
+/// every consumer goes through the router via `InferenceClient`.
 ///
-/// Conformance to `InferenceClient` was dropped in the multi-backend
-/// refactor — it was historical from when the router didn't exist. The
-/// class is intentionally just a thin HTTP wrapper now. `Sendable` because
-/// `OllamaBackend` (an actor) holds it as a stored property and every field
-/// (`URL`, `URLSession`, `JSONEncoder`/`JSONDecoder`) is itself Sendable.
+/// `Sendable` because `OllamaBackend` (an actor) holds it as a stored
+/// property and every field (`URL`, `URLSession`, `JSONEncoder`/`Decoder`)
+/// is itself Sendable.
 final class OllamaInferenceClient: Sendable {
     private let baseURL: URL
     private let session: URLSession

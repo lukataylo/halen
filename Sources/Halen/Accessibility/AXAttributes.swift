@@ -134,16 +134,48 @@ func axReadContainingWindowFrame(_ element: AXUIElement) -> CGRect? {
     return axReadFrame(windowElement)
 }
 
+/// Caches the primary screen's height for `axRectToCocoa`. `NSScreen.screens`
+/// walks the window-server display list on every access; `axRectToCocoa` runs
+/// on the caret-tracking hot path, so the height is cached and only recomputed
+/// when the display configuration actually changes.
+@MainActor
+private enum PrimaryScreen {
+    private static var cachedHeight: CGFloat?
+    private static var observing = false
+
+    /// Height of the primary screen (the one with frame origin (0,0)), or 0
+    /// if there is somehow no screen.
+    static var height: CGFloat {
+        if !observing {
+            observing = true
+            // Process-lifetime observer — never removed by design (the cache
+            // lives as long as the app). Invalidates on monitor plug/unplug,
+            // resolution change, arrangement change.
+            NotificationCenter.default.addObserver(
+                forName: NSApplication.didChangeScreenParametersNotification,
+                object: nil, queue: .main
+            ) { _ in
+                MainActor.assumeIsolated { cachedHeight = nil }
+            }
+        }
+        if let h = cachedHeight { return h }
+        let screen = NSScreen.screens.first(where: { $0.frame.origin == .zero }) ?? NSScreen.main
+        let h = screen?.frame.height ?? 0
+        cachedHeight = h
+        return h
+    }
+}
+
 /// Convert an AX rect (top-left origin, primary-display coords) to a Cocoa screen rect
 /// (bottom-left origin). Multi-monitor setups with displays above the primary need extra
 /// work — handled in a later milestone.
+@MainActor
 func axRectToCocoa(_ axRect: CGRect) -> CGRect {
-    guard let main = NSScreen.screens.first(where: { $0.frame.origin == .zero }) ?? NSScreen.main else {
-        return axRect
-    }
+    let primaryHeight = PrimaryScreen.height
+    guard primaryHeight > 0 else { return axRect }
     return CGRect(
         x: axRect.minX,
-        y: main.frame.height - axRect.maxY,
+        y: primaryHeight - axRect.maxY,
         width: axRect.width,
         height: axRect.height
     )

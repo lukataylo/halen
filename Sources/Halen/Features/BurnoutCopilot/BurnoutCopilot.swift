@@ -245,14 +245,20 @@ final class BurnoutCopilot: HalenPlugin {
         if created {
             Log.info("BurnoutCopilot: created 🌿 Halen break event")
         }
-        // Try a "Halen Focus" Shortcut (silent if not present).
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        task.arguments = ["-e", "tell application \"Shortcuts Events\" to run shortcut \"Halen Focus\""]
-        do {
-            try task.run()
-        } catch {
-            Log.debug("BurnoutCopilot: Shortcuts trigger skipped (\(error.localizedDescription))")
+        // Fire the optional "Halen Focus" Shortcut off the main actor.
+        // `Process.run()` is a fork/exec — cheap, but no reason to do it on
+        // the UI thread. The detached task also `waitUntilExit()`s so the
+        // child is reaped rather than left as a zombie if the Shortcut hangs.
+        Task.detached(priority: .utility) {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            task.arguments = ["-e", "tell application \"Shortcuts Events\" to run shortcut \"Halen Focus\""]
+            do {
+                try task.run()
+                task.waitUntilExit()
+            } catch {
+                Log.debug("BurnoutCopilot: Shortcuts trigger skipped (\(error.localizedDescription))")
+            }
         }
     }
 }

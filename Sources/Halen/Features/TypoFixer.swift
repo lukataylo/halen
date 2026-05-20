@@ -182,27 +182,9 @@ final class TypoFixer: HalenPlugin {
     // MARK: - Applying
 
     private func applyKnownCorrection(text ns: NSString, caretOffset: Int) {
-        let length = ns.length
-        guard caretOffset > 0, caretOffset <= length else { return }
+        guard let range = wordRange(in: ns, endingBefore: caretOffset) else { return }
 
-        guard let last = character(ns, at: caretOffset - 1),
-              last.isWhitespace || last.isPunctuation else {
-            return
-        }
-
-        var end = caretOffset - 1
-        while end > 0, let ch = character(ns, at: end - 1),
-              ch.isWhitespace || ch.isPunctuation {
-            end -= 1
-        }
-        var start = end
-        while start > 0, let ch = character(ns, at: start - 1),
-              !ch.isWhitespace, !ch.isPunctuation {
-            start -= 1
-        }
-        guard start < end else { return }
-
-        let word = ns.substring(with: NSRange(location: start, length: end - start))
+        let word = ns.substring(with: range)
         guard let correction = store.activeCorrection(for: word) else { return }
         let cased = matchCase(of: word, in: correction)
 
@@ -215,7 +197,6 @@ final class TypoFixer: HalenPlugin {
             return
         }
 
-        let range = NSRange(location: start, length: end - start)
         Log.info("TypoFixer applied: \(Log.redact(word)) → \(Log.redact(cased))")
 
         recentSelfEdits.append(SelfEdit(typo: word, correction: cased, timestamp: now))
