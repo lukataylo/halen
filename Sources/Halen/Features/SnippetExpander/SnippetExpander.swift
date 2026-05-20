@@ -1,10 +1,17 @@
 import Foundation
 import SwiftUI
+import AppKit
 import ApplicationServices
+import IOKit.hid
 
 /// Type `;tag` followed by a separator (space / punctuation) and Halen swaps it
 /// for the snippet's content. Static snippets are instant; AI snippets show a
 /// "[…]" placeholder, call Gemma 4, then replace with the response.
+///
+/// Also owns the ⌃⌥R "rephrase selection" hotkey: with text highlighted in
+/// any app, ⌃⌥R rewrites just that selection in place. Separate from the `;`
+/// triggers (which always act on the prior paragraph) because typing a
+/// trigger would destroy the highlight.
 @MainActor
 final class SnippetExpander: HalenPlugin {
     let id = "com.halen.snippet-expander"
@@ -25,6 +32,15 @@ final class SnippetExpander: HalenPlugin {
     }
     private var recentWrites: [PendingWrite] = []
 
+    /// NSEvent monitor handles for the ⌃⌥R rephrase-selection hotkey.
+    private var globalHotkeyMonitor: Any?
+    private var localHotkeyMonitor: Any?
+
+    /// Sentinel passed to `applyReplacement` for hotkey-driven writes — keeps
+    /// the self-edit suppression list happy without colliding with any real
+    /// `;` trigger (it starts with a NUL, which can't be typed).
+    private static let rephraseHotkeyTrigger = "\u{0}rephrase-hotkey"
+
     init(services: HalenServices) {
         self.services = services
         self.caretObserver = services.caretObserver
@@ -42,12 +58,126 @@ final class SnippetExpander: HalenPlugin {
                 }
             }
         }
+        installRephraseHotkey()
     }
 
     func stop() {
         task?.cancel()
         task = nil
         recentWrites.removeAll()
+        if let m = globalHotkeyMonitor { NSEvent.removeMonitor(m); globalHotkeyMonitor = nil }
+        if let m = localHotkeyMonitor  { NSEvent.removeMonitor(m); localHotkeyMonitor  = nil }
+    }
+
+    // MARK: - Rephrase-selection hotkey (⌃⌥R)
+
+    /// Install global + local `.keyDown` monitors for ⌃⌥R. Same mechanism as
+    /// AskHalen's ⌃H — NSEvent monitors rather than Carbon, so the hotkey
+    /// fires regardless of which app is focused. Needs Input Monitoring;
+    /// `IOHIDRequestAccess` is idempotent if AskHalen already requested it.
+    private func installRephraseHotkey() {
+        _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+
+        // ⌃⌥R: Control+Option held (and nothing else), key "r".
+        // `charactersIgnoringModifiers` returns "r" even with Option down,
+        // which would otherwise map the key to "®".
+        let isHotkey: (NSEvent) -> Bool = { event in
+            event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.control, .option]
+                && event.charactersIgnoringModifiers?.lowercased() == "r"
+        }
+        globalHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard isHotkey(event) else { return }
+            MainActor.assumeIsolated { self?.rephraseSelection() }
+        }
+        localHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if isHotkey(event) {
+                MainActor.assumeIsolated { self?.rephraseSelection() }
+                return nil   // consume — don't let ⌃⌥R fall through to Halen's own UI
+            }
+            return event
+        }
+        Log.info("SnippetExpander: ⌃⌥R rephrase-selection monitors installed (global=\(globalHotkeyMonitor != nil), local=\(localHotkeyMonitor != nil))")
+    }
+
+    /// Rephrase whatever text is currently selected, in place. No-op when
+    /// nothing is selected (the hotkey only does something with an active
+    /// highlight, by design). Mirrors `expandAI`'s placeholder + async
+    /// write-back so it's robust to the user editing during the Gemma call.
+    private func rephraseSelection() {
+        guard let element = caretObserver?.currentElement else {
+            Log.info("SnippetExpander: ⌃⌥R — no focused element")
+            return
+        }
+        guard let cfRange = axReadSelectedRange(element), cfRange.length > 0 else {
+            Log.info("SnippetExpander: ⌃⌥R — no active selection, ignoring")
+            return
+        }
+        let selected = axReadSelectedText(element)
+        guard !selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            Log.info("SnippetExpander: ⌃⌥R — selection empty/whitespace, ignoring")
+            return
+        }
+        let selRange = NSRange(location: cfRange.location, length: cfRange.length)
+        let trigger = Self.rephraseHotkeyTrigger
+
+        // Placeholder over the selection — immediate feedback plus a
+        // re-findable marker for the async write-back.
+        let placeholder = "[…]"
+        _ = applyReplacement(placeholder, at: selRange, trigger: trigger, in: element)
+        let placeholderRange = NSRange(location: selRange.location,
+                                       length: (placeholder as NSString).length)
+
+        // Anchor the busy overlay to the placeholder's on-screen bounds.
+        let overlayAnchor: Event.CaretRect? = {
+            guard let axRect = axReadBounds(element, range: CFRange(
+                location: placeholderRange.location, length: placeholderRange.length)) else {
+                return nil
+            }
+            let cocoa = axRectToCocoa(axRect)
+            return .init(x: cocoa.minX, y: cocoa.minY, width: cocoa.width, height: cocoa.height)
+        }()
+
+        let prompt = """
+        Rewrite the following text more clearly and concisely while keeping its meaning and tone. Output only the rewrite, no preamble, no quotes.
+
+        Text:
+        \(selected)
+        """
+        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 500,
+                                       temperature: 0.4, taskKind: .generation)
+        Log.info("SnippetExpander: ⌃⌥R rephrasing \(selected.count)-char selection")
+
+        Task { @MainActor [services, overlayAnchor, weak self] in
+            services.eventBus.publish(.inferenceActivity(.init(
+                phase: .started, source: "snippet-rephrase", anchor: overlayAnchor, timestamp: Date())))
+            defer {
+                services.eventBus.publish(.inferenceActivity(.init(
+                    phase: .finished, source: "snippet-rephrase", timestamp: Date())))
+            }
+            do {
+                let response = try await services.inference.complete(request)
+                let cleaned = response.text
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
+                guard let self else { return }
+                guard let writeRange = self.locatePlaceholder(placeholder, expectedAt: placeholderRange, in: element) else {
+                    Log.warn("SnippetExpander: ⌃⌥R placeholder gone from field — skipping write")
+                    return
+                }
+                guard !cleaned.isEmpty else {
+                    Log.warn("SnippetExpander: ⌃⌥R returned empty body — restoring original selection")
+                    self.applyReplacement(selected, at: writeRange, trigger: trigger, in: element)
+                    return
+                }
+                Log.info("SnippetExpander: ⌃⌥R completed (\(response.latencyMs)ms) responseLen=\(cleaned.count)")
+                self.applyReplacement(cleaned, at: writeRange, trigger: trigger, in: element)
+            } catch {
+                Log.warn("SnippetExpander: ⌃⌥R rephrase failed: \(error)")
+                guard let self,
+                      let writeRange = self.locatePlaceholder(placeholder, expectedAt: placeholderRange, in: element) else { return }
+                self.applyReplacement(selected, at: writeRange, trigger: trigger, in: element)
+            }
+        }
     }
 
     func makeDetailView() -> AnyView {

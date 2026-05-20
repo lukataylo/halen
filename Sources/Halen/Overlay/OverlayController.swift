@@ -51,6 +51,12 @@ final class OverlayController {
     /// UserDefaults key. Read on every `showCaret()` so the toggle takes effect live.
     static let showDotKey = "halen.showOverlayDot"
 
+    /// UserDefaults key for the indicator's visual style. Two values:
+    /// `"solid"` (default — filled cobalt mark) and `"outline"` (white-filled
+    /// speech bubble with a cobalt outline and eyes). `HalenCaretIndicator`
+    /// reads this via `@AppStorage` so the toggle takes effect live.
+    static let dotStyleKey = "halen.overlayDotStyle"
+
     init(eventBus: EventBus) {
         self.eventBus = eventBus
     }
@@ -300,14 +306,23 @@ final class OverlayController {
     }
 }
 
-/// Small solid cobalt-blue Halen mark used as the caret indicator. Source is
-/// `HalenIndicator.png` (rendered from `Resources/HalenSolid.svg`), already
-/// the right colour — no SwiftUI tinting needed. Falls back to a coloured
-/// circle if the asset isn't bundled.
+/// The Halen mark used as the caret indicator. Two styles, switched live via
+/// the `halen.overlayDotStyle` UserDefault:
+///   - `"solid"`   — filled cobalt mark (`HalenIndicator.png`, the default).
+///   - `"outline"` — white-filled speech bubble with a cobalt outline + eyes
+///                   (`HalenOutline.png`).
+/// Both are pre-rendered PNGs at the right colours, so no SwiftUI tinting is
+/// needed. Falls back to a coloured circle if the asset isn't bundled.
 private struct HalenCaretIndicator: View {
+    @AppStorage(OverlayController.dotStyleKey) private var dotStyle: String = "solid"
+
+    private var assetName: String {
+        dotStyle == "outline" ? "HalenOutline" : "HalenIndicator"
+    }
+
     var body: some View {
         Group {
-            if let img = NSImage(named: "HalenIndicator") {
+            if let img = NSImage(named: assetName) {
                 Image(nsImage: img)
                     .resizable()
                     .interpolation(.high)
@@ -317,6 +332,9 @@ private struct HalenCaretIndicator: View {
                     .padding(2)
             }
         }
-        .shadow(color: Color.halenCobalt.opacity(0.35), radius: 2, x: 0, y: 1)
+        // Lighter shadow for the outline style — a heavy cobalt glow under a
+        // white-filled bubble muddies it; the solid mark can carry more.
+        .shadow(color: Color.halenCobalt.opacity(dotStyle == "outline" ? 0.18 : 0.35),
+                radius: 2, x: 0, y: 1)
     }
 }

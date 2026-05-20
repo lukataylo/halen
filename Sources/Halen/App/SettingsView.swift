@@ -23,6 +23,7 @@ struct SettingsView: View {
     /// stale under us. `refresh()` runs on every `onAppear`.
     @State private var permissions = SystemPermissionsModel()
     @AppStorage(OverlayController.showDotKey) private var showCaretIndicator: Bool = true
+    @AppStorage(OverlayController.dotStyleKey) private var overlayDotStyle: String = "solid"
     /// Two-way binding to the WS bridge's enabled preference. Toggling
     /// here also calls into the bridge to actually start/stop it live.
     @AppStorage(WebSocketBridge.enabledKey) private var webSocketEnabled: Bool = true
@@ -267,6 +268,24 @@ struct SettingsView: View {
                         .controlSize(.regular)
                         .labelsHidden()
                 }
+
+                // Style picker — only relevant when the indicator is on.
+                if showCaretIndicator {
+                    Divider().opacity(0.4)
+                    HStack(spacing: 10) {
+                        Text("Style")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Picker("", selection: $overlayDotStyle) {
+                            Text("Solid").tag("solid")
+                            Text("Outline").tag("outline")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(maxWidth: 220)
+                        Spacer()
+                    }
+                }
             }
         }
     }
@@ -279,7 +298,7 @@ struct SettingsView: View {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .strokeBorder(.separator.opacity(0.4), lineWidth: 0.5)
                 )
-            if let img = NSImage(named: "HalenIndicator") {
+            if let img = NSImage(named: overlayDotStyle == "outline" ? "HalenOutline" : "HalenIndicator") {
                 Image(nsImage: img)
                     .resizable()
                     .interpolation(.high)

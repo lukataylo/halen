@@ -147,6 +147,11 @@ struct SnippetExpanderDetailView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Divider().opacity(0.4).padding(.vertical, 2)
+                Text("Rephrase a selection: highlight any text in any app and press ⌃⌥R. Halen rewrites just that selection in place — handy when you don't want to rephrase the whole paragraph.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

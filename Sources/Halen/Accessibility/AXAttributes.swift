@@ -69,6 +69,14 @@ func axReadSelectedRange(_ element: AXUIElement) -> CFRange? {
     return range
 }
 
+/// Read the currently selected text via `kAXSelectedTextAttribute`. Returns
+/// an empty string when there is no selection (caret only) — callers should
+/// pair this with `axReadSelectedRange` and check the range length to tell
+/// "nothing selected" apart from "selection is genuinely empty".
+func axReadSelectedText(_ element: AXUIElement) -> String {
+    axReadString(element, kAXSelectedTextAttribute) ?? ""
+}
+
 /// On-screen bounding rect of an arbitrary text range via
 /// `kAXBoundsForRangeParameterizedAttribute`. Rect is in AX coordinates
 /// (top-left origin, primary-display space) — use `axRectToCocoa` to convert.

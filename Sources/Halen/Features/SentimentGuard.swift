@@ -133,6 +133,13 @@ final class SentimentGuard: HalenPlugin {
         let enabled = rulesStore.enabledRules
         guard !enabled.isEmpty else { return }
 
+        // Snapshot the caret anchor NOW — the classifier has just settled, so
+        // the caret is sitting at the end of the sentence we're about to
+        // judge. The Gemma call below takes 1–4 s; by the time it returns the
+        // user may have moved the caret, scrolled, or switched fields, and
+        // anchoring then would float the popup far from the text it's about.
+        let anchorSnapshot = anchorRect()
+
         let categoriesBlock = enabled
             .map { "- \($0.label.lowercased()): \($0.prompt)" }
             .joined(separator: "\n")
@@ -154,7 +161,8 @@ final class SentimentGuard: HalenPlugin {
             Log.info("SentimentGuard: \(label) (\(response.latencyMs)ms)")
             if let matched = enabled.first(where: { $0.label.lowercased() == label }) {
                 showPopup(text: paragraph, rule: matched,
-                          hash: sha256Hex(paragraph), appBundleId: appBundleId)
+                          hash: sha256Hex(paragraph), appBundleId: appBundleId,
+                          anchor: anchorSnapshot)
             }
         } catch {
             Log.warn("SentimentGuard: inference failed: \(error)")
@@ -172,7 +180,8 @@ final class SentimentGuard: HalenPlugin {
 
     // MARK: - Popup
 
-    private func showPopup(text: String, rule: SentimentRule, hash: String, appBundleId: String) {
+    private func showPopup(text: String, rule: SentimentRule, hash: String,
+                           appBundleId: String, anchor: AnchorResult? = nil) {
         let label = rule.label.lowercased()
         flaggedThisSession += 1
         activePanel?.orderOut(nil)
@@ -211,7 +220,9 @@ final class SentimentGuard: HalenPlugin {
         panel.contentView = NSHostingView(rootView: view)
 
         let popupSize = CGSize(width: 360, height: 170)
-        panel.setFrame(popupFrame(for: anchorRect(), size: popupSize), display: true)
+        // Use the snapshot taken at classification time; only fall back to a
+        // fresh resolve if we never got one (shouldn't happen in practice).
+        panel.setFrame(popupFrame(for: anchor ?? anchorRect(), size: popupSize), display: true)
         panel.orderFrontRegardless()
 
         activePanel = panel
@@ -299,11 +310,21 @@ final class SentimentGuard: HalenPlugin {
             var y: CGFloat
             switch anchor.kind {
             case .caret:
-                // Caret rects are zero-width vertical bars; sit directly below.
-                y = anchor.rect.minY - size.height - 25
+                // Sit right under the caret with a small 10 px gap so the
+                // popup reads as attached to the line the user just typed.
+                // If there's no room below (caret near the screen bottom),
+                // flip above the caret rather than letting the clamp drag
+                // the popup back up over the text.
+                let below = anchor.rect.minY - size.height - 10
+                let above = anchor.rect.maxY + 10
+                y = (below >= visible.minY + 8) ? below : above
             case .element:
-                // Field's bottom-left; tuck just below.
-                y = anchor.rect.minY - size.height - 12
+                // No caret precision — anchor in the element's upper area
+                // (where text content usually begins) rather than its
+                // bottom-left, which on a tall editor is nowhere near the
+                // line being typed.
+                x = anchor.rect.minX + 12
+                y = anchor.rect.maxY - size.height - 44
             case .window:
                 // Window-anchored: nestle in the window's bottom-left inset
                 // rather than directly below (windows extend to screen edges).
