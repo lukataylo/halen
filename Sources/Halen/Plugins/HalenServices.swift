@@ -12,6 +12,9 @@ struct HalenServices {
     let eventBus: EventBus
     let inference: InferenceClient
     let caretObserver: CaretObserver
+    /// Host-owned calendar capability. Exposed to out-of-process plugins via
+    /// the `calendar/*` JSON-RPC methods (gated on the `calendar` permission).
+    let calendar: CalendarService
     let appSupportDir: URL
 
     /// `~/Library/Application Support/Halen/<pluginId>/` — make this lazily; not

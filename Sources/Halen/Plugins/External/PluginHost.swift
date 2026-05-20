@@ -58,12 +58,16 @@ final class PluginHost {
     /// `PluginRegistry` when the plugin is enabled at launch or by the user).
     func spawn(at dir: URL, manifest: PluginManifest) async {
         guard !instances.contains(where: { $0.manifest.id == manifest.id }) else { return }
+        // The plugin's granted permission set — what it declared in its
+        // manifest. `HostBridge` gates sensitive methods (calendar/*) on it.
+        let granted = Set(manifest.permissions ?? [])
         let instance = PluginInstance(manifest: manifest, pluginDir: dir,
                                       handler: { [bridge] method, params in
             // Every plugin-to-host RPC goes through the single `HostBridge`
             // shared with the WebSocket transport, so the surface is
             // identical and can't drift.
-            return try await bridge.dispatch(method: method, params: params)
+            return try await bridge.dispatch(method: method, params: params,
+                                             grantedPermissions: granted)
         })
         do {
             try await instance.start()

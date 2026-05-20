@@ -116,12 +116,20 @@ its manifest's `events` array.
 
 ### Host methods (plugin → host request)
 
-| Method               | Params                                     | Result |
+| Method                    | Params                                     | Result |
 |---|---|---|
-| `inference/complete` | `prompt`, `tier`, `maxTokens?`, `temperature?`, `stop?`, `taskKind?` | `text`, `modelId`, `latencyMs` |
-| `ax/replaceRange`    | `location`, `length`, `text`               | `ok: true` |
-| `ax/readSelection`   | —                                          | `text`, `appBundleId` |
-| `ui/toast`           | `title`, `body`                            | `ok: true` |
+| `inference/complete`      | `prompt`, `tier`, `maxTokens?`, `temperature?`, `stop?`, `taskKind?` | `text`, `modelId`, `latencyMs` |
+| `ax/replaceRange`         | `location`, `length`, `text`               | `ok: true` |
+| `ax/readSelection`        | —                                          | `text`, `appBundleId` |
+| `ui/toast`                | `title`, `body`                            | `ok: true` — posts a system notification |
+| `calendar/upcomingEvents` | `withinHours?` (default 24), `max?` (default 20) | `events: [{ id, title, start, end, attendees, notes }]` — `start`/`end` are epoch seconds |
+| `calendar/createEvent`    | `title`, `start` (epoch seconds), `durationMinutes?` (default 30) | `id` — the new event's identifier |
+
+The `calendar/*` methods are **gated** on the `calendar` permission — the
+plugin must list `"calendar"` in its manifest's `permissions` array, and the
+host requests the macOS Calendar TCC grant on first use. Without the manifest
+permission the call returns error `-32001` (permission denied). The host owns
+the single `EKEventStore`; a plugin never links EventKit itself.
 
 ### Errors
 

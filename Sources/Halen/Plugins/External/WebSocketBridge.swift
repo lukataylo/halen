@@ -366,7 +366,10 @@ final class WebSocketBridge {
             // Single source of truth for every host method, shared with
             // PluginHost. The WS transport now gets the full surface for
             // free (ax/replaceRange, ui/toast — previously missing here).
-            let result = try await bridge.dispatch(method: method, params: msg.params)
+            // No granted permissions — the browser extension has no
+            // privileged grants, so gated methods (calendar/*) are denied.
+            let result = try await bridge.dispatch(method: method, params: msg.params,
+                                                   grantedPermissions: [])
             send(RPCMessage(id: id, result: result), to: [client])
         } catch let error as RPCErrorObject {
             send(RPCMessage(id: id, error: error), to: [client])

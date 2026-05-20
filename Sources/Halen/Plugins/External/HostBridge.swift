@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import ApplicationServices
+import UserNotifications
 
 /// Single source of truth for every plugin/extension → host JSON-RPC method
 /// the host exposes. Both transports (stdio via `PluginHost` and WebSocket
@@ -23,7 +24,16 @@ final class HostBridge {
 
     /// The one dispatch site. Returns the `result` payload or throws an
     /// `RPCErrorObject` the transport then encodes back to the caller.
-    func dispatch(method: String, params: RPCValue?) async throws -> RPCValue {
+    ///
+    /// `grantedPermissions` is the calling client's permission set — for a
+    /// stdio plugin, its manifest's `permissions`; for the WebSocket bridge,
+    /// empty (the browser extension has no privileged grants). Sensitive
+    /// methods (currently `calendar/*`) are gated on it. The text/AX/inference
+    /// methods stay ungated for now — tightening those is a separate security
+    /// pass that would need every existing plugin to declare permissions.
+    func dispatch(method: String,
+                  params: RPCValue?,
+                  grantedPermissions: Set<String>) async throws -> RPCValue {
         switch method {
         case "inference/complete":
             return try await inferenceComplete(params: params)
@@ -33,9 +43,29 @@ final class HostBridge {
             return axReadSelection()
         case "ui/toast":
             return uiToast(params: params)
+        case "calendar/upcomingEvents":
+            try require("calendar", in: grantedPermissions, for: method)
+            return try await calendarUpcomingEvents(params: params)
+        case "calendar/createEvent":
+            try require("calendar", in: grantedPermissions, for: method)
+            return try await calendarCreateEvent(params: params)
         default:
             throw RPCErrorObject(code: PluginRPC.ErrorCode.methodNotFound.rawValue,
                                  message: "Unknown host method: \(method)", data: nil)
+        }
+    }
+
+    /// Throw `permissionDenied` unless `permission` is in the caller's grant
+    /// set. The plugin declared (or didn't) the permission in its manifest;
+    /// the marketplace install sheet is where the user actually consents.
+    private func require(_ permission: String,
+                         in granted: Set<String>,
+                         for method: String) throws {
+        guard granted.contains(permission) else {
+            throw RPCErrorObject(
+                code: PluginRPC.ErrorCode.permissionDenied.rawValue,
+                message: "\(method) requires the `\(permission)` permission — declare it in halen-plugin.json",
+                data: nil)
         }
     }
 
@@ -107,11 +137,76 @@ final class HostBridge {
     private func uiToast(params: RPCValue?) -> RPCValue {
         let title = params?.objectValue?["title"]?.stringValue ?? "Halen"
         let body = params?.objectValue?["body"]?.stringValue ?? ""
-        // Real UNUserNotification + overlay surfacing comes in a later milestone;
-        // for now the log line is the visible artifact, which is enough to
-        // prove the round-trip end-to-end.
+        // `ui/toast` posts a real system notification (it used to only log).
+        // No permission gate: a notification is low-risk and the user can
+        // silence Halen's notifications in System Settings. Authorisation is
+        // requested lazily — the first toast triggers the one-time prompt.
         Log.info("toast: \(title): \(body)")
+        Task { await Self.postNotification(title: title, body: body) }
         return .object(["ok": true] as [String: Any?])
+    }
+
+    /// Post a transient system notification. Used by `ui/toast`. Requests
+    /// authorisation on first use; if the user has denied it the `add` call
+    /// fails silently — the log line above is still the paper trail.
+    nonisolated static func postNotification(title: String, body: String) async {
+        let center = UNUserNotificationCenter.current()
+        _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+        )
+        try? await center.add(request)
+    }
+
+    // MARK: - Calendar (gated on the `calendar` permission)
+
+    private func calendarUpcomingEvents(params: RPCValue?) async throws -> RPCValue {
+        let obj = params?.objectValue
+        let withinHours = obj?["withinHours"]?.numericValue ?? 24
+        let max = obj?["max"]?.intValue ?? 20
+
+        // Lazily request access on first use — the host owns the one TCC
+        // prompt; the plugin never sees EventKit directly.
+        guard await services.calendar.requestAccess() else {
+            throw RPCErrorObject(
+                code: PluginRPC.ErrorCode.permissionDenied.rawValue,
+                message: "Calendar access not granted in System Settings → Privacy & Security",
+                data: nil)
+        }
+        let events = services.calendar.upcomingEvents(withinHours: withinHours, max: max)
+        return .object(["events": RPCValue.array(events.map(\.rpcObject))] as [String: Any?])
+    }
+
+    private func calendarCreateEvent(params: RPCValue?) async throws -> RPCValue {
+        guard let obj = params?.objectValue,
+              let title = obj["title"]?.stringValue,
+              let start = obj["start"]?.numericValue else {
+            throw RPCErrorObject(code: PluginRPC.ErrorCode.invalidParams.rawValue,
+                                 message: "calendar/createEvent requires `title` and `start` (epoch seconds)",
+                                 data: nil)
+        }
+        let durationMinutes = obj["durationMinutes"]?.intValue ?? 30
+
+        guard await services.calendar.requestAccess() else {
+            throw RPCErrorObject(
+                code: PluginRPC.ErrorCode.permissionDenied.rawValue,
+                message: "Calendar access not granted in System Settings → Privacy & Security",
+                data: nil)
+        }
+        guard let id = services.calendar.createEvent(
+            title: title,
+            start: Date(timeIntervalSince1970: start),
+            durationMinutes: durationMinutes)
+        else {
+            throw RPCErrorObject(code: PluginRPC.ErrorCode.internalError.rawValue,
+                                 message: "Failed to create the calendar event", data: nil)
+        }
+        return .object(["id": id] as [String: Any?])
     }
 }
 

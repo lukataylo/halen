@@ -150,6 +150,7 @@ final class AppCoordinator {
             eventBus: eventBus,
             inference: inference,
             caretObserver: observer,
+            calendar: CalendarService(),
             appSupportDir: HalenServices.defaultAppSupportDir()
         )
 
