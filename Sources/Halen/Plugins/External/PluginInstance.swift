@@ -129,13 +129,14 @@ final class PluginInstance {
         }
         if process.isRunning { kill(process.processIdentifier, SIGKILL) }
 
+        // Detach the readabilityHandlers first so no further callbacks fire,
+        // then cancel the AsyncStream consumers, then close the pipes.
+        stdoutPipe.fileHandleForReading.readabilityHandler = nil
+        stderrPipe.fileHandleForReading.readabilityHandler = nil
         readerTask?.cancel()
         stderrTask?.cancel()
-        // Close every pipe end we own. AsyncBytes on FileHandle.bytes.lines
-        // doesn't always observe Task cancellation while parked in `read(2)`;
-        // closing the read end forces the for-await to error out and the
-        // task to actually exit. Closing stdin lets the plugin's stdin
-        // read() return 0 (EOF) cleanly on the polite-shutdown path.
+        // Closing stdin lets the plugin's stdin read() return 0 (EOF) cleanly
+        // on the polite-shutdown path; closing our read ends releases them.
         try? stdinPipe.fileHandleForWriting.close()
         try? stdoutPipe.fileHandleForReading.close()
         try? stderrPipe.fileHandleForReading.close()
@@ -232,34 +233,50 @@ final class PluginInstance {
     }
 
     private func startReader() {
-        readerTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            let handle = self.stdoutPipe.fileHandleForReading
-            do {
-                // NDJSON: one message per line — `.lines` is the right primitive,
-                // no carry-buffer needed.
-                for try await line in handle.bytes.lines where self.isRunning {
-                    self.handleIncomingLine(Data(line.utf8))
-                }
-            } catch {
-                if self.isRunning {
-                    Log.warn("PluginInstance[\(self.manifest.id)]: stdout reader error: \(error)")
-                }
-            }
+        readerTask = installLineReader(on: stdoutPipe.fileHandleForReading) { [weak self] line in
+            guard let self, self.isRunning else { return }
+            self.handleIncomingLine(Data(line.utf8))
         }
     }
 
     private func startStderrForwarder() {
-        stderrTask = Task { @MainActor [weak self, id = manifest.id] in
-            guard let self else { return }
-            let handle = self.stderrPipe.fileHandleForReading
-            do {
-                for try await line in handle.bytes.lines where self.isRunning {
-                    Log.info("plugin[\(id)] \(line)")
-                }
-            } catch {
-                // Pipe closed on terminate — normal end-of-life, don't log.
+        let id = manifest.id
+        stderrTask = installLineReader(on: stderrPipe.fileHandleForReading) { [weak self] line in
+            guard self?.isRunning == true else { return }
+            Log.info("plugin[\(id)] \(line)")
+        }
+    }
+
+    /// Read `\n`-delimited lines from `handle` and hand each to `onLine` on the
+    /// MainActor, in order.
+    ///
+    /// Uses `readabilityHandler` rather than `FileHandle.bytes.lines`:
+    /// `AsyncBytes` delivered pipe data in laggy ~15-second batches, which
+    /// delayed every plugin JSON-RPC round-trip by that much. The
+    /// readabilityHandler fires as soon as the pipe has bytes; lines are
+    /// funnelled through an `AsyncStream` so the MainActor consumer sees them
+    /// promptly and in order.
+    private func installLineReader(on handle: FileHandle,
+                                   onLine: @escaping @MainActor (String) -> Void)
+        -> Task<Void, Never> {
+        let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+        // `accumulator` is touched only by this handle's readabilityHandler,
+        // which the OS fires serially — no locking needed.
+        let accumulator = LineBuffer()
+        handle.readabilityHandler = { fileHandle in
+            let chunk = fileHandle.availableData
+            if chunk.isEmpty {
+                // EOF — the plugin closed the pipe / exited.
+                fileHandle.readabilityHandler = nil
+                continuation.finish()
+                return
             }
+            for line in accumulator.drainLines(appending: chunk) {
+                continuation.yield(line)
+            }
+        }
+        return Task { @MainActor in
+            for await line in stream { onLine(line) }
         }
     }
 
@@ -314,5 +331,29 @@ final class PluginInstance {
                 data: nil
             )))
         }
+    }
+}
+
+/// Accumulates raw pipe bytes and yields complete `\n`-terminated lines —
+/// the carry-buffer a chunked reader needs (one `read` can split a line, or
+/// carry several). Confined to a single FileHandle's `readabilityHandler`,
+/// which the OS fires serially: `@unchecked Sendable` because that serial
+/// contract — not a lock — is the synchronisation.
+private final class LineBuffer: @unchecked Sendable {
+    private var data = Data()
+
+    /// Append `chunk`, then return every complete line it now yields (text
+    /// only, the `\n` stripped). A partial trailing line stays buffered.
+    func drainLines(appending chunk: Data) -> [String] {
+        data.append(chunk)
+        var lines: [String] = []
+        while let newline = data.firstIndex(of: 0x0A) {
+            let lineData = data[data.startIndex..<newline]
+            if !lineData.isEmpty, let line = String(data: lineData, encoding: .utf8) {
+                lines.append(line)
+            }
+            data.removeSubrange(data.startIndex...newline)
+        }
+        return lines
     }
 }

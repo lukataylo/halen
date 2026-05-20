@@ -324,11 +324,8 @@ final class AskHalen: HalenPlugin {
     }
 
     /// Post a transient system notification so the user knows the response
-    /// is on their clipboard. Inlined here (rather than via a notification
-    /// service) because Halen doesn't have one yet — MeetingPrep posts via
-    /// `UNUserNotificationCenter` directly with the same pattern.
-    /// Authorisation is already requested up front by MeetingPrep; on the
-    /// off-chance it's denied, the add() call fails silently and the user
+    /// is on their clipboard. Requests notification authorisation lazily; if
+    /// the user has denied it the `add()` call fails silently and the user
     /// still has the text on their clipboard.
     private func notifyClipboardFallback(reason: String) {
         let content = UNMutableNotificationContent()
@@ -340,7 +337,9 @@ final class AskHalen: HalenPlugin {
             trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
         )
         Task {
-            try? await UNUserNotificationCenter.current().add(request)
+            let center = UNUserNotificationCenter.current()
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+            try? await center.add(request)
         }
     }
 }

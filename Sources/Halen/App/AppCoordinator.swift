@@ -164,14 +164,17 @@ final class AppCoordinator {
             appSupportDir: HalenServices.defaultAppSupportDir()
         )
 
-        // Register first-party plugins.
+        // Register first-party plugins. Meeting Prep is no longer built in —
+        // it ships as an out-of-process plugin (plugins/meeting-prep/),
+        // installable from the Plugin Store, so the calendar capability and
+        // its briefing logic live behind the JSON-RPC boundary like any
+        // third-party plugin.
         registry.register(AskHalen(services: services))
         registry.register(TypoFixer(services: services, store: typoStore))
         registry.register(SentimentGuard(services: services))
         registry.register(VoiceDictation(services: services))
         registry.register(SnippetExpander(services: services))
         registry.register(BurnoutCopilot(services: services))
-        registry.register(MeetingPrep(services: services))
 
         // Out-of-process plugins under ~/Library/Application Support/Halen/Plugins/.
         // Discover manifests synchronously (just filesystem scan + JSON parse),
