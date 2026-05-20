@@ -1,9 +1,9 @@
 # Architecture
 
 Halen is a single Swift Package menubar app (`LSUIElement = true`) that hosts
-plugins in-process today and is designed to extract them to out-of-process
-JSON-RPC subprocesses in a later milestone. The whole codebase is roughly
-4k lines of Swift.
+its first-party plugins in-process and can also run third-party plugins as
+out-of-process JSON-RPC subprocesses. The whole codebase is roughly 13k lines
+of Swift, with another ~50 KB of unit tests under `Tests/HalenTests/`.
 
 ## Top-level layout
 
@@ -12,11 +12,13 @@ Sources/Halen/
   App/               # SwiftUI App, AppDelegate, AppCoordinator, MenuBarExtra UI
   Accessibility/     # AX permission, caret observer, AX attribute helpers
   Events/            # In-process pub/sub + typed event payloads
-  Inference/         # InferenceClient protocol, ModelTier, Ollama client, stub
+  Inference/         # RouterInferenceClient + protocol, ModelTier, backends
+                     #   (Apple FM / llama.cpp / Ollama), ModelDownloader
   Overlay/           # Caret-anchored NSWindow shell
-  Plugins/           # HalenPlugin protocol, HalenServices DI container, registry
-  Features/          # The six first-party plugins
-  Support/           # Logging, string diff
+  Plugins/           # HalenPlugin protocol, HalenServices DI container, registry,
+                     #   External/ — out-of-process plugin host + WebSocket bridge
+  Features/          # The seven first-party plugins
+  Support/           # Logging, string diff, hashing, paragraph classifier
 ```
 
 ## The big picture
@@ -35,14 +37,15 @@ Sources/Halen/
        │  └─┬─────────────┬─────────────┬─────────────┬────────────┘  │
        │    │             │             │             │               │
        │    ▼             ▼             ▼             ▼               │
-       │  TypoFixer  SentimentGuard  VoiceDictation  SnippetExpander  │
-       │                    BurnoutCopilot   MeetingPrep              │
+       │  AskHalen  TypoFixer  SentimentGuard  VoiceDictation         │
+       │  SnippetExpander  BurnoutCopilot  MeetingPrep                │
        │                       │           │                          │
        │                       │           │ async calls              │
        │                       ▼           ▼                          │
        │  ┌────────────────────────────────────────────────────────┐  │
-       │  │              OllamaInferenceClient                     │  │
-       │  │   (HTTP → http://localhost:11434, gemma4:e2b / e4b)    │  │
+       │  │              RouterInferenceClient                     │  │
+       │  │   routes per request, falls through on failure:        │  │
+       │  │   Apple FM · bundled Gemma 4 (llama.cpp) · Ollama      │  │
        │  └────────────────────────────────────────────────────────┘  │
        └──────────────────────────────────────────────────────────────┘
 ```
@@ -55,10 +58,13 @@ through `CaretObserver.replaceRange(_:with:)` or through their own UI panels.
 The **host** owns:
 
 - AX capture (focused element, caret rect, debounced text snapshots).
-- The shared inference runtime (Ollama HTTP client, queued).
+- The shared inference runtime (`RouterInferenceClient`, which serializes
+  per-backend requests and falls through across Apple FM / llama.cpp / Ollama).
 - Per-plugin storage roots (`~/Library/Application Support/Halen/<pluginId>/`).
 - Permission UI (Accessibility, Calendar, Mic, Speech, Notifications).
 - The marketplace UI (`HalenCenterView`) and plugin lifecycle.
+- The out-of-process plugin host (`Plugins/External/`) and the loopback
+  WebSocket bridge the browser extension connects to.
 
 A **plugin** is anything conforming to `HalenPlugin`:
 
@@ -80,12 +86,14 @@ protocol HalenPlugin: AnyObject {
 
 Categories: `writing`, `voice`, `scheduling`, `focus`, `productivity`.
 
-Today plugins are Swift classes wired into `AppCoordinator.startObservers()`.
-Six of them ship: `TypoFixer`, `SentimentGuard`, `VoiceDictation`,
-`SnippetExpander`, `BurnoutCopilot`, `MeetingPrep`. The
-`PluginRegistry` (`@Observable`) persists each plugin's enabled state in
-`UserDefaults` under the key `plugin.<id>.enabled` and calls `start()` /
-`stop()` on toggle.
+Today the first-party plugins are Swift classes wired into
+`AppCoordinator.startObservers()`. Seven of them ship: `AskHalen`,
+`TypoFixer`, `SentimentGuard`, `VoiceDictation`, `SnippetExpander`,
+`BurnoutCopilot`, `MeetingPrep`. The `PluginRegistry` (`@Observable`) persists
+each plugin's enabled state in `UserDefaults` under the key
+`plugin.<id>.enabled` and calls `start()` / `stop()` on toggle. Out-of-process
+plugins discovered under `~/Library/Application Support/Halen/Plugins/` are
+registered alongside them via `ExternalPluginAdapter`.
 
 ## The DI container: `HalenServices`
 
@@ -125,11 +133,10 @@ method name and each payload is `Codable`:
 
 | Case | Method | Payload |
 |---|---|---|
-| `textPaused`       | `text.pause`       | `appBundleId`, `appName`, `text`, `caretOffset`, `timestamp` |
-| `textSaved`        | `text.save`        | `appBundleId`, `appName`, `text`, `timestamp` |
-| `caretMoved`       | `caret.moved`      | `appBundleId`, `rect (x,y,w,h)`, `timestamp` |
-| `appFocused`       | `app.focused`      | `appBundleId`, `appName`, `timestamp` |
-| `clipboardChanged` | `clipboard.changed`| `textPreview`, `timestamp` |
+| `textPaused`        | `text.pause`        | `appBundleId`, `appName`, `text`, `caretOffset`, `timestamp` |
+| `caretMoved`        | `caret.moved`       | `appBundleId`, `rect (x,y,w,h)`, `timestamp` |
+| `appFocused`        | `app.focused`       | `appBundleId`, `appName`, `timestamp` |
+| `inferenceActivity` | `inference.activity`| `phase (started/finished)`, `source`, `anchor?`, `timestamp` |
 
 The `text.pause` event is the workhorse — every writing plugin keys off it.
 
@@ -182,7 +189,9 @@ func replaceRange(_ range: NSRange, with replacement: String) -> Bool
 Sets `kAXSelectedTextRangeAttribute` to the target range, then writes
 `kAXSelectedTextAttribute` with the replacement. Returns `false` for
 elements that don't honour AX writes — most Electron / web text fields and
-terminals. Used by `TypoFixer`, `SnippetExpander`, and `VoiceDictation`.
+terminals. Used by `TypoFixer`, `SnippetExpander`, `VoiceDictation`, and
+`AskHalen` (which falls back to a clipboard + ⌘V paste when the AX write
+fails).
 
 ## Inference layer
 
@@ -194,27 +203,44 @@ protocol InferenceClient: Sendable {
 }
 
 struct InferenceRequest: Sendable {
-    var prompt: String
-    var tier: ModelTier
-    var maxTokens: Int = 256
-    var temperature: Double = 0.2
-    var stop: [String] = []
+    let prompt: String
+    let tier: ModelTier
+    let maxTokens: Int        // default 256
+    let temperature: Double   // default 0.2
+    let stop: [String]
+    let taskKind: InferenceTaskKind   // .classification | .generation, default .generation
 }
 ```
 
-`ModelTier` (`small` / `medium` / `large`) is what plugins ask for. The
-default mapping in `OllamaInferenceClient`:
+Plugins ask for a `ModelTier` (`small` / `medium` / `large`) and a
+`taskKind`, never a concrete model. The concrete `InferenceClient` is
+`RouterInferenceClient`, which holds a set of `InferenceBackend`s and, for
+each request:
 
-| Tier   | Model name      | Where used |
-|--------|-----------------|------------|
-| small  | `gemma4:e2b`    | Burnout tone yes/no classification (4 tokens) |
-| medium | `gemma4:e4b`    | Sentiment Guard classify + rephrase, Snippet AI snippets, Meeting Prep briefings |
-| large  | `gemma4:26b`    | Reserved for future workstation paths |
+1. Filters to backends whose `capability.servesTiers` covers the request tier.
+2. Sorts by a lexicographic key — user preference order first
+   (`InferenceSettings.preferenceOrder`, persisted), then task-affinity
+   (`capability.strongAt`), then the backend's `basePriority`.
+3. Walks the resulting chain, skipping any backend whose cached availability
+   probe says unavailable, and falls through to the next on failure.
+4. Serializes same-backend requests with a per-backend `AsyncSemaphore(1)`;
+   different backends still run in parallel.
 
-The client POSTs to `http://localhost:11434/api/chat` with `stream: false`.
-Timeouts: 60 s request, 120 s resource. Plugin code only sees
-`InferenceClient`, so swapping Ollama for MLX/llama.cpp later is a host-only
-change.
+Three backends ship (`InferenceBackends.makeAll()`):
+
+| Backend (`BackendKind`)  | Serves tiers      | Notes |
+|--------------------------|-------------------|-------|
+| `appleFoundationModels`  | small, medium     | Apple's on-device system model via the Foundation Models framework, macOS 26+. Zero install; prewarmed at launch. |
+| `bundledLlama`           | small, medium     | Gemma 4 E4B (`Q4_K_M` GGUF) on a bundled llama.cpp runtime. Model fetched on first use by `ModelDownloader`, or baked into the `.app` with `BUNDLE_MODEL=1`. |
+| `ollama`                 | small, medium, large | Local Ollama daemon (`OllamaBackend` → `OllamaInferenceClient`). The only backend serving `.large`. Endpoint configurable via `OllamaSettings`. |
+
+The default preference order is Apple FM → bundled llama.cpp → Ollama; the
+user can reorder it in Settings → Inference.
+
+The Ollama client POSTs to `http://localhost:11434/api/chat` (or the
+configured endpoint) with `stream: false`; tier maps to `gemma4:e2b` /
+`gemma4:e4b` / `gemma4:26b`. Plugin code only ever sees `InferenceClient`, so
+adding or reordering backends is a host-only change.
 
 ## Storage
 
@@ -244,9 +270,12 @@ appear without overwriting user customisations.
    Accessibility.
 2. Once granted, starts `CaretObserver`, the overlay window, and the plugin
    registry.
-3. Registers all six first-party plugins with their stored enabled state.
-4. On quit, calls `plugin.stop()` for everything so hotkeys, AX observers,
-   and floating panels unwind cleanly.
+3. Registers all seven first-party plugins with their stored enabled state,
+   discovers any out-of-process plugins, and starts the WebSocket bridge if
+   it's enabled in Settings.
+4. On quit, runs the async shutdown ladder for out-of-process plugins, then
+   calls `plugin.stop()` for everything so hotkeys, AX observers, and
+   floating panels unwind cleanly.
 
 The menubar UI itself is `HalenCenterView`, a `MenuBarExtra` popover with
 category sections, per-plugin toggles, a footer with Accessibility shortcut
@@ -256,7 +285,8 @@ and Quit, and a slide-in detail view per plugin.
 
 - **No telemetry.** No analytics, no remote logging, no automatic crash
   reporter. Logs go to stderr and the unified system log only.
-- **No cloud fallback.** Every prompt hits localhost. If Ollama isn't
-  running, plugins that need inference fail silently and log a warning.
+- **No cloud fallback.** Every prompt is served on-device. If no backend is
+  available, plugins that need inference surface an actionable error and log
+  a warning — the router never reaches out to a remote model.
 - **No background daemon.** The app is a regular `NSApplication`; quitting
   the menubar quits everything.

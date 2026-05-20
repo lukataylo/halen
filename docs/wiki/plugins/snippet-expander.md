@@ -5,7 +5,8 @@
 
 A TextExpander-style sentinel trigger, with a twist: snippets can be
 **AI-backed**, where the snippet's stored value is a system prompt sent
-to Gemma 4 with the surrounding text as context.
+to Gemma 4 with the surrounding text as context. The plugin also owns a
+separate **⌃⌥R rephrase-selection hotkey** (see below).
 
 ## Trigger pattern
 
@@ -32,6 +33,24 @@ Lookup is case-insensitive (`SnippetStore.snippet(for:)` does
 `.lowercased()` compare on both sides). A 3-second `recentWrites`
 suppression list prevents the expansion from re-triggering on the AX
 write-back's own `text.pause`.
+
+## Rephrase-selection hotkey (⌃⌥R)
+
+Separate from the `;` triggers: with text highlighted in any app, **⌃⌥R**
+rewrites just that selection in place. It's a distinct mechanism because
+typing a `;` trigger would destroy the highlight.
+
+`installRephraseHotkey()` registers global + local `NSEvent` `.keyDown`
+monitors (same approach as Ask Halen's ⌃H, not Carbon) matching
+Control+Option held with the "r" key. It calls `IOHIDRequestAccess` so the
+hotkey can fire system-wide — Input Monitoring is needed for that, and the
+request is idempotent if Ask Halen already asked.
+
+`rephraseSelection()` reads the focused element's selected range and text via
+AX, no-ops when nothing is selected, and runs the same placeholder + async
+write-back path as an AI snippet — sending only the selected text to Gemma 4
+(`.medium` tier, `taskKind: .generation`) with a fixed "rewrite more clearly
+and concisely" prompt.
 
 ## The three snippet kinds
 
@@ -77,7 +96,7 @@ enum Kind: String, Codable, Sendable {
    ```
 
 2. Grab the **500 characters immediately before the trigger** as prior
-   context and POST to Gemma 4 E4B:
+   context and send it to Gemma 4 (`.medium` tier):
 
    ```swift
    let priorEnd = tokenRange.location

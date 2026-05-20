@@ -7,52 +7,76 @@
   `requiresOnDeviceRecognition`, and other 14-only API.
 - **Xcode command-line tools.** `xcode-select --install`.
 - **Swift 5.10+** (ships with Xcode 15.3; Swift 6 also fine).
-- **Ollama** running locally on the default port `11434`, with two models
-  pulled:
+- **An inference backend.** `RouterInferenceClient` routes across whatever is
+  available, so you need at least one of:
 
-  ```bash
-  ollama pull gemma4:e2b   # used for small-tier (fast classification)
-  ollama pull gemma4:e4b   # used for medium-tier (default for rewrites)
-  ```
+  - **Apple Intelligence** (macOS 26+) — nothing to install or configure.
+  - The **bundled Gemma 4 E4B model** — fetched on first use by the in-app
+    `ModelDownloader` (Settings → Inference), or baked into the `.app` with a
+    `BUNDLE_MODEL=1` build.
+  - **Ollama** running locally on the default port `11434`. Pull the models
+    matching the tiers you want:
 
-  Confirm with `ollama list` and a quick smoke test:
+    ```bash
+    ollama pull gemma4:e2b   # small-tier (fast classification)
+    ollama pull gemma4:e4b   # medium-tier (default for rewrites)
+    ollama pull gemma4:26b   # large-tier (optional, heavy reasoning)
+    ```
 
-  ```bash
-  curl -s http://localhost:11434/api/chat \
-    -H 'Content-Type: application/json' \
-    -d '{"model":"gemma4:e4b","stream":false,"messages":[{"role":"user","content":"say hi"}]}' \
-    | jq -r '.message.content'
-  ```
+    Confirm with `ollama list` and a quick smoke test:
 
-  The model→tier mapping is defined in
+    ```bash
+    curl -s http://localhost:11434/api/chat \
+      -H 'Content-Type: application/json' \
+      -d '{"model":"gemma4:e4b","stream":false,"messages":[{"role":"user","content":"say hi"}]}' \
+      | jq -r '.message.content'
+    ```
+
+  The Ollama model→tier mapping is defined in
   [`OllamaInferenceClient.modelName(for:)`](../../Sources/Halen/Inference/OllamaInferenceClient.swift):
-  `small → gemma4:e2b`, `medium → gemma4:e4b`, `large → gemma4:26b`.
+  `small → gemma4:e2b`, `medium → gemma4:e4b`, `large → gemma4:26b`. Backend
+  order is configurable in Settings → Inference.
 
 ## Build
 
-Two scripts in [`scripts/`](../../scripts/):
+Scripts in [`scripts/`](../../scripts/):
 
 ```bash
 ./scripts/build-app.sh    # SPM build + assemble build/Halen.app + codesign
-./scripts/run-dev.sh      # build, then launch the binary inside the bundle with stdout/stderr in your terminal
+./scripts/run-dev.sh      # build-app.sh, then quit-old / launch / stream the log
+./scripts/fetch-assets.sh # fetch the vendored llama.xcframework + GGUF (BUNDLE_MODEL builds)
+./scripts/notarize.sh     # notarize + staple a DIST build
 ```
 
 `build-app.sh` does:
 
-1. `swift build -c debug` (override with `CONFIG=release`).
+1. `swift build -c debug` (override with `CONFIG=release`; `DIST=1` forces a
+   release build).
 2. Copies the binary into `build/Halen.app/Contents/MacOS/halen`.
 3. Copies `Resources/Info.plist` and the icon set into `Contents/Resources/`.
-4. `codesign --force --sign "$SIGN_IDENTITY" --identifier com.dadiani.halen`.
+4. Embeds `llama.framework` (from `Vendor/llama.xcframework`) into
+   `Contents/Frameworks/` and patches the binary's rpath.
+5. Optionally bundles the Gemma 4 GGUF when `BUNDLE_MODEL=1` (default: slim
+   build, the in-app `ModelDownloader` fetches the model on first use).
+6. Signs nested code then the app:
+   `codesign --force --sign "$SIGN_IDENTITY" --identifier com.dadiani.halen`.
 
-The default signing identity is a personal Apple Development cert; override
+The default dev signing identity is a personal Apple Development cert; override
 with `SIGN_IDENTITY=- ./scripts/build-app.sh` for ad-hoc signing. **Use the
 same identity every rebuild** — the TCC database keys on the cert plus the
 bundle id, and switching identities will re-prompt for every permission.
 
+A `DIST=1 ./scripts/build-app.sh` produces a notarization-ready build (release
+config, Developer ID signing, Hardened Runtime, secure timestamp,
+entitlements); follow it with `./scripts/notarize.sh`. On a fresh checkout,
+`fetch-assets.sh` first builds `Vendor/llama.xcframework` from the pinned
+llama.cpp tag (`SKIP_GGUF=1` skips the multi-GB model download).
+
 ## Permissions
 
-Halen needs five separate macOS permissions. Each one is the OS's standard
-TCC prompt — Halen never asks for, sees, or stores credentials.
+Halen uses up to six separate macOS permissions. Each one is the OS's standard
+TCC prompt — Halen never asks for, sees, or stores credentials. Only
+Accessibility is required; the rest gate individual plugins.
 
 ### 1. Accessibility (required, blocks everything else)
 
@@ -74,12 +98,12 @@ so the TCC entry matches.
 
 ### 2. Microphone (Voice Dictation only)
 
-Triggered the first time you press ⌥⌘Space.
+Triggered the first time you press ⌥⌘H.
 `AVCaptureDevice.requestAccess(for: .audio)` shows the prompt.
 
 Usage string (`NSMicrophoneUsageDescription` in `Info.plist`):
 
-> Halen captures audio when you press ⌥⌘Space so it can transcribe your
+> Halen captures audio when you press ⌥⌘H so it can transcribe your
 > speech locally and insert it at your cursor. Audio never leaves this Mac.
 
 ### 3. Speech Recognition (Voice Dictation only)
@@ -118,6 +142,22 @@ you accept its suggestion — that requires the full-access scope.
 Meeting Prep posts one notification 1 second after a briefing lands on your
 clipboard. If you deny, the clipboard part still works.
 
+### 6. Input Monitoring (Ask Halen + Snippet Expander rephrase)
+
+Ask Halen's ⌃H palette and Snippet Expander's ⌃⌥R rephrase-selection hotkey
+use `NSEvent` global monitors, which need Input Monitoring to fire while
+another app is frontmost. Halen calls `IOHIDRequestAccess` on launch.
+
+Usage string (`NSInputMonitoringUsageDescription`):
+
+> Halen listens for the ⌃H hotkey so the Ask Halen palette can open in any
+> app. Only the hotkey is matched; no other keystrokes are recorded.
+
+If you deny it, the hotkeys still fire while Halen itself is frontmost. Grant
+it under **System Settings → Privacy & Security → Input Monitoring** for
+system-wide use. (Voice Dictation's ⌥⌘H uses Carbon `RegisterEventHotKey`
+instead and needs no permission beyond Accessibility.)
+
 ## Where data lives
 
 ```
@@ -140,8 +180,9 @@ without overwriting user changes — see each plugin's "Storage" section.
 | Symptom | Likely cause |
 |---|---|
 | Menubar says "Accessibility permission required" | App is signed by a different identity than the TCC entry. Re-add `build/Halen.app` to System Settings. |
-| ⌥⌘Space does nothing | Another app owns the shortcut. Logs show `HotkeyRegistrar: RegisterEventHotKey failed`. |
+| ⌥⌘H does nothing | Another app owns the shortcut. Logs show `HotkeyRegistrar: RegisterEventHotKey failed`. |
+| ⌃H / ⌃⌥R fire only when Halen is frontmost | Input Monitoring not granted. Add Halen under System Settings → Privacy & Security → Input Monitoring. (⌃H is also consumed as backspace inside Terminal / iTerm by design.) |
 | Typo Fixer never fires | Focused text field is non-AX (Electron / web / terminal). Logs show `replaceRange: failed to set selection range`. |
-| Sentiment Guard never fires | Ollama not running, or `gemma4:e4b` not pulled. Check `curl http://localhost:11434/api/tags`. |
+| Sentiment Guard never fires | No inference backend available. Check Settings → Inference for backend status; if relying on Ollama, confirm it's running with `curl http://localhost:11434/api/tags`. |
 | Voice Dictation says "recogniser unavailable" | On-device speech model not installed. System Settings → Keyboard → Dictation. |
 | Meeting Prep never fires | Calendar access denied, or no event 13–17 min away. Use the "Generate now" button in the plugin detail view. |

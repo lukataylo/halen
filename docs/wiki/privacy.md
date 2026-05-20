@@ -30,16 +30,22 @@ let (text, caretOffset) = windowAroundCaret(text: fullText, offset: fullOffset, 
 That cap exists so a terminal scrollback or a long Notes document can't
 blast inference plugins with megabytes of unrelated text.
 
-Plugins that downstream the text further:
+In all cases the text goes only to the local inference backend the router
+picks (Apple Foundation Models, the bundled Gemma 4 model, or your Ollama
+daemon) — never off-device. Plugins that downstream the text further:
 
 - **Sentiment Guard** re-windows to ~800 chars around the caret before
-  hashing and sending to Gemma.
+  hashing and sending for tone classification.
 - **Burnout Copilot** re-windows to ~800 chars before its yes/no tone call.
 - **Snippet Expander (AI snippets)** sends the 500 chars *immediately
-  preceding* the trigger as prior context.
+  preceding* the trigger as prior context; the ⌃⌥R rephrase hotkey sends only
+  the currently selected text.
+- **Ask Halen** sends your typed question plus the context you can see in the
+  palette — the focused app name, the current selection, and the most recent
+  clipboard entry.
 - **Meeting Prep** sends EventKit event titles, attendee names, and notes
   — never anything from focused text fields.
-- **Typo Fixer** does string diffs locally; it never sends text to Gemma.
+- **Typo Fixer** does string diffs locally; it never sends text to a model.
 - **Voice Dictation** streams audio buffers to `SFSpeechRecognizer` with
   `requiresOnDeviceRecognition = true` (see below).
 
@@ -55,29 +61,46 @@ Everything by default. Concretely:
 
 ## Network traffic
 
-Halen makes exactly one kind of outbound connection: **HTTP POST to
-`http://localhost:11434/api/chat`**, the Ollama HTTP API on the loopback
-interface. The client is defined in
+Inference itself never touches the network for the Apple Foundation Models
+and bundled-llama.cpp backends — both run entirely on-device. The only
+inference backend that uses a socket at all is **Ollama**, and it talks to
+the loopback interface:
+
+**HTTP POST to `http://localhost:11434/api/chat`** — the Ollama HTTP API. The
+client is defined in
 [`OllamaInferenceClient.swift`](../../Sources/Halen/Inference/OllamaInferenceClient.swift):
 
 ```swift
 init(baseURL: URL = URL(string: "http://localhost:11434")!) { ... }
 ```
 
-The base URL is set in code; there is no setting that would let the user
-or a process change it to a remote host. The request body contains:
+The endpoint defaults to `localhost:11434` but **is user-configurable** via
+`OllamaSettings` (Settings → Inference) — for example to reach Ollama running
+in a VM or on another machine on your LAN. It is never changed by Halen or by
+a remote process; only you can point it elsewhere. The request body contains:
 
 - The constructed prompt (windowed text from above, plus instructions)
 - The model name (`gemma4:e2b` / `gemma4:e4b` / `gemma4:26b`)
 - Generation options (`temperature`, `num_predict`, `stop`)
 
-That traffic does not leave the loopback interface unless the user has
-configured Ollama itself to bind to a non-localhost address. By default
-Ollama listens on `127.0.0.1` only.
+With the default endpoint, that traffic does not leave the loopback interface
+unless you have configured Ollama itself to bind to a non-localhost address.
 
-There is **no other outbound network code** in the project — no analytics
-SDK, no remote logging endpoint, no auto-updater, no crash reporter.
-`URLSession` is only constructed once, inside the Ollama client.
+Two more outbound paths exist, both user-initiated and neither carrying any of
+your text:
+
+- **Bundled-model download.** If you choose to download the bundled Gemma 4
+  model from Settings → Inference (instead of using Apple Intelligence or a
+  `BUNDLE_MODEL=1` build), `ModelDownloader` fetches a single GGUF file from
+  Hugging Face (`huggingface.co/unsloth/gemma-4-E4B-it-GGUF`). This is a
+  one-time file transfer, not telemetry.
+- **Browser extension bridge.** If you enable the WebSocket bridge for the
+  optional browser extension, Halen listens on `127.0.0.1:50765` (loopback
+  only) so the extension can forward typing events from browser text fields.
+
+There is **no analytics SDK, no remote logging endpoint, no auto-updater, and
+no crash reporter** anywhere in the project. Nothing about your text, voice,
+or calendar is ever uploaded.
 
 ## Apple on-device speech recognition
 
@@ -111,8 +134,8 @@ Burnout Copilot and Meeting Prep ask for **full Calendars access** via
   the user accepts the break suggestion. No other writes.
 
 Calendar data flows through the same pipeline as everything else: read
-into memory, sent to localhost Gemma if needed (Meeting Prep), never
-persisted outside macOS's own EventKit store.
+into memory, sent to the local inference backend if needed (Meeting Prep),
+never persisted outside macOS's own EventKit store.
 
 ## Telemetry
 
@@ -131,6 +154,7 @@ Nothing is uploaded.
 | Speech Recognition      | Voice Dictation      | Convert audio to text **on-device** |
 | Calendars (full access) | Burnout Copilot, Meeting Prep | Read events; Burnout writes the `🌿 Halen break` event |
 | Notifications           | Meeting Prep         | Post the "briefing ready" alert |
+| Input Monitoring        | Ask Halen, Snippet Expander | Match the ⌃H and ⌃⌥R hotkeys system-wide — only those hotkeys, no other keystrokes |
 
 You can deny any of these and the host continues to run. The dependent
 plugins surface their own "permission required" detail-view state with a

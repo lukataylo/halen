@@ -42,16 +42,17 @@ Tripped when `distractionMinutesInWindow >= 90`.
 
 A rolling window of the **last 10 tone classifications**, each `.calm` or
 `.sharp`. Records are added by `BurnoutCopilot.classifyTone(_:caretOffset:)`,
-which sends paused text (windowed to ~800 chars, only if > 60 chars) to
-Gemma 4 **E2B** for a yes/no:
+which sends paused text (windowed to ~800 chars, only if > 60 chars) to the
+`.small` inference tier for a yes/no:
 
 ```swift
 let prompt = """
-Is the tone of the following text irritated, sharp, or hostile?
-Reply with only "yes" or "no", lowercase.
-Text: \"\"\"\(windowed)\"\"\"
+Is the tone of the following text irritated, sharp, or hostile? Reply with only "yes" or "no", lowercase.
+
+Text: \"\"\"\(paragraph)\"\"\"
 """
-let request = InferenceRequest(prompt: prompt, tier: .small, maxTokens: 4, temperature: 0.1)
+let request = InferenceRequest(prompt: prompt, tier: .small, maxTokens: 16,
+                               temperature: 0.1, taskKind: .classification)
 ```
 
 Tripped when `sharpCount >= 3` in the last 10 samples.

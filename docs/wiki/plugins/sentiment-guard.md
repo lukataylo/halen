@@ -4,8 +4,8 @@
 > [`Sources/Halen/Features/SentimentGuard.swift`](../../../Sources/Halen/Features/SentimentGuard.swift),
 > [`Sources/Halen/Features/SentimentRulesStore.swift`](../../../Sources/Halen/Features/SentimentRulesStore.swift)
 
-A "would you really send that?" popover, driven by Gemma 4 E4B running
-locally on every paused draft that looks like a message.
+A "would you really send that?" popover, driven by a local Gemma 4 model
+(`.medium` tier) running on every paused draft that looks like a message.
 
 ## Trigger gate
 
@@ -56,9 +56,11 @@ Text: \"\"\"\(windowed)\"\"\"
 """
 ```
 
-Request parameters: `tier: .medium` (→ `gemma4:e4b`), `maxTokens: 16`,
-`temperature: 0.1`. Adding or toggling a rule changes the prompt on the
-next pause — no restart needed.
+Request parameters: `tier: .medium`, `maxTokens: 16`, `temperature: 0.1`.
+The router serves `.medium` from whichever backend is available (Apple
+Foundation Models, the bundled Gemma 4 model, or Ollama's `gemma4:e4b`).
+Adding or toggling a rule changes the prompt on the next pause — no restart
+needed.
 
 Gemma's response is normalised (lowercased, trimmed of punctuation, first
 word taken) and matched against the lowercase rule labels. A match

@@ -6,7 +6,7 @@ so the demo runs in **60 seconds flat** with no dead air.
 > Setup before you start: open **TextEdit** with a blank document; open
 > **System Settings → Privacy & Security → Accessibility** in a tab beside it
 > in case you need to show the permission was granted; have **Halen** running
-> with all six plugins enabled (the dropdown shows "6 of 6 plugins active").
+> with all seven plugins enabled (the dropdown shows "7 of 7 plugins active").
 
 ---
 
@@ -16,9 +16,9 @@ so the demo runs in **60 seconds flat** with no dead air.
 > plugin. Here's the marketplace."*
 
 - Click the **Halen icon** in the menubar.
-- Hover over each plugin card briefly: *Typo Fixer, Sentiment Guard, Voice
-  Dictation, Snippet Expander, Burnout Copilot, Meeting Prep.*
-- *"Six plugins. All running locally. No cloud calls anywhere."*
+- Hover over each plugin card briefly: *Ask Halen, Typo Fixer, Sentiment
+  Guard, Voice Dictation, Snippet Expander, Burnout Copilot, Meeting Prep.*
+- *"Seven plugins. All running locally. No cloud calls anywhere."*
 
 ## 0:08 — 0:23 · Typo correction (15 s)
 
@@ -84,7 +84,7 @@ so the demo runs in **60 seconds flat** with no dead air.
   meeting, Halen reads the entry, asks Gemma 4 for a five-bullet briefing,
   drops it on my clipboard, and posts a notification."*
 - Close the dropdown.
-- *"That's Halen. Six plugins, one local Gemma 4, every keystroke private.
+- *"That's Halen. Seven plugins, local Gemma 4, every keystroke private.
   Built in a hackathon."* 🎤
 
 ---
@@ -96,7 +96,7 @@ so the demo runs in **60 seconds flat** with no dead air.
   enable/disable independently.
 - **Gemma 4.** The on-device frontier model released April 2026; E4B is the
   default tier; E2B handles fast classification paths.
-- **Six plugins out of the box.** Designed so judges can see breadth quickly.
+- **Seven plugins out of the box.** Designed so judges can see breadth quickly.
 - **Built in a hackathon.** Don't apologise — every line is recent.
 
 ## Things to avoid

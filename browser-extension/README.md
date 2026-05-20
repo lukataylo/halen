@@ -30,7 +30,11 @@ Gmail, Google Docs, Notion, ChatGPT.app's input, etc.
 
 Same plugins, same protocol shape — the browser tab is just another event
 source. Write-back relies on Halen's existing clipboard-and-⌘V fallback
-(Bet 4a) because synthesised ⌘V works perfectly in Chromium text fields.
+because synthesised ⌘V works perfectly in Chromium text fields.
+
+The bridge is authenticated: loopback binding alone isn't a trust boundary
+(any local process could connect), so every client must present a **pairing
+token** before it can send or receive events.
 
 ## Install (Chrome / Edge / Arc / Brave)
 
@@ -38,10 +42,12 @@ source. Write-back relies on Halen's existing clipboard-and-⌘V fallback
 2. Toggle on **Developer mode** (top-right)
 3. Click **Load unpacked**
 4. Pick the `browser-extension/` directory in this repo
+5. **Pair it.** Click the extension's toolbar icon to open its popup, then
+   paste the pairing token from **Halen Settings → Browser bridge**. Until
+   the token matches, the connection opens but Halen ignores its events.
 
-The extension's icon appears in the toolbar. Tooltip shows the connection
-status (the v0 doesn't render a popup yet — watch the Halen log for
-connection events).
+The extension's popup shows the connection status; you can also watch the
+Halen log for connection events.
 
 ## Verify
 

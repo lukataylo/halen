@@ -3,7 +3,7 @@
 > Plugin id: `com.halen.voice-dictation` · Category: Voice · Code:
 > [`Sources/Halen/Features/VoiceDictation/`](../../../Sources/Halen/Features/VoiceDictation/)
 
-Press **⌥⌘Space**, speak, press again — the transcription appears at your
+Press **⌥⌘H**, speak, press again — the transcription appears at your
 cursor. Apple's on-device recogniser does the speech-to-text; nothing
 hits the network.
 
@@ -13,8 +13,7 @@ Defined in
 [`HotkeyRegistrar.swift`](../../../Sources/Halen/Features/VoiceDictation/HotkeyRegistrar.swift).
 
 Why Carbon instead of `NSEvent.addGlobalMonitorForEvents`: the NSEvent
-global-monitor path didn't fire reliably for ⌥⌘Space (it conflicts with
-the system dictation shortcut at the event-tap level), and it needs Input
+global-monitor path didn't fire reliably for the shortcut, and it needs Input
 Monitoring permission. Carbon's `RegisterEventHotKey` is the canonical
 mechanism for menubar apps that need a real, system-wide shortcut and
 works without any additional TCC prompt beyond Accessibility.
@@ -60,7 +59,7 @@ if #available(macOS 13.0, *) {
 
 Errors with NSError codes `301` and `216` (cancellation and benign
 end-of-audio) are filtered out so the UI doesn't flash an error when the
-user just presses ⌥⌘Space again to stop.
+user just presses ⌥⌘H again to stop.
 
 ## Permission flow
 
@@ -76,7 +75,7 @@ whether each is `granted` / `denied` / `notDetermined`.
 `Info.plist` strings:
 
 - `NSMicrophoneUsageDescription`:
-  > Halen captures audio when you press ⌥⌘Space so it can transcribe your
+  > Halen captures audio when you press ⌥⌘H so it can transcribe your
   > speech locally and insert it at your cursor. Audio never leaves this Mac.
 - `NSSpeechRecognitionUsageDescription`:
   > Halen uses Apple's on-device speech recognition to convert your
