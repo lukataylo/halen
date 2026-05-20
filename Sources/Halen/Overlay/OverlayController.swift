@@ -344,6 +344,12 @@ private struct HalenCaretIndicator: View {
     }
 
     var body: some View {
+        // No drop shadow. The caret-indicator panel is exactly the icon
+        // size (16×16) and the image fills it edge-to-edge, so any blur
+        // radius has no margin to render into and clips to a hard square —
+        // very visible as a grey halo behind the white-filled outline mark
+        // on a light background. Both marks are self-defining without it
+        // (solid = dark cobalt fill, outline = crisp cobalt stroke).
         Group {
             if let img = NSImage(named: assetName) {
                 Image(nsImage: img)
@@ -355,9 +361,5 @@ private struct HalenCaretIndicator: View {
                     .padding(2)
             }
         }
-        // Lighter shadow for the outline style — a heavy cobalt glow under a
-        // white-filled bubble muddies it; the solid mark can carry more.
-        .shadow(color: Color.halenCobalt.opacity(dotStyle == "outline" ? 0.18 : 0.35),
-                radius: 2, x: 0, y: 1)
     }
 }
