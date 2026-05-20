@@ -180,6 +180,7 @@ without overwriting user changes — see each plugin's "Storage" section.
 | Symptom | Likely cause |
 |---|---|
 | Menubar says "Accessibility permission required" | App is signed by a different identity than the TCC entry. Re-add `build/Halen.app` to System Settings. |
+| Any permission stuck — granted but not working, and System Settings won't let you toggle it | The code signature changed (ad-hoc / failed `codesign` / new identity) and TCC's grant is orphaned on the old signature. Run `scripts/reset-permissions.sh` (`tccutil reset` for every service Halen uses), then relaunch and re-grant. |
 | ⌥⌘H does nothing | Another app owns the shortcut. Logs show `HotkeyRegistrar: RegisterEventHotKey failed`. |
 | ⌃H / ⌃⌥R fire only when Halen is frontmost | Input Monitoring not granted. Add Halen under System Settings → Privacy & Security → Input Monitoring. (⌃H is also consumed as backspace inside Terminal / iTerm by design.) |
 | Typo Fixer never fires | Focused text field is non-AX (Electron / web / terminal). Logs show `replaceRange: failed to set selection range`. |

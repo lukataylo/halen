@@ -124,9 +124,22 @@ if [[ "$DIST" == "1" ]]; then
     echo "✓ built + signed $APP_DIR"
     echo "  next: scripts/notarize.sh   (Gatekeeper will reject it until then)"
 else
+    # `codesign` failing here (commonly `errSecInternalComponent` — a wedged
+    # `securityd`) leaves an unsigned bundle. macOS then treats it as a new
+    # identity and the app's TCC permissions don't carry over. Catch the
+    # failure and point at the fix instead of dying with a raw Security error.
+    codesign_failed() {
+        echo "" >&2
+        echo "error: codesign failed — the bundle is unsigned." >&2
+        echo "  This is usually a wedged 'securityd' (errSecInternalComponent)." >&2
+        echo "  Fix: reboot (clears securityd), or 'sudo killall securityd', then rebuild." >&2
+        echo "  After any signature change, run scripts/reset-permissions.sh so TCC" >&2
+        echo "  re-prompts cleanly." >&2
+        exit 1
+    }
     if [[ -d "$FRAMEWORKS/llama.framework" ]]; then
-        codesign --force --sign "$SIGN_IDENTITY" "$FRAMEWORKS/llama.framework" >/dev/null
+        codesign --force --sign "$SIGN_IDENTITY" "$FRAMEWORKS/llama.framework" >/dev/null || codesign_failed
     fi
-    codesign --force --sign "$SIGN_IDENTITY" --identifier com.dadiani.halen "$APP_DIR" >/dev/null
+    codesign --force --sign "$SIGN_IDENTITY" --identifier com.dadiani.halen "$APP_DIR" >/dev/null || codesign_failed
     echo "✓ built $APP_DIR"
 fi
