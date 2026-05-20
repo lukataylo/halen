@@ -26,6 +26,16 @@ final class AppCoordinator {
     /// menubar popup closing and re-opening.
     let launchAtLogin = LaunchAtLoginController()
 
+    /// Backs the Plugin Store modal. App-scoped so its fetched registry and
+    /// in-progress install state survive the menubar popup closing. A freshly
+    /// installed plugin is handed straight back to `registerInstalledPlugin`
+    /// so it goes live without an app restart.
+    lazy var pluginStoreModel: PluginStoreModel = {
+        PluginStoreModel(registry: registry) { [weak self] dir, manifest in
+            self?.registerInstalledPlugin(directory: dir, manifest: manifest)
+        }
+    }()
+
     /// Kept around so we can prewarm Apple FM at launch and re-probe
     /// availability from the Settings UI without going through the router.
     let backends: [InferenceBackend]
@@ -186,6 +196,22 @@ final class AppCoordinator {
         if WebSocketBridge.isEnabledInDefaults {
             ws.start()
         }
+    }
+
+    /// Register a freshly-installed external plugin live, without an app
+    /// restart. Called by the Plugin Store after `PluginInstaller` has
+    /// downloaded, unpacked, and validated the plugin into the install root.
+    /// No-op if the plugin host hasn't been created yet (Accessibility not
+    /// granted) — in that path the plugin is picked up by the normal
+    /// `discoverManifests()` scan once observers start.
+    func registerInstalledPlugin(directory: URL, manifest: PluginManifest) {
+        guard let pluginHost else {
+            Log.warn("AppCoordinator: plugin host not ready; \(manifest.id) will load on next launch")
+            return
+        }
+        guard !registry.contains(manifest.id) else { return }
+        let adapter = ExternalPluginAdapter(manifest: manifest, pluginDir: directory, host: pluginHost)
+        registry.register(adapter)
     }
 
     private func startEventLogger() {
