@@ -23,11 +23,11 @@ struct HalenCenterView: View {
     /// Owned by AppCoordinator so its observable status survives the menubar
     /// popup closing — passed through to SettingsView's startup card.
     @Bindable var launchAtLogin: LaunchAtLoginController
-    /// Backs the Plugin Store modal. App-scoped (AppCoordinator) so a fetched
-    /// registry and in-progress install survive the menubar popup closing.
-    @Bindable var storeModel: PluginStoreModel
+    /// Opens the Plugin Store. It's a standalone window (not a sheet on this
+    /// dropdown) so it survives the menubar popover closing — see
+    /// `PluginStoreWindowController`.
+    let onOpenStore: () -> Void
     @State private var nav: CenterNav = .marketplace
-    @State private var showingStore = false
 
     var body: some View {
         ZStack {
@@ -58,13 +58,6 @@ struct HalenCenterView: View {
         .frame(width: 380)
         .frame(minHeight: 280, maxHeight: 560)
         .background(.regularMaterial)
-        .sheet(isPresented: $showingStore) {
-            PluginStoreView(
-                registry: registry,
-                model: storeModel,
-                onClose: { showingStore = false }
-            )
-        }
     }
 
     private func push(_ target: CenterNav) {
@@ -81,46 +74,8 @@ struct HalenCenterView: View {
             Divider()
             content
             Divider()
-            pluginStoreItem
-            Divider()
             footer
         }
-    }
-
-    /// Entry point to the Plugin Store modal. Sits at the end of the dropdown,
-    /// just above the Accessibility / Quit footer.
-    @ViewBuilder
-    private var pluginStoreItem: some View {
-        Button {
-            showingStore = true
-        } label: {
-            HStack(spacing: 11) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(Color.halenCobalt.opacity(0.16))
-                    Image(systemName: "puzzlepiece.extension.fill")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color.halenCobalt)
-                }
-                .frame(width: 30, height: 30)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Plugin Store…")
-                        .font(.system(.body, weight: .medium))
-                    Text("Browse and install more plugins")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(StoreItemButtonStyle())
     }
 
     // MARK: - Header
@@ -141,6 +96,19 @@ struct HalenCenterView: View {
 
             Spacer()
 
+            // Opens the Plugin Store in its own standalone window — kept
+            // out of the plugin list so "browse/install plugins" reads as a
+            // distinct action, not another plugin row.
+            Button(action: onOpenStore) {
+                Image(systemName: "puzzlepiece.extension.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Plugin Store")
+
             Button {
                 push(.settings)
             } label: {
@@ -151,6 +119,7 @@ struct HalenCenterView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .help("Settings")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -356,21 +325,4 @@ struct PluginRow: View {
     }
 
     private var tint: Color { pluginCategoryTint(plugin.category) }
-}
-
-/// Hover-highlight button style for the "Plugin Store…" dropdown row, matching
-/// `PluginRow`'s subtle row background.
-private struct StoreItemButtonStyle: ButtonStyle {
-    @State private var isHovering = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill((isHovering || configuration.isPressed)
-                          ? Color.primary.opacity(0.06) : Color.clear)
-                    .padding(.horizontal, 6)
-            )
-            .onHover { isHovering = $0 }
-    }
 }

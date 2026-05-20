@@ -26,7 +26,7 @@ final class AppCoordinator {
     /// menubar popup closing and re-opening.
     let launchAtLogin = LaunchAtLoginController()
 
-    /// Backs the Plugin Store modal. App-scoped so its fetched registry and
+    /// Backs the Plugin Store. App-scoped so its fetched registry and
     /// in-progress install state survive the menubar popup closing. A freshly
     /// installed plugin is handed straight back to `registerInstalledPlugin`
     /// so it goes live without an app restart.
@@ -34,6 +34,12 @@ final class AppCoordinator {
         PluginStoreModel(registry: registry) { [weak self] dir, manifest in
             self?.registerInstalledPlugin(directory: dir, manifest: manifest)
         }
+    }()
+
+    /// The Plugin Store's standalone window — opened from the dropdown's
+    /// header button, lives independently of the menubar popover.
+    lazy var pluginStoreWindow: PluginStoreWindowController = {
+        PluginStoreWindowController(registry: registry, model: pluginStoreModel)
     }()
 
     /// Kept around so we can prewarm Apple FM at launch and re-probe
