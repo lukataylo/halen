@@ -81,13 +81,13 @@ else
     echo "warning: $LLAMA_FW_SRC not found — run scripts/fetch-assets.sh" >&2
 fi
 
-# Bundling the GGUF inflates the .app from ~12 MB to ~780 MB. Default OFF —
+# Bundling the GGUF inflates the .app from ~12 MB to ~4.8 GB. Default OFF —
 # `ModelDownloader` fetches the file on demand into Application Support, so
 # the .app users download stays small. Opt-in with BUNDLE_MODEL=1 for an
 # offline-first / kiosk-friendly all-in-one build.
 BUNDLE_MODEL="${BUNDLE_MODEL:-0}"
 if [[ "$BUNDLE_MODEL" == "1" ]]; then
-    GGUF_SRC="$ROOT/assets/Models/gemma-4-E4B-it-Q4_K_M.gguf"
+    GGUF_SRC="$ROOT/assets/Models/gemma-4-E4B-it-IQ4_XS.gguf"
     if [[ -f "$GGUF_SRC" ]]; then
         echo "→ bundling $(basename "$GGUF_SRC") (BUNDLE_MODEL=1)"
         mkdir -p "$RESOURCES/Models"

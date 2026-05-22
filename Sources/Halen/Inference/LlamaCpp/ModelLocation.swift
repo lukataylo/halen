@@ -14,8 +14,9 @@ import Foundation
 /// future model update can be picked up without rebuilding the app.
 enum ModelLocation {
     /// Canonical filename. Matches the source HuggingFace asset
-    /// (`unsloth/gemma-4-E4B-it-GGUF`).
-    static let filename = "gemma-4-E4B-it-Q4_K_M.gguf"
+    /// (`unsloth/gemma-4-E4B-it-GGUF`). IQ4_XS — an importance-matrix 4-bit
+    /// quant that is ~5% smaller than Q4_K_M at effectively equal quality.
+    static let filename = "gemma-4-E4B-it-IQ4_XS.gguf"
 
     /// Best-available URL for the GGUF, or `nil` if neither location has it
     /// (fresh install on a Mac without Apple Intelligence — `ModelDownloader`
@@ -41,7 +42,7 @@ enum ModelLocation {
     /// `Contents/Resources/Models/<filename>` inside the .app — only present in
     /// `BUNDLE_MODEL=1` builds. `nil` in the default slim build.
     static var bundled: URL? {
-        Bundle.main.url(forResource: "gemma-4-E4B-it-Q4_K_M",
+        Bundle.main.url(forResource: "gemma-4-E4B-it-IQ4_XS",
                         withExtension: "gguf",
                         subdirectory: "Models")
     }
