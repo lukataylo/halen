@@ -55,6 +55,78 @@ actor RouterInferenceClient: InferenceClient {
         throw RouterError.allBackendsFailed(lastError)
     }
 
+    /// Streaming counterpart of `complete`. `nonisolated` so it satisfies the
+    /// non-`async` `InferenceClient` requirement from an `actor`; routing hops
+    /// onto the actor inside `runStream`.
+    nonisolated func stream(_ request: InferenceRequest) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task { await self.runStream(request, into: continuation) }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// Walks the candidate chain like `complete`, but forwards a backend's
+    /// streamed snapshots straight through. Fallthrough-on-failure only applies
+    /// *before* the first snapshot — once a backend has streamed partial text,
+    /// switching backends would make the consumer's view rewind, so a mid-flight
+    /// failure is propagated instead.
+    private func runStream(
+        _ request: InferenceRequest,
+        into continuation: AsyncThrowingStream<String, Error>.Continuation
+    ) async {
+        let chain = await orderedCandidates(for: request)
+        guard !chain.isEmpty else {
+            continuation.finish(throwing: RouterError.noBackendAvailable(request.tier))
+            return
+        }
+
+        var lastError: Error?
+        for backend in chain {
+            let availability = await cachedAvailability(backend)
+            guard availability.isAvailable else {
+                lastError = RouterError.backendUnavailable(backend.kind)
+                continue
+            }
+
+            let gate = gates[backend.kind]!
+            do {
+                try await gate.wait()   // throws if cancelled while queued — no permit held
+            } catch {
+                continuation.finish(throwing: CancellationError())
+                return
+            }
+
+            var yielded = false
+            do {
+                try Task.checkCancellation()
+                for try await snapshot in backend.stream(request) {
+                    if Task.isCancelled { throw CancellationError() }
+                    yielded = true
+                    continuation.yield(snapshot)
+                }
+                await gate.signal()
+                continuation.finish()
+                return
+            } catch is CancellationError {
+                await gate.signal()
+                continuation.finish(throwing: CancellationError())
+                return
+            } catch {
+                await gate.signal()
+                lastError = error
+                availabilityCache[backend.kind] = nil   // re-probe before trusting it again
+                if yielded {
+                    Log.warn("Router: \(backend.kind.rawValue) stream failed mid-flight (\(error)) — propagating")
+                    continuation.finish(throwing: error)
+                    return
+                }
+                Log.warn("Router: \(backend.kind.rawValue) stream failed (\(error)) — trying next backend")
+                continue
+            }
+        }
+        continuation.finish(throwing: RouterError.allBackendsFailed(lastError))
+    }
+
     /// Clear the availability cache and re-probe every backend now. Called by the
     /// Settings backend picker's Refresh button and its periodic poll.
     ///

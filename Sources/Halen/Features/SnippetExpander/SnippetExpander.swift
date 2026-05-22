@@ -292,14 +292,55 @@ final class SnippetExpander: HalenPlugin {
                 services.eventBus.publish(.inferenceActivity(.init(
                     phase: .finished, source: source, timestamp: Date())))
             }
+
+            let start = Date()
+            // Tracks what we last wrote into the field and where. Each streamed
+            // snapshot is located by searching for the *previously written*
+            // text (the user may have edited elsewhere mid-stream, shifting it)
+            // and overwritten in place. Seeded with the `[…]` placeholder.
+            var lastWritten = placeholder
+            var writtenRange = placeholderRange
+
+            /// Re-locate `lastWritten` in the (possibly-edited) field and
+            /// overwrite it with `snapshot`. Returns false when the text has
+            /// vanished (user deleted it) or the AX write fails — caller stops.
+            func flush(_ snapshot: String) -> Bool {
+                guard let self,
+                      let target = self.locatePlaceholder(lastWritten, expectedAt: writtenRange, in: element)
+                else { return false }
+                guard self.applyReplacement(snapshot, at: target, trigger: label, in: element) else {
+                    return false
+                }
+                lastWritten = snapshot
+                writtenRange = NSRange(location: target.location, length: (snapshot as NSString).length)
+                return true
+            }
+
+            var latest = ""
+            var lastFlush = Date.distantPast
             do {
-                let response = try await services.inference.complete(request)
-                let cleaned = response.text.unwrappedModelText
-                guard let self else { return }
-                // Re-find the placeholder before writing — the user may have
-                // edited the field during the multi-second call, shifting it.
-                guard let writeRange = self.locatePlaceholder(placeholder, expectedAt: placeholderRange, in: element) else {
-                    Log.warn("SnippetExpander: \(label) placeholder gone from field — skipping write")
+                for try await snapshot in services.inference.stream(request) {
+                    latest = snapshot
+                    guard !snapshot.isEmpty else { continue }
+                    // Throttle AX writes — a per-token write storm into a
+                    // foreign text field is janky. ~11 fps still reads as
+                    // live "typing". The first snapshot always passes (the
+                    // seed timestamp is `.distantPast`) so generation appears
+                    // to start immediately.
+                    if Date().timeIntervalSince(lastFlush) < 0.09 { continue }
+                    lastFlush = Date()
+                    if !flush(snapshot) {
+                        Log.warn("SnippetExpander: \(label) streamed text gone from field — stopping")
+                        return
+                    }
+                }
+                // Final authoritative write: clean wrapper quotes off the last
+                // snapshot and reconcile (intermediate writes were raw).
+                let cleaned = latest.unwrappedModelText
+                guard let self,
+                      let writeRange = self.locatePlaceholder(lastWritten, expectedAt: writtenRange, in: element)
+                else {
+                    Log.warn("SnippetExpander: \(label) streamed text gone from field — skipping final write")
                     return
                 }
                 guard !cleaned.isEmpty else {
@@ -307,25 +348,26 @@ final class SnippetExpander: HalenPlugin {
                     self.applyReplacement(restoreText, at: writeRange, trigger: label, in: element)
                     return
                 }
-                Log.info("SnippetExpander: \(label) completed (\(response.latencyMs)ms) responseLen=\(cleaned.count)")
-                let wrote = self.applyReplacement(cleaned, at: writeRange, trigger: label, in: element)
-                if !wrote {
-                    Log.warn("SnippetExpander: \(label) response AX write failed at \(writeRange.location),\(writeRange.length) — target element stale or unsupported")
+                let elapsed = Int(Date().timeIntervalSince(start) * 1000)
+                Log.info("SnippetExpander: \(label) completed streamed (\(elapsed)ms) responseLen=\(cleaned.count)")
+                if !self.applyReplacement(cleaned, at: writeRange, trigger: label, in: element) {
+                    Log.warn("SnippetExpander: \(label) final AX write failed at \(writeRange.location),\(writeRange.length) — target element stale or unsupported")
                 }
             } catch {
                 Log.warn("SnippetExpander: \(label) failed: \(error)")
                 guard let self,
-                      let writeRange = self.locatePlaceholder(placeholder, expectedAt: placeholderRange, in: element) else { return }
+                      let writeRange = self.locatePlaceholder(lastWritten, expectedAt: writtenRange, in: element) else { return }
                 self.applyReplacement(restoreText, at: writeRange, trigger: label, in: element)
             }
         }
     }
 
-    /// Re-find the `[…]` placeholder in the (possibly-edited) field. The Gemma
-    /// call is async and multi-second; if the user typed elsewhere in the field
-    /// meanwhile, the placeholder will have shifted. Returns its current range,
-    /// the original `expected` range if the field can't be read, or nil if the
-    /// placeholder is gone (the user deleted it — don't write anything).
+    /// Re-find `placeholder` in the (possibly-edited) field. Used both for the
+    /// initial `[…]` marker and, during streaming, for the previously-written
+    /// snapshot — generation is async and multi-second, so if the user typed
+    /// elsewhere meanwhile the text will have shifted. Returns its current
+    /// range, the original `expected` range if the field can't be read, or nil
+    /// if the text is gone (the user deleted it — don't write anything).
     private func locatePlaceholder(_ placeholder: String, expectedAt expected: NSRange,
                                    in element: AXUIElement?) -> NSRange? {
         guard let target = element ?? caretObserver?.currentElement,

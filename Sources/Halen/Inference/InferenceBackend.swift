@@ -12,6 +12,32 @@ protocol InferenceBackend: Sendable {
     func availability() async -> BackendAvailability
 
     func complete(_ request: InferenceRequest) async throws -> InferenceResponse
+
+    /// Streaming completion — see `InferenceClient.stream(_:)`. Yields the
+    /// cumulative text so far. Backends that can stream tokens (llama.cpp,
+    /// Apple FM) override this; everything else gets the default below.
+    func stream(_ request: InferenceRequest) -> AsyncThrowingStream<String, Error>
+}
+
+extension InferenceBackend {
+    /// Default streaming: a backend with no native token callback simply runs
+    /// `complete` and emits the whole result as one final snapshot. The
+    /// consumer's streaming code path still works — it just sees a single
+    /// update instead of many.
+    func stream(_ request: InferenceRequest) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let response = try await complete(request)
+                    continuation.yield(response.text)
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
 }
 
 enum BackendKind: String, Sendable, Codable, CaseIterable {
