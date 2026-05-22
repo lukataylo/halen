@@ -188,6 +188,7 @@ final class AppCoordinator {
         registry.register(ClarityChecker(services: services))
         registry.register(StyleGuide(services: services))
         registry.register(EmailReply(services: services))
+        registry.register(Autocomplete(services: services))
 
         // Out-of-process plugins under ~/Library/Application Support/Halen/Plugins/.
         // Discover manifests synchronously (just filesystem scan + JSON parse),
