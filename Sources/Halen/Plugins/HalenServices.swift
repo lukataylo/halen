@@ -15,6 +15,9 @@ struct HalenServices {
     /// Host-owned calendar capability. Exposed to out-of-process plugins via
     /// the `calendar/*` JSON-RPC methods (gated on the `calendar` permission).
     let calendar: CalendarService
+    /// Per-app tone profiles. A shared read for the writing plugins (Sentiment
+    /// Guard, Clarity Checker); the Tone Profiles plugin owns the editor.
+    let toneProfiles: AppToneProfileStore
     let appSupportDir: URL
 
     /// `~/Library/Application Support/Halen/<pluginId>/` — make this lazily; not

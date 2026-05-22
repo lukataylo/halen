@@ -144,10 +144,15 @@ final class SentimentGuard: HalenPlugin {
         let categoriesBlock = enabled
             .map { "- \($0.label.lowercased()): \($0.prompt)" }
             .joined(separator: "\n")
+        // Bias the classifier by the app's tone profile — a blunt Slack
+        // message shouldn't be judged the way a blunt email is.
+        let toneClause = services.toneProfiles.profile(for: appBundleId).promptClause
         let prompt = """
         You are a tone classifier. Categorise the tone of the following text as one of these labels:
         \(categoriesBlock)
         - neutral: the text doesn't strongly match any of the above
+
+        \(toneClause)
 
         Reply with ONLY the matching label, lowercase, no punctuation, no preamble.
 
