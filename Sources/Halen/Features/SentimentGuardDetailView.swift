@@ -12,14 +12,40 @@ struct SentimentGuardDetailView: View {
     @State private var newColor = "purple"
     @State private var confirmingClear = false
 
+    /// Conciseness check — surfaces wordy filler phrases alongside the tone
+    /// classifier. On by default; the scan is rule-based and free.
+    @AppStorage(SentimentGuard.concisenessDefaultsKey) private var concisenessEnabled = true
+
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
                 rulesCard
+                concisenessCard
                 statsCard
                 modelCard
             }
             .padding(12)
+        }
+    }
+
+    // MARK: - Conciseness card
+
+    private var concisenessCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    cardLabel("Conciseness check")
+                    Spacer()
+                    Toggle("", isOn: $concisenessEnabled)
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .labelsHidden()
+                }
+                Text("Alongside the tone classifier, scan for wordy filler phrases — \"in order to\", \"the fact that\", \"at this point in time\" — and suggest tighter rewrites. Rule-based and instant; no model call.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
