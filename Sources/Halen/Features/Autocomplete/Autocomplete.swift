@@ -31,6 +31,9 @@ final class Autocomplete: HalenPlugin {
     private var eventTask: Task<Void, Never>?
     private var suggestTask: Task<Void, Never>?
     private var ghostPanel: NSPanel?
+    /// Auto-dismiss timer — frees the captured Tab key if the user pauses on a
+    /// suggestion and walks away without accepting or typing.
+    private var dismissTimer: Task<Void, Never>?
 
     /// The suggestion currently shown, and where to insert it on accept.
     private var pendingSuggestion: String?
@@ -153,7 +156,9 @@ final class Autocomplete: HalenPlugin {
             .frame(width: width, height: height, alignment: .leading)
         panel.contentView = NSHostingView(rootView: view)
         panel.setFrameOrigin(NSPoint(x: caretRect.maxX + 1, y: caretRect.minY))
-        panel.orderFront(nil)
+        // `orderFrontRegardless` — the ghost overlays whatever app the user is
+        // in, so it must show even though Halen isn't the active app.
+        panel.orderFrontRegardless()
         ghostPanel = panel
 
         // Tab accepts — registered only for the lifetime of this ghost so
@@ -162,6 +167,13 @@ final class Autocomplete: HalenPlugin {
             keyCode: UInt32(kVK_Tab), modifiers: 0,
             id: HotkeyID.autocomplete.rawValue,
             onFire: { [weak self] in self?.accept() })
+
+        // Don't hold the Tab key captured indefinitely if the user wanders off.
+        dismissTimer = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(7))
+            guard !Task.isCancelled else { return }
+            self?.dismiss()
+        }
     }
 
     private func accept() {
@@ -182,6 +194,8 @@ final class Autocomplete: HalenPlugin {
         generation += 1   // invalidate any in-flight suggestion
         suggestTask?.cancel()
         suggestTask = nil
+        dismissTimer?.cancel()
+        dismissTimer = nil
         ghostPanel?.orderOut(nil)
         ghostPanel = nil
         pendingSuggestion = nil
