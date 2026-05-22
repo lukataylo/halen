@@ -80,13 +80,16 @@ final class EmailReply: HalenPlugin {
             notify(body: "Select the message you want to reply to, then press ⌃⌥E.")
             return
         }
+        // Bias the reply's register by the mail app's tone profile — the same
+        // host service Sentiment Guard and Clarity Checker read.
+        let toneClause = services.toneProfiles.profile(for: bundleId).promptClause
 
         inflight?.cancel()
         inflight = Task { @MainActor [services, weak self] in
             let prompt = """
             You are drafting a reply to an email on the user's behalf. Write a clear, \
-            polite, appropriately concise reply to the message below. Output ONLY the \
-            reply body — no subject line, no preamble, no quotes.
+            polite, appropriately concise reply to the message below. \(toneClause) \
+            Output ONLY the reply body — no subject line, no preamble, no quotes.
 
             Message:
             \"\"\"
