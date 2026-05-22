@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ApplicationServices
 
 /// Personal style guide — a pure rule engine, no inference. Holds the user's
 /// banned-term → preferred-term pairs and "never use X" prohibitions; scans
