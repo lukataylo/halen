@@ -8,6 +8,8 @@ import Foundation
 enum HotkeyID: UInt32 {
     case voiceDictation = 1
     case askHalen       = 2
+    case emailReply     = 3
+    case autocomplete   = 4
 }
 
 /// Carbon `RegisterEventHotKey` wrapper. The NSEvent global monitor we tried first
