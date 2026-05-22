@@ -185,6 +185,7 @@ final class AppCoordinator {
         registry.register(VoiceDictation(services: services))
         registry.register(SnippetExpander(services: services))
         registry.register(ToneProfiles(services: services))
+        registry.register(ClarityChecker(services: services))
 
         // Out-of-process plugins under ~/Library/Application Support/Halen/Plugins/.
         // Discover manifests synchronously (just filesystem scan + JSON parse),
