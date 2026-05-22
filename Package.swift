@@ -7,9 +7,20 @@ let package = Package(
     products: [
         .executable(name: "halen", targets: ["Halen"]),
     ],
+    // MLX backend (work in progress): to activate `MLXBackend`, uncomment the
+    // dependency below and add the `MLXLLM` product to the `Halen` target's
+    // `dependencies`. Until then `MLXBackend` compiles as an inert stub
+    // (`canImport(MLXLLM)` is false) and the router skips it.
+    //
+    // dependencies: [
+    //     .package(url: "https://github.com/ml-explore/mlx-swift-examples", from: "2.21.0"),
+    // ],
     targets: [
         .executableTarget(
             name: "Halen",
+            // Add when activating MLX:
+            //     .product(name: "MLXLLM", package: "mlx-swift-examples"),
+            //     .product(name: "MLXLMCommon", package: "mlx-swift-examples"),
             dependencies: ["llama"],
             path: "Sources/Halen"
         ),

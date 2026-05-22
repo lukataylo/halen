@@ -13,7 +13,11 @@ enum InferenceBackends {
         // download via ModelDownloader. Ollama remains opt-in for the large
         // tier. Array order doesn't matter; the router sorts by
         // `InferenceSettings.preferenceOrder`.
-        var backends: [InferenceBackend] = [LlamaCppBackend(), OllamaBackend()]
+        //
+        // `MLXBackend` is included unconditionally: until the mlx-swift
+        // dependency is added it is a harmless stub that reports
+        // `.unavailable`, so the router simply skips it and falls through.
+        var backends: [InferenceBackend] = [LlamaCppBackend(), MLXBackend(), OllamaBackend()]
         #if canImport(FoundationModels)
         if #available(macOS 26, *) {
             backends.append(AppleFMBackend())
