@@ -297,7 +297,7 @@ private struct FindingsPopoverStreamingBody: View {
     private var displayedRewrite: String {
         if !streaming.rewrite.isEmpty { return streaming.rewrite }
         switch streaming.phase {
-        case .failed:    return "The local model didn't return a rewrite. Try again in a moment."
+        case .failed:    return "Rewrite failed. Try again."
         case .streaming: return "…"
         default:         return ""
         }

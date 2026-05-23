@@ -155,7 +155,7 @@ struct AskHalenPalette: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else if hasSubmitted && !isStreaming {
-                    Text("Model returned an empty response. Try rephrasing, or check Settings → Inference for the active backend.")
+                    Text("No response. Try rephrasing.")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -239,11 +239,11 @@ struct AskHalenPalette: View {
                 }
                 .foregroundStyle(.secondary)
             } else {
-                Text("No context detected — Halen will answer with what you type.")
+                Text("Halen will answer based on your question.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
-            Text("⏎ to send · ⎋ to close")
+            Text("Return to send · Esc to close")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(.tertiary)
         }

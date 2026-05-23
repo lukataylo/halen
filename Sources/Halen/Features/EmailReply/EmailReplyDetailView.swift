@@ -22,7 +22,7 @@ struct EmailReplyDetailView: View {
                     Text("Press ⌃⌥E in a mail app")
                         .font(.system(.callout, weight: .medium))
                 }
-                Text("Halen reads the message you've selected (or the one around your cursor), drafts a reply with the local model, and inserts it at your cursor if you're in the reply box — otherwise it copies the draft to the clipboard so you can paste it.")
+                Text("Halen drafts a reply to the message at your cursor. Inserts it in the reply box, or copies to the clipboard.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -37,7 +37,7 @@ struct EmailReplyDetailView: View {
                 Text("Mail · Outlook · Spark · Airmail · Canary · Mimestream")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
-                Text("Browser-based mail (Gmail, Outlook web) isn't auto-detected — select the message text first and the hotkey still works.")
+                Text("For Gmail or Outlook on the web, select the message text first.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

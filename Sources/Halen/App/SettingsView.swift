@@ -173,11 +173,11 @@ struct SettingsView: View {
 
     private var startupDetailText: String {
         if launchAtLogin.requiresApproval {
-            return "Disabled by the system. Re-enable from Login Items."
+            return "Turn on in System Settings → General → Login Items."
         }
         return launchAtLogin.isEnabled
-            ? "Halen will open when you log in."
-            : "Halen will only run when you launch it."
+            ? "Opens at login."
+            : "Opens only when you launch it."
     }
 
     private var permissionsCard: some View {
@@ -190,7 +190,7 @@ struct SettingsView: View {
                         Divider().padding(.leading, 30)
                     }
                 }
-                Text("Halen runs entirely on this Mac. Granting a permission lets a specific feature work; revoking it disables only that feature.")
+                Text("Halen runs locally. Each permission controls one feature.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -257,9 +257,9 @@ struct SettingsView: View {
                 HStack(alignment: .center, spacing: 12) {
                     overlayPreview
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Halen indicator near cursor")
+                        Text("Show indicator")
                             .font(.system(.callout, weight: .medium))
-                        Text("A small Halen mark appears beside your caret while you type. Turn off if it gets in the way.")
+                        Text("A small Halen mark next to your cursor.")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -299,7 +299,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Inline underlines")
                                 .font(.system(size: 12, weight: .medium))
-                            Text("Preview · draws a coloured strip under the flagged paragraph. Works best in Notes and TextEdit; coverage in browsers and Electron apps is rougher.")
+                            Text("Beta. Underlines flagged text. Best in Notes and TextEdit.")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -356,7 +356,7 @@ struct SettingsView: View {
                     backendRow(kind: kind, index: index)
                 }
 
-                Text("Halen tries backends in this order — the first available one handles each request. Reorder with the arrows.")
+                Text("Tried in order. First available handles the request.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -499,7 +499,7 @@ struct SettingsView: View {
 
                 ollamaStatusLine
 
-                Text("Where Halen sends Ollama requests. Change this if you've started `ollama serve` on a non-default port (`OLLAMA_HOST=…`). The Built-in model and Apple Intelligence backends are unaffected.")
+                Text("Ollama endpoint. Change only if you moved the daemon to a different port.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -526,8 +526,8 @@ struct SettingsView: View {
                 let loopback = OllamaSettings.isLoopback(url)
                 statusDot(loopback ? .ok : .warning)
                 Text(loopback
-                     ? "Loopback — requests stay on this Mac."
-                     : "Remote host — requests leave this Mac. Halen markets itself as local-first.")
+                     ? "Local. Requests stay on this Mac."
+                     : "Remote. Requests leave this Mac.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -582,7 +582,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text("The 4.72 GB Gemma 4 E4B GGUF runs locally as a fallback when Apple Intelligence isn't available. Downloads on demand into Application Support — never bundled in the .app unless you build with BUNDLE_MODEL=1.")
+                Text("Runs on your Mac when Apple Intelligence is unavailable. Downloads on first use.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -658,7 +658,7 @@ struct SettingsView: View {
         case .verifying:
             return "Checking SHA-256 against the pinned hash."
         case .installing:
-            return "Moving into Application Support."
+            return "Installing…"
         case .ready:
             return "Gemma 4 E4B IQ4_XS, ~4.72 GB on disk."
         case .failed(let message):
@@ -708,7 +708,7 @@ struct SettingsView: View {
                         }
                         Spacer()
                     }
-                    Text("Halen exposes a JSON-RPC bridge on loopback so the browser extension (and future companions) can report typing in fields macOS Accessibility can't reach — Slack, Discord, Gmail, Docs.")
+                    Text("Lets the browser extension report text from apps the system can't reach.")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -749,7 +749,7 @@ struct SettingsView: View {
                                 }
                                 Button("Cancel", role: .cancel) {}
                             } message: {
-                                Text("Every paired client (browser extension, companion apps) will need to re-enter the new token. Use this if you think the current token has leaked.")
+                                Text("Paired clients will need to enter the new token.")
                             }
                     }
                     Text("Browser extension: open its popup, paste this token, click Save.")
@@ -762,7 +762,7 @@ struct SettingsView: View {
 
     private func bridgeStatusDetail(_ bridge: WebSocketBridge) -> String {
         guard bridge.isListening else {
-            return "Browser extension and other loopback clients won't connect while off."
+            return "Browser extension can't connect while off."
         }
         switch bridge.clientCount {
         case 0:  return "Listening — no clients connected."

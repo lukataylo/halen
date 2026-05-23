@@ -103,7 +103,7 @@ struct ClarityCheckerDetailView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 6) {
                 cardLabel("How it works")
-                Text("When you pause typing, every enabled rule above goes into one classification prompt. Any matches surface in a caret-anchored popover; \"Rewrite via Gemma 4\" puts a cleaned-up version on your clipboard. \(flaggedCount) flagged this session.")
+                Text("Rules run when you pause typing. Matches show a popover with a rewrite option. \(flaggedCount) flagged this session.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

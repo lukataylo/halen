@@ -100,7 +100,7 @@ struct StyleGuideDetailView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 6) {
                 cardLabel("How it works")
-                Text("As you type, Halen scans each paragraph for your banned terms — no AI, instant, fully deterministic. Matches appear in a popover; rules with a preferred term get a one-tap Replace.")
+                Text("Highlights banned words as you type. Tap Replace to use the preferred wording.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

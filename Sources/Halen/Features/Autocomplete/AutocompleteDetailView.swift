@@ -22,7 +22,7 @@ struct AutocompleteDetailView: View {
                     Text("Pause while typing")
                         .font(.system(.callout, weight: .medium))
                 }
-                Text("When you stop at the end of a line, Halen suggests the next few words in gray ghost text just past your cursor. Press Tab to accept it; any other keystroke dismisses it.")
+                Text("Pause typing to see suggestions in gray. Press Tab to accept.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -34,7 +34,7 @@ struct AutocompleteDetailView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 6) {
                 cardLabel("Known limits")
-                Text("The ghost text is a floating overlay, not real inline text — macOS can't draw inside another app's text field. Alignment is good in native fields (TextEdit, Notes, Mail) and rougher in Electron and web editors. While a suggestion is visible, Tab is captured to accept it.")
+                Text("Suggestions appear as a floating overlay. Alignment is best in Mail, Notes, and TextEdit.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

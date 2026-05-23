@@ -57,7 +57,11 @@ struct HalenCenterView: View {
             }
         }
         .frame(width: 380)
-        .frame(minHeight: 280, maxHeight: 560)
+        // Taller defaults — the plugin list + footer felt cramped with
+        // 280/560. New floor fits the full first-party plugin list without
+        // scrolling; new ceiling gives custom rules + external plugins room
+        // before the list scrolls on a 13" display.
+        .frame(minHeight: 360, maxHeight: 680)
         .background(.regularMaterial)
     }
 

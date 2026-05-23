@@ -42,7 +42,7 @@ struct SentimentGuardDetailView: View {
                         .controlSize(.mini)
                         .labelsHidden()
                 }
-                Text("Alongside the tone classifier, scan for wordy filler phrases — \"in order to\", \"the fact that\", \"at this point in time\" — and suggest tighter rewrites. Rule-based and instant; no model call.")
+                Text("Flags wordy phrases like \"in order to\" and \"the fact that\". Instant.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -208,7 +208,7 @@ struct SentimentGuardDetailView: View {
                 .controlSize(.small)
                 .foregroundStyle(approvedCount == 0 ? Color.secondary.opacity(0.5) : Color.red)
                 .disabled(approvedCount == 0)
-                .confirmationDialog("Clear \(approvedCount) approved fingerprint\(approvedCount == 1 ? "" : "s")?",
+                .confirmationDialog("Clear approved texts?",
                                     isPresented: $confirmingClear,
                                     titleVisibility: .visible) {
                     Button("Clear approvals", role: .destructive) { onClearApproved() }
@@ -240,7 +240,7 @@ struct SentimentGuardDetailView: View {
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                 }
-                Text("Every enabled rule above goes into one classification prompt sent to whichever backend the router has available (Apple Intelligence by default, falling through to the bundled model or Ollama). The first match surfaces a popover; \"neutral\" is silent.")
+                Text("Rules run when you pause typing. First match shows a popover.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -23,7 +23,7 @@ struct ToneProfilesDetailView: View {
             VStack(alignment: .leading, spacing: 10) {
                 cardLabel("App tone profiles")
                 if store.sortedEntries.isEmpty {
-                    Text("No apps assigned yet. Pick a register for the apps you use below.")
+                    Text("Choose a tone for each app below.")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 } else {
@@ -50,7 +50,7 @@ struct ToneProfilesDetailView: View {
                 cardLabel("Recently used apps")
                 let unassigned = recentApps.apps.filter { store.profiles[$0.bundleId] == nil }
                 if unassigned.isEmpty {
-                    Text("Apps you focus while Halen runs appear here, ready to assign.")
+                    Text("Apps you use will appear here.")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 } else {
@@ -73,7 +73,7 @@ struct ToneProfilesDetailView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 6) {
                 cardLabel("How it's used")
-                Text("Sentiment Guard and Clarity Checker read the profile for the app you're typing in and adjust how strict they are — a blunt Slack message isn't judged like a formal email.")
+                Text("Rules adjust to the app you're in. Slack gets different rules than Mail.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

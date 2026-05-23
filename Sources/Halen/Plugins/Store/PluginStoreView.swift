@@ -66,7 +66,7 @@ struct PluginStoreView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: { target in
-            Text("“\(target.name)” will be stopped and its files deleted from ~/Library/Application Support/Halen/Plugins/. This can't be undone.")
+            Text("“\(target.name)” will be removed. This can't be undone.")
         }
         .alert("Couldn't remove plugin",
                isPresented: Binding(get: { removalError != nil },
@@ -98,7 +98,7 @@ struct PluginStoreView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Plugin Store")
                     .font(.system(.headline, weight: .semibold))
-                Text("Browse, install, and manage Halen plugins")
+                Text("Discover and manage plugins")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -171,7 +171,7 @@ struct PluginStoreView: View {
                 let entries = model.notInstalled
                 sectionHeader("Available", count: entries.count)
                 if entries.isEmpty {
-                    emptyHint("You've installed everything in the registry. 🎉")
+                    emptyHint("All available plugins are installed.")
                 } else {
                     ForEach(entries) { entry in
                         AvailablePluginRow(
@@ -190,7 +190,7 @@ struct PluginStoreView: View {
             HStack(spacing: 10) {
                 ProgressView()
                     .controlSize(.small)
-                Text("Fetching the plugin registry…")
+                Text("Loading…")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)

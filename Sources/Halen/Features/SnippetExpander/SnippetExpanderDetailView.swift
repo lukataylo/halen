@@ -144,12 +144,12 @@ struct SnippetExpanderDetailView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("AI snippets get the previous ~500 characters as context. A `[…]` placeholder shows while Gemma generates, then swaps to the result.")
+                Text("AI snippets use nearby text as context. A placeholder shows while generating.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Divider().opacity(0.4).padding(.vertical, 2)
-                Text("Rephrase a selection: highlight any text in any app and press ⌃⌥R. Halen rewrites just that selection in place — handy when you don't want to rephrase the whole paragraph.")
+                Text("Highlight text and press ⌃⌥R to rewrite just the selection.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -257,7 +257,7 @@ private struct SnippetRow: View {
                 Text(snippet.trigger)
                     .font(.system(.callout, design: .monospaced, weight: .medium))
                 if snippet.builtin {
-                    Text("BUILT-IN · editing creates an override")
+                    Text("BUILT-IN · edits create a custom copy")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 5)
@@ -300,7 +300,7 @@ private struct SnippetRow: View {
                 .focused($editorFocused)
                 .onSubmit(commit)
             } else {
-                Text("This is a built-in dynamic snippet — only the display name is editable.")
+                Text("Built-in dynamic snippet. Only the name is editable.")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
