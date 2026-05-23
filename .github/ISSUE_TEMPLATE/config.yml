@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security disclosure
+    url: https://github.com/lukataylo/halen/security/advisories/new
+    about: Report a security vulnerability privately via GitHub Security Advisories.
+  - name: Plugin protocol reference
+    url: https://github.com/lukataylo/halen/blob/main/plugins/README.md
+    about: JSON-RPC over stdio — events, RPC methods, manifest format.
+  - name: Roadmap
+    url: https://github.com/lukataylo/halen/blob/main/ROADMAP.md
+    about: What's planned but not yet built. Open an issue before working on anything here.
+  - name: Changelog
+    url: https://github.com/lukataylo/halen/blob/main/CHANGELOG.md
+    about: What shipped in each release.

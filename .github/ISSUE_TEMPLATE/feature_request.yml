@@ -1,0 +1,73 @@
+name: Feature request
+description: Suggest a new behavior, plugin idea, or improvement.
+title: "[feat] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Halen stays small on purpose — every shipped plugin earns its place. The clearer the problem,
+        the easier this is for everyone. If you're proposing a whole new plugin, use the
+        [plugin proposal](https://github.com/lukataylo/halen/issues/new?template=plugin_proposal.yml)
+        template instead.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: The user-visible friction, not the proposed fix. "When I'm writing X, Halen does Y, and I want Z."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What do you want Halen to do?
+      description: Your sketch of the behavior. UI, hotkey, event, plugin — whatever shape it takes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What have you tried, or considered?
+      description: Other Halen settings, other apps, workarounds — anything that almost-but-not-quite solves it.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which part of Halen does this touch?
+      multiple: true
+      options:
+        - Host (event bus, router, settings, onboarding)
+        - Existing plugin (specify in description)
+        - New plugin
+        - External plugin protocol (JSON-RPC)
+        - Inference backend / model routing
+        - Documentation
+        - Web / landing page
+    validations:
+      required: true
+
+  - type: dropdown
+    id: privacy
+    attributes:
+      label: Privacy impact
+      description: Halen is local-first. If your feature would change that, say so up front.
+      options:
+        - Stays fully local — no new network traffic
+        - Optional network request (user opt-in, off by default)
+        - Requires a network service to function
+        - Not sure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched [open issues](https://github.com/lukataylo/halen/issues) and the [roadmap](https://github.com/lukataylo/halen/blob/main/ROADMAP.md) — this isn't already proposed.
+          required: true

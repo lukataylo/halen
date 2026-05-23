@@ -1,0 +1,122 @@
+name: Bug report
+description: Something Halen does that it shouldn't, or doesn't do that it should.
+title: "[bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The more we can reproduce locally, the faster we can fix.
+        If this is a security issue, don't file it here — email security@halen.dev instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what did Halen do instead?
+      placeholder: |
+        1. Opened Mail.app, started a reply
+        2. Typed "teh quick brown fox"
+        3. Expected Typo Fixer to swap "teh" → "the"
+        4. Nothing happened
+    validations:
+      required: true
+
+  - type: input
+    id: halen-version
+    attributes:
+      label: Halen version
+      description: Settings → About → Version, or `mdls -name kMDItemVersion /Applications/Halen.app`.
+      placeholder: 0.2.0 (build 142)
+    validations:
+      required: true
+
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description: Apple menu → About This Mac. Include the build number if you can.
+      placeholder: macOS 14.5 (23F79)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: chip
+    attributes:
+      label: Mac chip
+      options:
+        - Apple Silicon (M1 / M2 / M3 / M4)
+        - Intel
+    validations:
+      required: true
+
+  - type: dropdown
+    id: plugin
+    attributes:
+      label: Which plugin is involved?
+      description: If the bug spans the host or multiple plugins, pick "Host / multiple".
+      options:
+        - Host / multiple
+        - Ask Halen
+        - Typo Fixer
+        - Sentiment Guard
+        - Snippet Expander
+        - Clarity Checker
+        - Voice Dictation
+        - Inline Autocomplete
+        - Personal Style Guide
+        - Email Reply
+        - Tone Profiles
+        - Burnout Copilot (external)
+        - Meeting Prep (external)
+        - Third-party / unsure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Which inference backend was active?
+      description: Settings → Inference shows the active backend.
+      options:
+        - Apple Foundation Models
+        - Bundled Gemma 4 (llama.cpp)
+        - Bundled Qwen 2.5 0.5B (classifier tier)
+        - Ollama (localhost:11434)
+        - Not applicable / unsure
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      description: |
+        Halen writes diagnostic output to `/tmp/halen-trace.log`. The last 200 lines around the bug are usually plenty.
+        ```bash
+        tail -n 200 /tmp/halen-trace.log
+        ```
+        Redact anything sensitive before pasting — Halen tries to scrub PII but trust your eyes over ours.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, screen recordings, the wider context — drop them here.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched [open issues](https://github.com/lukataylo/halen/issues) and didn't find a duplicate.
+          required: true
+        - label: I'm on the latest Halen release (Sparkle: Settings → About → Check for updates).
+          required: true
+        - label: Accessibility and Input Monitoring permissions are granted.
+          required: true

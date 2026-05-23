@@ -3,14 +3,36 @@
 </p>
 
 <p align="center">
-  <strong>Local-first AI companion for macOS.</strong><br>
+  <strong>Local-first writing companion for macOS.</strong><br>
   No cloud. No upload. Just you, your data, your rules.<br>
-  <a href="https://halen.dev">halen.dev</a>
+  <a href="https://halen.dev">halen.dev</a> · <a href="https://halen.dev/changelog.html">Changelog</a> · <a href="https://halen.dev/privacy.html">Privacy</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/lukataylo/halen/actions/workflows/ci.yml"><img src="https://github.com/lukataylo/halen/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="https://github.com/lukataylo/halen/releases/latest"><img src="https://img.shields.io/github/v/release/lukataylo/halen?include_prereleases&label=download" alt="Latest release"></a>
+  <a href="https://github.com/lukataylo/halen/releases"><img src="https://img.shields.io/github/downloads/lukataylo/halen/total?label=downloads&color=1635D6" alt="Total downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/swift-5.10-orange?logo=swift" alt="Swift 5.10">
+  <a href="https://github.com/lukataylo/halen/stargazers"><img src="https://img.shields.io/github/stars/lukataylo/halen?style=flat&color=ff9e3b" alt="GitHub stars"></a>
 </p>
 
 ---
 
-Halen is a menubar app that watches the text near your cursor and runs a set of small, focused **plugins** against it. Every plugin runs locally — typo correction is a static dictionary; everything else goes through a local [Gemma 4](https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/) model. Inference routes across whatever's available on your Mac — Apple Intelligence, a bundled Gemma 4 model on llama.cpp, or your own [Ollama](https://ollama.com) daemon. The text never leaves your Mac.
+Halen is a menubar app that watches the text near your cursor and runs a set of small, focused **plugins** against it. Every plugin runs locally. Typo correction is a personal dictionary; tone classification is Qwen 2.5 0.5B; rewrites go through Gemma 4 E4B on llama.cpp. Inference routes across whatever's available on your Mac — Apple Intelligence, the bundled local models, or your own [Ollama](https://ollama.com) daemon. The text never leaves your Mac.
+
+## Install
+
+[**Download Halen.dmg**](https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/Halen.dmg) — signed, notarized, drag-to-Install. Apple Silicon Mac, macOS 14 or later.
+
+1. Double-click the DMG to mount it.
+2. Drag `Halen.app` to **Applications**.
+3. Open Halen. Grant **Accessibility** and **Input Monitoring** when it asks — these are the two permissions every plugin depends on, and onboarding walks you through them.
+
+Halen auto-updates via Sparkle. Future versions install in place; no need to re-download from this page.
+
+> Building from source instead? Jump to [Build from source](#build-from-source).
 
 ## What's in the box
 
@@ -61,24 +83,24 @@ External plugins live under `~/Library/Application Support/Halen/Plugins/` and c
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-- **Host (this app)** owns macOS Accessibility caret tracking, the event bus, the multi-backend inference router, persistent storage, and the SwiftUI menubar UI.
-- **Plugins** subscribe to events on the bus, optionally call inference, and write back to the focused text field via AX. They're in-host Swift modules today; the contract is already shaped to lift them out-of-process to JSON-RPC later (`text.pause` event names line up with future method names) — an out-of-process plugin host and a loopback WebSocket bridge (for the browser extension) are already wired in.
-- **Inference** goes through `RouterInferenceClient`, which routes each request to the best available backend and falls through to the next on failure. Three backends ship: **Apple Foundation Models** (macOS 26+, zero install), a **bundled Gemma 4 E4B model on llama.cpp** (downloaded on first use, or bundled into the `.app` with `BUNDLE_MODEL=1`), and your local **Ollama** daemon (opt-in, the only backend serving the large tier). Plugins request a *tier* (`small` / `medium` / `large`) and a task kind — the host picks the backend and model. The backend order is user-configurable in Settings.
+- **Host (this app)** owns macOS Accessibility caret tracking, the event bus, the multi-backend inference router, persistent storage, the auto-updater (Sparkle), and the SwiftUI menubar UI.
+- **Plugins** subscribe to events on the bus, optionally call inference, and write back to the focused text field via AX. Ten ship in-process; two more (`burnout-copilot` and `meeting-prep`) ship as **out-of-process JSON-RPC plugins** under [`plugins/`](plugins/), loaded through the same `ExternalPluginAdapter` any third-party plugin uses. The contract is identical: `text.pause` event names line up between in-process and over-the-wire. A loopback WebSocket bridge speaks the same surface to the browser extension.
+- **Inference** goes through `RouterInferenceClient`, which routes each request to the best available backend and falls through to the next on failure. Backends shipped: **Apple Foundation Models** (macOS 26+, zero install), a **bundled Gemma 4 E4B model on llama.cpp** for the `.medium`/`.large` tiers, a **bundled Qwen 2.5 0.5B classifier** for the `.classifier` tier (sub-100 ms warm tone scans), and your local **Ollama** daemon (opt-in). Plugins request a tier (`classifier` / `small` / `medium` / `large`) and a task kind; the host picks the backend and model. Order is user-configurable in Settings.
 
 Full architecture and per-plugin internals: see [`docs/wiki/`](docs/wiki/).
 
-## Quickstart
+## Build from source
 
 **Prerequisites**
-- macOS 14 Sonoma or later
+- macOS 14 Sonoma or later, Apple Silicon
 - Xcode command-line tools (`xcode-select --install`)
 - An inference backend. Halen picks whatever's available, so any one of:
   - **Apple Intelligence** (macOS 26+) — nothing to install.
-  - The **bundled Gemma 4 E4B model** — fetched on first use by the in-app downloader (Settings → Inference), or baked into the `.app` with a `BUNDLE_MODEL=1` build.
-  - **[Ollama](https://ollama.com)** with `gemma4:e4b` (and optionally `gemma4:e2b` / `gemma4:26b`):
+  - The **bundled Gemma 4 E4B model** — fetched on first use by the in-app downloader (Settings → Inference), or baked into the `.app` with `BUNDLE_MODEL=1`.
+  - **[Ollama](https://ollama.com)** with `gemma4:e4b` and optionally `gemma4:e2b`:
     ```bash
     ollama pull gemma4:e4b
-    ollama pull gemma4:e2b   # smaller / faster — used by classification paths
+    ollama pull gemma4:e2b   # smaller / faster
     ```
 
 **Build and launch**
@@ -88,13 +110,15 @@ cd halen
 ./scripts/run-dev.sh
 ```
 
-`run-dev.sh` calls `build-app.sh` (which builds the SPM target, assembles `build/Halen.app`, embeds `llama.framework`, and signs with your Apple Development cert so TCC permissions persist across rebuilds), quits any prior instance, launches the app, and streams its log. For a notarization-ready release build, follow [`docs/RELEASING.md`](docs/RELEASING.md) — the three-script chain that produces a signed, notarized, drag-to-Install DMG.
+`run-dev.sh` calls `build-app.sh` (which builds the SPM target, assembles `build/Halen.app`, embeds `llama.framework` and `Sparkle.framework`, and signs with your Apple Development cert so TCC permissions persist across rebuilds), quits any prior instance, launches the app, and streams its log.
 
-**Grant permissions**
-1. **Accessibility** — Halen prompts on first launch. Add `build/Halen.app` to System Settings → Privacy & Security → Accessibility. *Without this, no plugin can see or modify text.*
-2. **Microphone + Speech Recognition** — requested the first time you use Voice Dictation.
-3. **Calendar + Notifications** — requested by Burnout Copilot and Meeting Prep when you open them.
-4. **Input Monitoring** — used by Ask Halen (⌃H) and Snippet Expander's rephrase hotkey (⌃⌥R) so those shortcuts fire from other apps. Without it the hotkeys still work while Halen itself is frontmost; grant it under System Settings → Privacy & Security → Input Monitoring for system-wide use.
+For a release build, [`docs/RELEASING.md`](docs/RELEASING.md) walks through the four-script chain (`build-app.sh` → `notarize.sh` → `package-dmg.sh` → `publish-release.sh`) that produces a signed, notarized, drag-to-Install DMG and an updated Sparkle appcast.
+
+**Grant permissions** (Halen's onboarding walks through these on first launch)
+1. **Accessibility** — Halen needs this to see and modify text. *Without it, no plugin works.*
+2. **Input Monitoring** — for global hotkeys like `⌃H` (Ask Halen) and `⌃⌥R` (rephrase selection).
+3. **Microphone + Speech Recognition** — requested the first time you turn on Voice Dictation.
+4. **Calendar + Notifications** — requested by Burnout Copilot and Meeting Prep when you install them from the Plugin Store.
 
 ## Privacy
 
@@ -102,40 +126,67 @@ Everything that processes your text — typo matching, tone classification, snip
 
 ## Demo
 
-A scripted **1-minute demo** is in [`docs/DEMO.md`](docs/DEMO.md). Beat-by-beat: typo correction → sentiment popover → text expansion → meeting prep.
+A scripted **1-minute demo** is in [`docs/DEMO.md`](docs/DEMO.md). Beat-by-beat: typo correction → sentiment popover → ;casual rewrite → meeting prep briefing.
+
+The web demo at [halen.dev](https://halen.dev) runs the same four beats inline in your browser.
 
 ## Repository layout
 
 ```
 Sources/Halen/
-├── App/                 # SwiftUI App, AppCoordinator, marketplace UI, settings
+├── App/                 # SwiftUI App, AppCoordinator, marketplace UI,
+│                        #   settings, onboarding, Sparkle updater wrapper
 ├── Plugins/             # HalenPlugin protocol, PluginRegistry, HalenServices,
 │                        #   out-of-process plugin host + WebSocket bridge
-├── Features/            # the seven bundled plugins, one folder/file each
+├── Features/            # the ten in-process plugins, one folder each
 ├── Accessibility/       # AX permission flow, caret/focused-element observer
-├── Inference/           # RouterInferenceClient, backends (Apple FM / llama.cpp /
+├── Inference/           # RouterInferenceClient, backends (Apple FM, llama.cpp,
 │                        #   Ollama), tiers, model downloader
 ├── Events/              # in-process EventBus + Codable event payloads
-├── Overlay/             # caret-following indicator window
-└── Support/             # Log, string diff, Levenshtein, windowing helpers
+├── Overlay/             # caret-following indicator window + inline underlines
+└── Support/             # Log, string diff, Levenshtein, paragraph classifier
 
-Tests/HalenTests/        # ~110 unit tests (router, event bus, manifests, …)
-Resources/               # AppIcon.icns, menubar template, source SVG
-Vendor/                  # pinned llama.cpp xcframework + version
-docs/                    # README hero, site assets, landing page, wiki
-scripts/                 # build-app.sh, run-dev.sh, fetch-assets.sh,
-                         #   notarize.sh, generate-icons.swift
+Tests/HalenTests/        # 117 unit tests (router, event bus, manifests,
+                         #   paragraph classifier, style rules, …)
+plugins/                 # Out-of-process JSON-RPC plugins:
+                         #   burnout-copilot · meeting-prep
+                         #   plus preview ports of style-guide / email-reply /
+                         #   autocomplete / tone-profiles (v0.3.0 cutover)
+Resources/               # AppIcon.icns, menubar template, Info.plist,
+                         #   entitlements, source SVG
+Vendor/                  # pinned llama.cpp xcframework + version pin
+docs/                    # README hero, landing-page assets, wiki,
+                         #   RELEASING.md, PLUGIN_EXTRACTION.md, DEMO.md
+scripts/                 # build-app.sh · run-dev.sh · fetch-assets.sh
+                         # notarize.sh · package-dmg.sh · publish-release.sh
+                         # reset-permissions.sh · generate-icons.swift
 ```
 
 ## Build, test, CI
 
-`swift build` / `swift test` from the repo root. The full suite is ~110 tests
-under `Tests/HalenTests/`. [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
-runs `swift build` + `swift test` + a release-config build on every push and PR
-to `main` (macOS 14 runner).
+`swift build` / `swift test` from the repo root. The suite is 117 tests under
+`Tests/HalenTests/`. [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+runs `swift build` + `swift test` + a release-config build on every push and
+PR to `main`, on a macOS 14 runner. CI status is the badge at the top.
+
+## Contributing
+
+We welcome contributions. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup,
+code style, and how to propose a change. Be kind in issues and PRs;
+disagreement is fine, dismissiveness isn't.
+
+The roadmap lives at [`ROADMAP.md`](ROADMAP.md); the changelog at
+[`CHANGELOG.md`](CHANGELOG.md).
+
+Writing a plugin? Halen's external plugin protocol (JSON-RPC over stdio) is
+documented in [`plugins/README.md`](plugins/README.md). The two reference
+plugins, `burnout-copilot` and `meeting-prep`, are both ~100 lines of Python
+each.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE). Gemma 4 itself is governed by Google's
-[Gemma terms](https://ai.google.dev/gemma/terms); the model weights are not
-redistributed in this repository (the bundled model is downloaded on demand).
+MIT — see [`LICENSE`](LICENSE). Gemma 4 is governed by Google's
+[Gemma terms](https://ai.google.dev/gemma/terms); Qwen 2.5 by Alibaba's
+[Qwen license](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/main/LICENSE).
+Model weights are not redistributed in this repository — they download on
+demand from Hugging Face.

@@ -201,7 +201,11 @@ final class TypoFixer: HalenPlugin {
 
         recentSelfEdits.append(SelfEdit(typo: word, correction: cased, timestamp: now))
         recentAutoFixes.append(SelfEdit(typo: word, correction: cased, timestamp: now))
-        caretObserver?.replaceRange(range, with: cased)
+        // VoiceOver users get no signal from a silent inline edit; describe
+        // the substitution so they hear it through the announcement bridge.
+        // Short clause only — VO speaks the whole string.
+        let description = "Fixed '\(word)' to '\(cased)'"
+        caretObserver?.replaceRange(range, with: cased, describedAs: description)
     }
 
     private func matchCase(of source: String, in replacement: String) -> String {

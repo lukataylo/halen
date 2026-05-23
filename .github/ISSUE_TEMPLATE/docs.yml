@@ -1,0 +1,28 @@
+name: Docs issue
+description: Something in the README, wiki, or in-app help is wrong, missing, or confusing.
+title: "[docs] "
+labels: ["docs", "needs-triage"]
+body:
+  - type: input
+    id: page
+    attributes:
+      label: Which page?
+      description: Path or URL — `README.md`, `docs/wiki/plugins/sentiment-guard.md`, `halen.dev/privacy.html`, …
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: What's wrong, missing, or confusing?
+      description: If something is factually wrong, a quote of the offending text helps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix
+      description: Optional. A rewrite, a missing diagram, a link to authoritative info — whatever's useful.
+    validations:
+      required: false

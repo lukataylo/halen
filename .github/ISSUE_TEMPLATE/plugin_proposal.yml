@@ -1,0 +1,93 @@
+name: Plugin proposal
+description: Pitch a new plugin — first-party or external (JSON-RPC).
+title: "[plugin] "
+labels: ["plugin", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Halen's surface area grows through plugins. Before you write code, a short pitch helps us
+        figure out whether it fits as built-in or external, and whether it overlaps with something
+        already on the [roadmap](https://github.com/lukataylo/halen/blob/main/ROADMAP.md).
+
+        Reference plugins to study: [`burnout-copilot`](https://github.com/lukataylo/halen/tree/main/plugins/burnout-copilot)
+        and [`meeting-prep`](https://github.com/lukataylo/halen/tree/main/plugins/meeting-prep), both ~100 lines of Python.
+        Protocol: [`plugins/README.md`](https://github.com/lukataylo/halen/blob/main/plugins/README.md).
+
+  - type: input
+    id: name
+    attributes:
+      label: Plugin name
+      placeholder: e.g. "Citation Linker"
+    validations:
+      required: true
+
+  - type: textarea
+    id: pitch
+    attributes:
+      label: One-paragraph pitch
+      description: What does it do? When does it trigger? What's the user-visible payoff?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: shape
+    attributes:
+      label: Built-in or external?
+      description: |
+        Built-in plugins are Swift modules living in `Sources/Halen/Features/`.
+        External plugins are out-of-process (any language) and talk to the host over JSON-RPC stdio.
+        External is the default; built-in is reserved for things that have to be fast, deep into AX, or part of the core UX.
+      options:
+        - External (JSON-RPC over stdio)
+        - Built-in (Swift, in-process)
+        - Not sure — happy to discuss
+    validations:
+      required: true
+
+  - type: textarea
+    id: events
+    attributes:
+      label: Which events does it subscribe to?
+      description: |
+        e.g. `text.pause`, `caret.moved`, `paragraph.classified`, `finding.created`, `app.focused`.
+        The full surface is in [`Sources/Halen/Events/`](https://github.com/lukataylo/halen/tree/main/Sources/Halen/Events).
+      placeholder: text.pause, app.focused
+    validations:
+      required: true
+
+  - type: textarea
+    id: inference
+    attributes:
+      label: Inference needs
+      description: |
+        Which tier — `classifier` (Qwen 0.5B), `small`, `medium` (Gemma 4 E4B), `large`?
+        Does it stream? Latency budget? Or no inference at all?
+    validations:
+      required: false
+
+  - type: textarea
+    id: permissions
+    attributes:
+      label: Permissions required
+      description: AX, Input Monitoring, Calendar, Microphone, Network, Files — anything beyond the defaults.
+    validations:
+      required: false
+
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy posture
+      description: Does any data leave the Mac? If yes, what, when, and to whom?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I read [`CONTRIBUTING.md`](https://github.com/lukataylo/halen/blob/main/CONTRIBUTING.md#plugin-contributions) and [`plugins/README.md`](https://github.com/lukataylo/halen/blob/main/plugins/README.md).
+          required: true
+        - label: This doesn't duplicate a bundled plugin or something already on the roadmap.
+          required: true
