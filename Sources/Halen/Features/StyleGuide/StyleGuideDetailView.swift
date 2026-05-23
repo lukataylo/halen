@@ -7,15 +7,87 @@ struct StyleGuideDetailView: View {
     @State private var showAddRule = false
     @State private var newBanned = ""
     @State private var newPreferred = ""
+    @State private var newKind: StyleRuleKind = .literal
+    /// Transient toast after a CSV import — `(imported, skipped)`.
+    @State private var lastImport: (imported: Int, skipped: Int)?
 
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
                 rulesCard
+                importCard
                 aboutCard
             }
             .padding(12)
         }
+    }
+
+    // MARK: - CSV import
+
+    private var importCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                cardLabel("Import / export")
+                Text("Bulk-load rules from a CSV file. Format: banned,preferred,kind. The header row is optional; kind defaults to literal.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Button {
+                        importCSVFile()
+                    } label: {
+                        Label("Import CSV…", systemImage: "square.and.arrow.down")
+                    }
+                    .controlSize(.small)
+                    Button {
+                        exportCSVFile()
+                    } label: {
+                        Label("Export CSV…", systemImage: "square.and.arrow.up")
+                    }
+                    .controlSize(.small)
+                    Spacer()
+                }
+                if let li = lastImport {
+                    Text(li.skipped == 0
+                         ? "Imported \(li.imported) rule\(li.imported == 1 ? "" : "s")."
+                         : "Imported \(li.imported), skipped \(li.skipped).")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func importCSVFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.commaSeparatedText, .plainText]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url,
+              let data = try? Data(contentsOf: url),
+              let csv = String(data: data, encoding: .utf8)
+        else { return }
+        lastImport = store.importCSV(csv)
+    }
+
+    private func exportCSVFile() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.nameFieldStringValue = "halen-style-rules.csv"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        var out = "banned,preferred,kind\n"
+        // Export only user rules — exporting the three built-ins back into
+        // the user's own CSV would round-trip noise.
+        for rule in store.sorted where !rule.builtin {
+            // Crude CSV escaping: quote any field containing comma or quote.
+            func esc(_ s: String) -> String {
+                if s.contains(",") || s.contains("\"") {
+                    return "\"\(s.replacingOccurrences(of: "\"", with: "\"\""))\""
+                }
+                return s
+            }
+            out += "\(esc(rule.banned)),\(esc(rule.preferred)),\(rule.kind.rawValue)\n"
+        }
+        try? out.write(to: url, atomically: true, encoding: .utf8)
     }
 
     private var rulesCard: some View {
@@ -58,11 +130,22 @@ struct StyleGuideDetailView: View {
 
     private var addRuleForm: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField("Banned term (e.g. \"synergy\")", text: $newBanned)
+            Picker("", selection: $newKind) {
+                Text("Literal").tag(StyleRuleKind.literal)
+                Text("Regex").tag(StyleRuleKind.regex)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            TextField(
+                newKind == .literal
+                    ? "Banned term (e.g. \"synergy\")"
+                    : "Regex pattern (e.g. \\bcolou?r\\b)",
+                text: $newBanned)
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 8).padding(.vertical, 5)
                 .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
-                .font(.system(size: 12))
+                .font(.system(size: 12, design: newKind == .regex ? .monospaced : .default))
 
             TextField("Preferred term (leave blank to just ban it)", text: $newPreferred)
                 .textFieldStyle(.plain)
@@ -70,19 +153,34 @@ struct StyleGuideDetailView: View {
                 .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
                 .font(.system(size: 12))
 
+            // Inline validation: a regex with a syntax error would fail
+            // silently at scan time, looking like a Halen bug. Surface it
+            // up-front so the user fixes the pattern before saving.
+            if newKind == .regex, !newBanned.isEmpty, !regexIsValid {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.orange)
+                    Text("Invalid regex syntax")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             HStack {
                 Spacer()
                 Button {
-                    store.addCustomRule(banned: newBanned, preferred: newPreferred)
+                    store.addCustomRule(banned: newBanned, preferred: newPreferred, kind: newKind)
                     newBanned = ""
                     newPreferred = ""
+                    newKind = .literal
                     withAnimation(.spring(duration: 0.2)) { showAddRule = false }
                 } label: {
                     Label("Add rule", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .disabled(newBanned.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(!canAddRule)
             }
         }
         .padding(8)
@@ -94,6 +192,21 @@ struct StyleGuideDetailView: View {
                         .strokeBorder(.separator.opacity(0.4), lineWidth: 0.5)
                 )
         )
+    }
+
+    /// Form validation: requires a non-empty banned field plus (for regex
+    /// rules) a syntactically valid pattern.
+    private var canAddRule: Bool {
+        let trimmed = newBanned.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return false }
+        if newKind == .regex { return regexIsValid }
+        return true
+    }
+
+    private var regexIsValid: Bool {
+        (try? NSRegularExpression(
+            pattern: newBanned.trimmingCharacters(in: .whitespaces),
+            options: [.caseInsensitive])) != nil
     }
 
     private var aboutCard: some View {

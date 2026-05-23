@@ -21,6 +21,31 @@ final class Autocomplete: HalenPlugin {
     let icon = "text.append"
     let category: PluginCategory = .writing
 
+    /// Extra debounce on top of text.pause before a suggestion request
+    /// fires. text.pause already settles upstream; this knob lets users
+    /// who find ghost text too eager push the firing point further out.
+    /// 0…500 ms range; 0 keeps the historical behaviour.
+    static let extraSettleKey = "halen.autocomplete.extraSettleMs"
+    static var extraSettleMs: Int {
+        let raw = UserDefaults.standard.object(forKey: extraSettleKey) as? Int
+        guard let raw, (0...500).contains(raw) else { return 0 }
+        return raw
+    }
+
+    /// Optional whitelist of app bundle ids. When the set is non-empty,
+    /// Autocomplete only suggests in those apps. Defaults to empty (the
+    /// historical behaviour: suggest everywhere). Stored as a comma-
+    /// separated string for parity with SentimentGuard's ignore list.
+    static let whitelistKey = "halen.autocomplete.appWhitelist"
+    static var appWhitelist: Set<String> {
+        let raw = UserDefaults.standard.string(forKey: whitelistKey) ?? ""
+        return Set(
+            raw.split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+        )
+    }
+
     private let services: HalenServices
     private weak var caretObserver: CaretObserver?
     /// Tab is registered ONLY while a suggestion is on screen, then immediately
@@ -66,7 +91,27 @@ final class Autocomplete: HalenPlugin {
                 guard let self else { return }
                 switch event {
                 case .textPaused(let p):
-                    self.maybeSuggest(text: p.text, caretOffset: p.caretOffset)
+                    // App whitelist — when configured (non-empty), only
+                    // suggest in the listed apps. Empty = old behaviour
+                    // (suggest everywhere).
+                    let whitelist = Self.appWhitelist
+                    if !whitelist.isEmpty, !whitelist.contains(p.appBundleId) {
+                        self.dismiss()
+                        continue
+                    }
+                    // Extra settle delay — text.pause already settled
+                    // upstream, this pushes the suggestion fire a bit
+                    // further out for users who find ghost text too eager.
+                    let extra = Self.extraSettleMs
+                    if extra > 0 {
+                        Task { @MainActor [weak self] in
+                            try? await Task.sleep(for: .milliseconds(extra))
+                            guard let self, !Task.isCancelled else { return }
+                            self.maybeSuggest(text: p.text, caretOffset: p.caretOffset)
+                        }
+                    } else {
+                        self.maybeSuggest(text: p.text, caretOffset: p.caretOffset)
+                    }
                 case .caretMoved, .appFocused:
                     // Any movement / focus change makes the ghost stale.
                     self.dismiss()

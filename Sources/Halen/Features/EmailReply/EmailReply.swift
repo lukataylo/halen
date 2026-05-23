@@ -16,6 +16,46 @@ final class EmailReply: HalenPlugin {
     let icon = "arrowshape.turn.up.left"
     let category: PluginCategory = .productivity
 
+    /// User-selectable tone for the draft. "Match" defers to the
+    /// Tone Profiles plugin's per-app profile (the historical behaviour);
+    /// the others override it for this specific reply.
+    enum ReplyTone: String, CaseIterable, Sendable {
+        case match       // honour the Tone Profiles per-app setting
+        case formal
+        case casual
+        case concise
+        case warm
+
+        /// Sentence appended to the reply prompt. `match` returns an empty
+        /// string because the caller will already have inserted the tone-
+        /// profile clause; the others fully override it.
+        var promptClause: String {
+            switch self {
+            case .match:   return ""
+            case .formal:  return "Write the reply in a formal, professional register."
+            case .casual:  return "Write the reply in a casual, relaxed register — friendly and brief."
+            case .concise: return "Keep the reply as short as politely possible. Two or three sentences."
+            case .warm:    return "Write the reply with a warm, friendly tone — acknowledge the sender before responding."
+            }
+        }
+
+        var label: String {
+            switch self {
+            case .match:   return "Match app"
+            case .formal:  return "Formal"
+            case .casual:  return "Casual"
+            case .concise: return "Concise"
+            case .warm:    return "Warm"
+            }
+        }
+    }
+
+    static let defaultToneKey = "halen.email-reply.defaultTone"
+    static var defaultTone: ReplyTone {
+        let raw = UserDefaults.standard.string(forKey: defaultToneKey) ?? ""
+        return ReplyTone(rawValue: raw) ?? .match
+    }
+
     private let services: HalenServices
     private weak var caretObserver: CaretObserver?
     private let hotkey = HotkeyRegistrar()
@@ -82,7 +122,16 @@ final class EmailReply: HalenPlugin {
         }
         // Bias the reply's register by the mail app's tone profile — the same
         // host service Sentiment Guard and Clarity Checker read.
-        let toneClause = services.toneProfiles.profile(for: bundleId).promptClause
+        // Tone resolution: a user-selected default ("formal" / "casual" /
+        // "concise" / "warm") wins outright. Otherwise fall back to the
+        // per-app tone profile (which is the historical default).
+        let replyTone = Self.defaultTone
+        let toneClause: String
+        if replyTone == .match {
+            toneClause = services.toneProfiles.profile(for: bundleId).promptClause
+        } else {
+            toneClause = replyTone.promptClause
+        }
 
         inflight?.cancel()
         inflight = Task { @MainActor [services, weak self] in

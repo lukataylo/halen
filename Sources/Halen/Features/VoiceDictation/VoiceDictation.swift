@@ -4,6 +4,7 @@ import Speech
 import AVFoundation
 import Carbon.HIToolbox
 import ApplicationServices
+import UserNotifications
 
 /// Global-hotkey-driven dictation. ⌥⌘H toggles recording. While listening, a
 /// floating indicator pulses near the caret. On stop, the transcription (local,
@@ -110,6 +111,16 @@ final class VoiceDictation: HalenPlugin {
     private func beginRecording() {
         guard !isRecording else { return }
         state.refreshPermissions()
+
+        // Graceful denial: if either permission is `.denied`, don't even
+        // start the recorder (it would fail silently inside AVAudioEngine).
+        // Surface a notification with a one-click jump to Settings so the
+        // user has a path forward. Before this, ⌥⌘H just looked broken.
+        if state.micPermission == .denied || state.speechPermission == .denied {
+            postPermissionDeniedNotification()
+            Log.warn("VoiceDictation: hotkey suppressed — mic=\(state.micPermission), speech=\(state.speechPermission)")
+            return
+        }
         state.resetLevels()
 
         // Capture the field + caret NOW — the transcript callback fires seconds
@@ -184,6 +195,54 @@ final class VoiceDictation: HalenPlugin {
         }
         state.lastTranscript = trimmed
         Log.info("VoiceDictation inserted \(trimmed.count) chars at offset \(capturedOffset) wrote=\(wrote)")
+    }
+
+    // MARK: - Permission denial fallback
+
+    /// Posts a one-shot system notification when ⌥⌘H is pressed but Mic or
+    /// Speech Recognition is denied. The notification body names which
+    /// permission needs flipping; the user clicks through to the right
+    /// pane of System Settings.
+    ///
+    /// Halen has the Notification permission only if the user has granted
+    /// it — Meeting Prep / Ask Halen request it lazily. If neither has
+    /// run, `add()` no-ops; we still log the missing permission so the
+    /// user can find it from the detail view's permission status.
+    private func postPermissionDeniedNotification() {
+        let mic   = state.micPermission == .denied
+        let speech = state.speechPermission == .denied
+        let what: String
+        switch (mic, speech) {
+        case (true, true):   what = "Microphone and Speech Recognition access"
+        case (true, false):  what = "Microphone access"
+        case (false, true):  what = "Speech Recognition access"
+        default:             return     // nothing to nag about
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Voice Dictation needs permission"
+        content.body  = "Halen can't hear you — \(what) was denied. Click to open System Settings."
+        content.sound = nil
+
+        let request = UNNotificationRequest(
+            identifier: "voice-dictation-denied-\(Int(Date().timeIntervalSince1970))",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+        )
+        Task {
+            let center = UNUserNotificationCenter.current()
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+            try? await center.add(request)
+        }
+        // Also open Settings directly — most users won't see the
+        // notification banner if Halen's never been granted Notifications.
+        // The deep link target is the privacy pane that actually contains
+        // the toggle the user needs to flip.
+        if mic {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
+        } else if speech {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition")!)
+        }
     }
 
     // MARK: - Listening indicator

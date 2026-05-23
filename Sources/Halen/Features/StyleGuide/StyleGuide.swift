@@ -102,11 +102,11 @@ final class StyleGuide: HalenPlugin {
             }
             return Finding(id: rule.id,
                            title: "“\(match.matchedText)” → “\(rule.preferred)”",
-                           detail: "Your preferred term.",
+                           detail: rule.kind == .regex ? "Your preferred term (regex)." : "Your preferred term.",
                            colorName: "purple",
                            fixLabel: "Replace",
                            onFix: { [weak self] in
-                               self?.replace(banned: rule.banned, with: rule.preferred)
+                               self?.replace(rule: rule)
                            })
         }
         let size = CGSize(width: 360, height: CGFloat(min(340, 130 + matches.count * 48)))
@@ -139,18 +139,24 @@ final class StyleGuide: HalenPlugin {
         dismissTask = nil
     }
 
-    /// Replace the first word-boundary occurrence of `banned` in the focused
-    /// field with `preferred`. Re-reads the live field text so the replacement
-    /// lands even if the user kept typing after the scan.
-    private func replace(banned: String, with preferred: String) {
+    /// Replace the first match of `rule.banned` in the focused field with
+    /// `rule.preferred`. Re-reads the live field text so the replacement
+    /// lands even if the user kept typing after the scan. Literal rules
+    /// honour word boundaries; regex rules honour their own pattern.
+    private func replace(rule: StyleRule) {
         guard let element = caretObserver?.currentElement,
               let current = axReadString(element, kAXValueAttribute) else { return }
         let ns = current as NSString
-        guard let range = StyleRulesStore.wordRange(of: banned, in: ns) else {
-            Log.info("StyleGuide: \"\(banned)\" no longer in field — skipping replace")
+        let range: NSRange?
+        switch rule.kind {
+        case .literal: range = StyleRulesStore.wordRange(of: rule.banned, in: ns)
+        case .regex:   range = StyleRulesStore.firstRegexMatch(pattern: rule.banned, in: ns)
+        }
+        guard let range else {
+            Log.info("StyleGuide: \"\(rule.banned)\" no longer in field — skipping replace")
             return
         }
-        let wrote = caretObserver?.replaceRange(range, with: preferred, in: element) ?? false
-        Log.info("StyleGuide: replaced \"\(banned)\" → \"\(preferred)\" wrote=\(wrote)")
+        let wrote = caretObserver?.replaceRange(range, with: rule.preferred, in: element) ?? false
+        Log.info("StyleGuide: replaced \"\(rule.banned)\" → \"\(rule.preferred)\" wrote=\(wrote)")
     }
 }
