@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Full release flow (this script is step 3 of 3): see docs/RELEASING.md
+# for the end-to-end pipeline, prerequisites, and troubleshooting table.
+#
 # Package the stapled Developer-ID build as a notarized, drag-to-Install DMG.
 #
 # Inputs:  build/Halen.app          (must already be notarized + stapled by

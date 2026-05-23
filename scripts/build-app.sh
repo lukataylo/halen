@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Full release flow (this script is step 1 of 3): see docs/RELEASING.md
+# for the end-to-end pipeline, prerequisites, and troubleshooting table.
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Full release flow (this script is step 2 of 3): see docs/RELEASING.md
+# for the end-to-end pipeline, prerequisites, and troubleshooting table.
+#
 # Notarize the Developer ID build produced by `DIST=1 ./scripts/build-app.sh`:
 # zip it, submit to Apple's notary service, staple the ticket, verify, and
 # package the stapled app as the distributable zip.

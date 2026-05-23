@@ -77,7 +77,7 @@ cd halen
 ./scripts/run-dev.sh
 ```
 
-`run-dev.sh` calls `build-app.sh` (which builds the SPM target, assembles `build/Halen.app`, embeds `llama.framework`, and signs with your Apple Development cert so TCC permissions persist across rebuilds), quits any prior instance, launches the app, and streams its log. For a notarization-ready release build, use `DIST=1 ./scripts/build-app.sh` followed by `./scripts/notarize.sh`.
+`run-dev.sh` calls `build-app.sh` (which builds the SPM target, assembles `build/Halen.app`, embeds `llama.framework`, and signs with your Apple Development cert so TCC permissions persist across rebuilds), quits any prior instance, launches the app, and streams its log. For a notarization-ready release build, follow [`docs/RELEASING.md`](docs/RELEASING.md) — the three-script chain that produces a signed, notarized, drag-to-Install DMG.
 
 **Grant permissions**
 1. **Accessibility** — Halen prompts on first launch. Add `build/Halen.app` to System Settings → Privacy & Security → Accessibility. *Without this, no plugin can see or modify text.*
