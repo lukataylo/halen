@@ -265,13 +265,26 @@ private struct FindingsPopoverStreamingBody: View {
                 .controlSize(.regular)
             Spacer()
             if let onCopy {
+                // Hand-styled like the IndicatorPopover's Rephrase button.
+                // `.borderedProminent` over the popover's `.regularMaterial`
+                // chrome renders as near-invisible white-on-frosted; explicit
+                // accent fill + white text gives reliable contrast.
                 Button(action: onCopy) {
-                    Label("Copy", systemImage: "doc.on.doc")
-                        .font(.system(size: 12, weight: .medium))
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("Copy")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(streaming.phase == .done
+                                ? Color.accentColor
+                                : Color.gray.opacity(0.45))
+                    .clipShape(Capsule())
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-                .tint(.accentColor)
+                .buttonStyle(.plain)
                 .disabled(streaming.phase != .done)
             }
         }

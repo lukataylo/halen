@@ -294,6 +294,12 @@ final class CaretObserver {
 
         guard let element = axReadFocusedElement(appElement) else {
             focusedElement = nil
+            // Silent before — but the user can't tell whether the AX subscription
+            // worked or not in this state, and "indicator is gone" is the symptom.
+            // Now we log the gap, which is almost always "user has the app window
+            // up but their text cursor isn't in any editable field" (notes list,
+            // toolbar focused, no document open, etc.).
+            Log.info("attachToFocusedElement: no focused element on \(observedApp?.localizedName ?? "?") — caret tracking idle until cursor lands in a text field")
             return
         }
 

@@ -47,7 +47,12 @@ final class SentimentGuard: HalenPlugin {
     /// appears. SentimentGuard uses these to size the host `NSPanel`; the
     /// SwiftUI `FindingsPopover` inside grows to fill the available height.
     static let popupIdleSize = NSSize(width: 320, height: 150)
-    static let popupRephraseSize = NSSize(width: 320, height: 300)
+    /// Streaming pane is roughly: status row (24) + ~5 lines of rewrite
+    /// text at 12pt (≈90) + actions row (32) + 28 vertical chrome ≈ 220.
+    /// Tighter than the previous 300 — that left a wide empty band under
+    /// short rewrites. The internal ScrollView can still expand for longer
+    /// outputs; this is just the panel's outer frame.
+    static let popupRephraseSize = NSSize(width: 320, height: 220)
     /// Hashes the user explicitly approved as fine. Persisted.
     private var approvedHashes: Set<String> = []
     /// Number of times we surfaced a popover this session (any rule). In-memory only.
