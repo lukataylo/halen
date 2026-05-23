@@ -72,8 +72,30 @@ final class PluginRegistry {
     }
 
     private func readPersistedEnabled(_ id: String) -> Bool {
-        defaults.object(forKey: defaultsKey(for: id)) as? Bool ?? true
+        // Explicit user choice takes precedence over the default-off list —
+        // someone who deliberately enabled VoiceDictation and quit should
+        // get VoiceDictation on next launch even though it's off by default
+        // for new users.
+        if let stored = defaults.object(forKey: defaultsKey(for: id)) as? Bool {
+            return stored
+        }
+        return !Self.defaultDisabledPluginIds.contains(id)
     }
 
     private func defaultsKey(for id: String) -> String { "plugin.\(id).enabled" }
+
+    /// Plugins that start **off** for a fresh install — the "Pick what's on"
+    /// step of onboarding flips them on if the user opts in. Everything not
+    /// in this set defaults to on. Picked to match the immediate-value
+    /// threshold: a brand-new user should get tone/clarity/typo/ask/snippets
+    /// without surprises; the rest are niche (Voice), interrupt-heavy
+    /// (Autocomplete), need setup (StyleGuide), or apply to a narrow workflow
+    /// (EmailReply, ToneProfiles).
+    static let defaultDisabledPluginIds: Set<String> = [
+        "com.halen.voice-dictation",
+        "com.halen.autocomplete",
+        "com.halen.style-guide",
+        "com.halen.email-reply",
+        "com.halen.tone-profiles",
+    ]
 }

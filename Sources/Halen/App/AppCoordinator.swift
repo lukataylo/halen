@@ -51,6 +51,14 @@ final class AppCoordinator {
         PluginStoreWindowController(registry: registry, model: pluginStoreModel)
     }()
 
+    /// First-run setup walkthrough. Lazy because building the SwiftUI
+    /// hosting view shouldn't run on every launch — only when we actually
+    /// need to present the flow (first launch, or the user re-triggers it
+    /// from Settings → "Run setup again").
+    lazy var onboardingWindow: OnboardingWindowController = {
+        OnboardingWindowController(registry: registry)
+    }()
+
     /// Kept around so we can prewarm Apple FM at launch and re-probe
     /// availability from the Settings UI without going through the router.
     let backends: [InferenceBackend]
@@ -225,6 +233,17 @@ final class AppCoordinator {
         webSocketBridge = ws
         if WebSocketBridge.isEnabledInDefaults {
             ws.start()
+        }
+
+        // First-run setup walkthrough. The registry is now populated, so
+        // the "Pick what's on" step has live data to render. Defer one tick
+        // so the AppKit run loop is fully up — opening a window during
+        // didFinishLaunching can race with the menubar status item.
+        if !OnboardingWindowController.isCompleted {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(400))
+                self?.onboardingWindow.present()
+            }
         }
     }
 

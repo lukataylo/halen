@@ -14,6 +14,10 @@ struct SettingsView: View {
     let webSocketBridge: WebSocketBridge?
     @Bindable var launchAtLogin: LaunchAtLoginController
     let onBack: () -> Void
+    /// Re-trigger the first-run walkthrough. Wired by `HalenCenterView`
+    /// down to `AppCoordinator.onboardingWindow.presentAgain()`. Surfaced
+    /// in the About card.
+    let onRunSetupAgain: () -> Void
 
     @State private var pollTask: Task<Void, Never>?
     @State private var confirmingModelRemove = false
@@ -796,11 +800,26 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text("Local-first writing agent for macOS. Uses your local Gemma 4 instance for tone, typo, and rewrite tasks — no text leaves this device.")
+                Text("Local-first writing for macOS. Tone, clarity, and rewrites run on your Mac.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
+
+                Divider().opacity(0.4).padding(.vertical, 2)
+
+                Button {
+                    onRunSetupAgain()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10))
+                        Text("Run setup again")
+                            .font(.system(size: 11))
+                    }
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.accentColor)
             }
         }
     }

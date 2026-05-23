@@ -28,6 +28,10 @@ struct HalenCenterView: View {
     /// dropdown) so it survives the menubar popover closing — see
     /// `PluginStoreWindowController`.
     let onOpenStore: () -> Void
+    /// Re-trigger the first-run setup walkthrough. Wired through to
+    /// `AppCoordinator.onboardingWindow.presentAgain()`. Surfaced in
+    /// SettingsView's About card.
+    let onRunSetupAgain: () -> Void
     @State private var nav: CenterNav = .marketplace
 
     var body: some View {
@@ -51,7 +55,8 @@ struct HalenCenterView: View {
                     modelDownloader: modelDownloader,
                     webSocketBridge: webSocketBridge,
                     launchAtLogin: launchAtLogin,
-                    onBack: { back() }
+                    onBack: { back() },
+                    onRunSetupAgain: onRunSetupAgain
                 )
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
