@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct ClarityCheckerDetailView: View {
     @Bindable var rulesStore: ClarityRulesStore
     let flaggedCount: Int
@@ -111,6 +112,7 @@ struct ClarityCheckerDetailView: View {
     }
 }
 
+@MainActor
 private struct ClarityRuleRow: View {
     let rule: ClarityRule
     let onToggle: (Bool) -> Void

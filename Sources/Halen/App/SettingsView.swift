@@ -5,6 +5,7 @@ import AppKit
 /// picker (priority order + live availability of Apple Intelligence / Ollama /
 /// future local runtimes), and About metadata. Sits on the same push-navigation
 /// stack as plugin detail views.
+@MainActor
 struct SettingsView: View {
     @Bindable var state: AppState
     @Bindable var inferenceSettings: InferenceSettings

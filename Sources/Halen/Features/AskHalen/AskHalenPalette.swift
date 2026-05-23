@@ -16,6 +16,7 @@ import SwiftUI
 /// whole class of bug by always rendering the output area and switching its
 /// *content* based on state — every body evaluation reads every relevant
 /// field, so observation tracking is guaranteed.
+@MainActor
 struct AskHalenPalette: View {
     @ObservedObject var state: AskHalenState
     let onSubmit: () -> Void

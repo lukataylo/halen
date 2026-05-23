@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct AutocompleteDetailView: View {
     var body: some View {
         ScrollView {

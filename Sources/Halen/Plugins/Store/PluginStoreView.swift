@@ -410,6 +410,7 @@ private struct AvailablePluginRow: View {
 
 // MARK: - Shared visual helpers
 
+@MainActor
 private struct PluginIconBadge: View {
     let systemName: String
     let tint: Color
@@ -431,6 +432,7 @@ private struct PluginIconBadge: View {
 /// window it vibrancy-samples the desktop wallpaper and tints every card.
 /// `StoreCard` uses the system `controlBackgroundColor` instead: an opaque,
 /// light/dark-adaptive native surface that sits cleanly on the window.
+@MainActor
 private struct StoreCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
 

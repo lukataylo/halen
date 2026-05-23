@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct SnippetExpanderDetailView: View {
     @Bindable var store: SnippetStore
 
@@ -163,6 +164,7 @@ struct SnippetExpanderDetailView: View {
 /// Row with inline edit-on-double-click. Builtins can be edited too — the
 /// store converts the edit into a custom override that survives the launch-time
 /// `ensureBuiltins` refresh, and Reset restores the original prompt.
+@MainActor
 private struct SnippetRow: View {
     let snippet: Snippet
     let onDelete: () -> Void

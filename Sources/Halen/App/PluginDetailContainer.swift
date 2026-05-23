@@ -3,6 +3,7 @@ import SwiftUI
 /// Shell view rendered when the user taps a plugin in the marketplace. Holds the
 /// back-button header and renders the plugin's own detail content underneath.
 /// Uses native glass materials throughout.
+@MainActor
 struct PluginDetailContainer<Content: View>: View {
     let plugin: any HalenPlugin
     let onBack: () -> Void
@@ -51,6 +52,7 @@ struct PluginDetailContainer<Content: View>: View {
     }
 }
 
+@MainActor
 struct PluginCategoryBadge: View {
     let plugin: any HalenPlugin
 

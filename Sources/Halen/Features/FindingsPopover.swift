@@ -55,6 +55,7 @@ final class StreamingRewriteState: ObservableObject {
 /// the action buttons swap to Close + Copy. The caller is expected to resize
 /// the host `NSPanel` separately when it starts streaming — the SwiftUI view
 /// fills the available height.
+@MainActor
 struct FindingsPopover: View {
     let icon: String
     let headline: String
@@ -153,6 +154,7 @@ struct FindingsPopover: View {
 /// Streaming-aware variant. Lives in its own view so it can take a non-optional
 /// `@ObservedObject` — SwiftUI doesn't allow optional `@ObservedObject`s on the
 /// outer `FindingsPopover` API.
+@MainActor
 private struct FindingsPopoverStreamingBody: View {
     let icon: String
     let headline: String
@@ -302,6 +304,7 @@ private struct FindingsPopoverStreamingBody: View {
     }
 }
 
+@MainActor
 private struct FindingsPopoverHeader: View {
     let icon: String
     let headline: String
@@ -329,6 +332,7 @@ private struct FindingsPopoverHeader: View {
     }
 }
 
+@MainActor
 private struct FindingRow: View {
     let finding: Finding
 

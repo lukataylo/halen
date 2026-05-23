@@ -48,6 +48,7 @@ extension HalenPlugin {
 
 /// Default detail content for plugins without a custom view. Reads naturally as
 /// "this plugin has nothing to configure" without looking broken or empty.
+@MainActor
 struct EmptyPluginDetailView: View {
     let plugin: any HalenPlugin
 

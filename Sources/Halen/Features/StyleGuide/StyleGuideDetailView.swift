@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct StyleGuideDetailView: View {
     @Bindable var store: StyleRulesStore
 
@@ -108,6 +109,7 @@ struct StyleGuideDetailView: View {
     }
 }
 
+@MainActor
 private struct StyleRuleRow: View {
     let rule: StyleRule
     let onToggle: (Bool) -> Void

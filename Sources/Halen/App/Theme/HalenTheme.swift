@@ -49,6 +49,7 @@ func sentimentRuleColor(_ name: String) -> Color {
 
 /// A glass-styled card used by detail views. Always full-width so cards align
 /// vertically regardless of intrinsic content size.
+@MainActor
 struct GlassCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
@@ -73,6 +74,7 @@ struct GlassCard<Content: View>: View {
 /// plugins). Avatar on the left, bubble content on the right. Bullets in the
 /// body get rendered as a clean list; loading state animates three dots in
 /// the bubble.
+@MainActor
 struct HalenChatBubble: View {
     let headline: String
     let content: String?
@@ -177,6 +179,7 @@ struct HalenChatBubble: View {
 
 /// Three pulsing dots, iMessage-style. Used inside `HalenChatBubble` while a
 /// Gemma response is in flight.
+@MainActor
 struct TypingDots: View {
     let color: Color
     @State private var animating = false

@@ -376,6 +376,7 @@ final class AskHalenState: ObservableObject {
 
 /// Default detail view — Ask Halen has nothing to configure today; the hotkey
 /// is the surface. Future settings (custom hotkey, default model tier) land here.
+@MainActor
 private struct AskHalenDetailView: View {
     var body: some View {
         VStack(spacing: 14) {

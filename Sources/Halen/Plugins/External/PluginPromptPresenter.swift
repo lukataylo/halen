@@ -73,6 +73,7 @@ final class PluginPromptPresenter {
 /// Generic prompt popup: a body line and one button per action. The first
 /// action is rendered as the prominent (primary) button — plugins put the
 /// affirmative action first.
+@MainActor
 private struct PluginPromptView: View {
     let title: String
     let message: String

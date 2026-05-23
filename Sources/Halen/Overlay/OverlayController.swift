@@ -496,6 +496,7 @@ final class OverlayIndicatorState {
 /// The host panel sizes to `findingDotSize` (24) always; the SwiftUI view
 /// fills with the right art for the current state so no panel reframe is
 /// needed when a finding appears or clears.
+@MainActor
 struct HalenCaretIndicator: View {
     @AppStorage(OverlayController.dotStyleKey) private var dotStyle: String = "solid"
     /// Pass an empty `OverlayIndicatorState` for indicators that never need
@@ -596,6 +597,7 @@ struct HalenCaretIndicator: View {
 /// plugin's rewrite path). Both publish a `.findingActionRequested` event
 /// on the EventBus; the originating plugin owns the actual behaviour, so
 /// this view stays plugin-agnostic.
+@MainActor
 private struct IndicatorPopoverContent: View {
     @Bindable var state: OverlayIndicatorState
 

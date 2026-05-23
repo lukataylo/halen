@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct SentimentGuardDetailView: View {
     @Bindable var rulesStore: SentimentRulesStore
     let approvedCount: Int
@@ -251,6 +252,7 @@ struct SentimentGuardDetailView: View {
 
 // MARK: - Stat pillar
 
+@MainActor
 private struct StatPillar: View {
     let value: Int
     let label: String
@@ -271,6 +273,7 @@ private struct StatPillar: View {
     }
 }
 
+@MainActor
 private struct StatDivider: View {
     var body: some View {
         Rectangle()
@@ -281,6 +284,7 @@ private struct StatDivider: View {
 
 // MARK: - Row
 
+@MainActor
 private struct RuleRow: View {
     let rule: SentimentRule
     let onToggle: (Bool) -> Void

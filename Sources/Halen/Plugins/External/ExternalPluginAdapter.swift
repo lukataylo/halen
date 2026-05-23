@@ -59,6 +59,7 @@ final class ExternalPluginAdapter: HalenPlugin {
 /// disk. Permissions are surfaced even though the host doesn't enforce them
 /// yet (informational v1), because they're the user's only signal of what
 /// surface area the plugin is asking for.
+@MainActor
 private struct ExternalPluginDetailView: View {
     let manifest: PluginManifest
     let pluginDir: URL

@@ -3,6 +3,7 @@ import SwiftUI
 /// Dark pill shown near the caret while dictation is recording.
 /// Animated audio-level visualiser in the middle; Stop (commit) and Cancel
 /// (discard) buttons on the right.
+@MainActor
 struct VoiceListeningIndicator: View {
     @Bindable var state: VoiceDictationState
     let onStop: () -> Void
@@ -64,6 +65,7 @@ struct VoiceListeningIndicator: View {
 /// Simple bar-style audio visualiser. Each bar's height tracks one entry in
 /// `levels` (a rolling window of recent RMS amplitudes). New samples push
 /// the window left so the most recent audio is on the right.
+@MainActor
 struct VoiceWaveformView: View {
     let levels: [Float]
     private let barCount = 28
@@ -89,6 +91,7 @@ struct VoiceWaveformView: View {
 }
 
 /// Round monochrome icon button used in the listening pill.
+@MainActor
 private struct CircleIconButton: View {
     let systemImage: String
     let tint: Color
@@ -112,6 +115,7 @@ private struct CircleIconButton: View {
 }
 
 /// Detail view shown when the user taps Voice Dictation in the marketplace.
+@MainActor
 struct VoiceDictationDetailView: View {
     @Bindable var state: VoiceDictationState
 
@@ -252,6 +256,7 @@ struct VoiceDictationDetailView: View {
 }
 
 /// Small monospaced "key cap" pill used to render a shortcut.
+@MainActor
 private struct KeyCap: View {
     let label: String
 

@@ -10,6 +10,7 @@ enum CenterNav: Equatable {
     case settings
 }
 
+@MainActor
 struct HalenCenterView: View {
     @Bindable var state: AppState
     let registry: PluginRegistry
@@ -268,6 +269,7 @@ struct HalenCenterView: View {
 
 // MARK: - Plugin Row
 
+@MainActor
 struct PluginRow: View {
     let plugin: any HalenPlugin
     @Binding var isEnabled: Bool

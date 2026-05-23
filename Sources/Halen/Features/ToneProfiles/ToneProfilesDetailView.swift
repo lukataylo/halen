@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct ToneProfilesDetailView: View {
     @Bindable var store: AppToneProfileStore
     @Bindable var recentApps: RecentAppsModel
@@ -85,6 +86,7 @@ struct ToneProfilesDetailView: View {
     }
 }
 
+@MainActor
 private struct ToneRow: View {
     let title: String
     let subtitle: String

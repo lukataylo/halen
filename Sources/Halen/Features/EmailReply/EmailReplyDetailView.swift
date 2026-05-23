@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct EmailReplyDetailView: View {
     var body: some View {
         ScrollView {

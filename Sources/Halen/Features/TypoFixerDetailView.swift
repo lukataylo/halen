@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct TypoFixerDetailView: View {
     @Bindable var store: TypoStore
     @State private var newTypo: String = ""
@@ -172,6 +173,7 @@ struct TypoFixerDetailView: View {
     }
 }
 
+@MainActor
 private struct EntryRow: View {
     let key: String
     let entry: TypoStore.Entry
