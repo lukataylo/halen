@@ -217,6 +217,18 @@ final class CaretObserver {
         // Skip self — observing our own menubar app is noise.
         if app.bundleIdentifier == "com.dadiani.halen" { return }
 
+        // App-focus tracking is independent of AX. Publish `.appFocused`
+        // FIRST so Tone Profiles' "Recently used apps", per-app cooldowns,
+        // and any future per-app feature get the signal even when AX is
+        // denied / Halen hasn't been granted Accessibility yet. The AX
+        // observer setup below is the more granular caret-tracking work
+        // that legitimately needs the permission.
+        eventBus.publish(.appFocused(.init(
+            appBundleId: app.bundleIdentifier ?? "",
+            appName: app.localizedName ?? "",
+            timestamp: Date()
+        )))
+
         tearDownObserver()
         let pid = app.processIdentifier
         let appElement = AXUIElementCreateApplication(pid)
@@ -256,12 +268,6 @@ final class CaretObserver {
         self.observedApp = app
 
         Log.info("AX observing app: \(app.localizedName ?? "pid:\(pid)") (\(app.bundleIdentifier ?? "no-bid"))")
-
-        eventBus.publish(.appFocused(.init(
-            appBundleId: app.bundleIdentifier ?? "",
-            appName: app.localizedName ?? "",
-            timestamp: Date()
-        )))
 
         attachToFocusedElement()
     }

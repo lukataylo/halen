@@ -1,23 +1,25 @@
 import Foundation
 
 /// Shared scaffolding for "wait for the user to stop typing, then classify the
-/// paragraph at the caret" — the SentimentGuard / BurnoutCopilot pattern.
+/// paragraph at the caret" — the SentimentGuard / ClarityChecker pattern.
 ///
 /// Owns three responsibilities so each plugin doesn't reinvent them:
 ///
 ///  1. **Settle debounce** — every `schedule(...)` call resets a `settleDelay`
-///     timer; the work only fires when typing genuinely stops, so Gemma isn't
-///     run mid-sentence.
+///     timer; the work only fires when typing genuinely stops, so the
+///     classifier isn't run mid-sentence.
 ///  2. **Paragraph extraction** — pulls the line-bounded paragraph around the
 ///     caret via `paragraphAroundCaret`, gates it on `minLength`, and runs an
 ///     optional per-call `eligibility` predicate (e.g. "needs sentence-ending
 ///     punctuation", "not in app cooldown").
-///  3. **Hash-based dedup** — a bounded FIFO of SHA-256 fingerprints means an
-///     identical paragraph isn't re-classified, but the cache can't grow
-///     without bound. FIFO (not random) eviction so behaviour is predictable.
+///  3. **Hash-based dedup** — a bounded LRU of SHA-256 fingerprints means an
+///     identical paragraph isn't re-classified. LRU (touched-most-recently
+///     stays) instead of strict FIFO so a paragraph the user keeps editing
+///     stays cached even past `maxCacheSize` intervening writes.
 ///
-/// Anything plugin-specific — the actual Gemma prompt, what to do with the
-/// label, persistent allowlists — lives in the per-call `classify` closure.
+/// Anything plugin-specific — the actual classification prompt, what to do
+/// with the label, persistent allowlists — lives in the per-call `classify`
+/// closure.
 @MainActor
 final class ParagraphClassifier {
     private let minLength: Int
@@ -25,8 +27,11 @@ final class ParagraphClassifier {
     private let maxCacheSize: Int
 
     private var task: Task<Void, Never>?
-    private var seenHashes: Set<String> = []
-    private var seenOrder: [String] = []   // FIFO eviction (oldest at index 0)
+    /// LRU of seen paragraph hashes. Most-recently-touched at the END;
+    /// eviction trims from the FRONT when the count exceeds `maxCacheSize`.
+    /// An ordered array (not a linked list) is fine because the cap is
+    /// small enough (256 default) that O(n) removals are sub-microsecond.
+    private var seenLRU: [String] = []
 
     init(minLength: Int = 60,
          settleDelay: TimeInterval = 1.0,
@@ -71,12 +76,17 @@ final class ParagraphClassifier {
         guard paragraph.count > minLength, eligibility(paragraph) else { return }
 
         let hash = sha256Hex(paragraph)
-        guard !seenHashes.contains(hash) else { return }
-        seenHashes.insert(hash)
-        seenOrder.append(hash)
-        if seenHashes.count > maxCacheSize {
-            let evict = seenOrder.removeFirst()
-            seenHashes.remove(evict)
+        // LRU touch: if we've seen this hash, move it to the most-recent
+        // slot AND skip re-classifying (the user is mid-edit on a paragraph
+        // we already judged). If unseen, append + evict if over cap.
+        if let existing = seenLRU.firstIndex(of: hash) {
+            seenLRU.remove(at: existing)
+            seenLRU.append(hash)
+            return
+        }
+        seenLRU.append(hash)
+        if seenLRU.count > maxCacheSize {
+            seenLRU.removeFirst()
         }
 
         await classify(paragraph)
