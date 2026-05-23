@@ -160,7 +160,7 @@ if [[ "$DIST" == "1" ]]; then
         # Sparkle ships nested helper bundles (Autoupdate, Updater) that must
         # each be signed individually; their internal symlinks make a single
         # top-level codesign call insufficient. Sign deepest-first.
-        local sparkle="$FRAMEWORKS/Sparkle.framework"
+        sparkle="$FRAMEWORKS/Sparkle.framework"
         for nested in \
             "$sparkle/Versions/B/XPCServices/Installer.xpc" \
             "$sparkle/Versions/B/XPCServices/Downloader.xpc" \
