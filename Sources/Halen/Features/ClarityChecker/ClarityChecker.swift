@@ -159,7 +159,7 @@ final class ClarityChecker: HalenPlugin {
             headline: rules.count == 1 ? "1 clarity issue" : "\(rules.count) clarity issues",
             headlineColorName: "blue",
             findings: findings,
-            primaryActionLabel: "Rewrite via Gemma 4",
+            primaryActionLabel: "Rewrite",
             onPrimaryAction: { [weak self] in
                 self?.rewrite(paragraph: paragraph)
                 self?.closePanel()

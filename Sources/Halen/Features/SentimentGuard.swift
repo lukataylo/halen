@@ -46,8 +46,8 @@ final class SentimentGuard: HalenPlugin {
     /// taller once the user asks for a rephrase and the streaming preview pane
     /// appears. SentimentGuard uses these to size the host `NSPanel`; the
     /// SwiftUI `FindingsPopover` inside grows to fill the available height.
-    static let popupIdleSize = NSSize(width: 360, height: 170)
-    static let popupRephraseSize = NSSize(width: 360, height: 330)
+    static let popupIdleSize = NSSize(width: 320, height: 150)
+    static let popupRephraseSize = NSSize(width: 320, height: 300)
     /// Hashes the user explicitly approved as fine. Persisted.
     private var approvedHashes: Set<String> = []
     /// Number of times we surfaced a popover this session (any rule). In-memory only.
@@ -169,6 +169,15 @@ final class SentimentGuard: HalenPlugin {
         let categoriesBlock = enabled
             .map { "- \($0.label.lowercased()): \($0.prompt)" }
             .joined(separator: "\n")
+        // Few-shot examples — Qwen 0.5B routinely returned `neutral` for
+        // unambiguously irritated/hostile messages with just the rule
+        // definitions; a handful of worked examples reliably anchors it.
+        // Examples cover the default-enabled labels (hostile, irritated)
+        // plus neutral. Off-by-default labels (passive-aggressive, anxious,
+        // overly corporate) ride on the rule definition alone — Qwen still
+        // hits those reasonably when they're enabled.
+        let enabledLabels = Set(enabled.map { $0.label.lowercased() })
+        let examplesBlock = Self.fewShotExamples(forLabels: enabledLabels)
         // Bias the classifier by the app's tone profile — a blunt Slack
         // message shouldn't be judged the way a blunt email is.
         let toneClause = services.toneProfiles.profile(for: appBundleId).promptClause
@@ -178,6 +187,9 @@ final class SentimentGuard: HalenPlugin {
         - neutral: the text doesn't strongly match any of the above
 
         \(toneClause)
+
+        Examples:
+        \(examplesBlock)
 
         Reply with ONLY the matching label, lowercase, no punctuation, no preamble.
 
@@ -259,7 +271,7 @@ final class SentimentGuard: HalenPlugin {
             headlineColorName: headlineColor,
             contextPreview: text,
             findings: findings,
-            primaryActionLabel: "Rephrase via Gemma 4",
+            primaryActionLabel: "Rephrase",
             // Rephrase no longer closes the popup — it streams the rewrite
             // into the preview pane in place.
             onPrimaryAction: { [weak self] in
@@ -409,8 +421,43 @@ final class SentimentGuard: HalenPlugin {
 
     private func saveApproved() {
         let list = Array(approvedHashes).sorted()
-        guard let data = try? JSONEncoder().encode(list) else { return }
-        try? data.write(to: approvedFileURL, options: .atomic)
+        do {
+            let data = try JSONEncoder().encode(list)
+            try data.write(to: approvedFileURL, options: .atomic)
+        } catch {
+            Log.error("SentimentGuard: saveApproved failed — \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Few-shot prompt examples
+
+    /// Worked examples used to anchor the small classifier (Qwen 0.5B). Each
+    /// entry is a short sample of the kind of message the tone label applies
+    /// to. The runtime picks only the examples for labels currently enabled,
+    /// so the prompt stays minimal when the user has narrowed the rule set.
+    /// Examples are intentionally short — Qwen's context budget is generous
+    /// but every wasted token slows the classification.
+    private static let labelExamples: [(label: String, text: String)] = [
+        ("hostile", "Stop wasting my time. I asked you yesterday and I'm asking again."),
+        ("hostile", "This is the last time I'm going to repeat this. Sort it out."),
+        ("irritated", "Are you serious? I already sent that link THREE times."),
+        ("irritated", "I'm so sick of this. Why does nobody ever read the brief?"),
+        ("passive-aggressive", "Per my previous email, as I mentioned, just circling back."),
+        ("anxious", "Sorry, sorry, this is probably wrong but maybe could you just check?"),
+        ("overly corporate", "Let's circle back and synergise on the next steps to drive outcomes."),
+        ("neutral", "Thanks for the heads-up, looking into it now and will follow up."),
+        ("neutral", "Could you take a look when you have a moment? No rush."),
+    ]
+
+    /// Build the few-shot examples block for the prompt. Only includes
+    /// examples for labels the user currently has enabled; always includes
+    /// the two neutral examples so the model knows what "doesn't match"
+    /// looks like.
+    fileprivate static func fewShotExamples(forLabels enabled: Set<String>) -> String {
+        labelExamples
+            .filter { enabled.contains($0.label) || $0.label == "neutral" }
+            .map { "Text: \"\"\"\($0.text)\"\"\"\n\($0.label)" }
+            .joined(separator: "\n\n")
     }
 }
 

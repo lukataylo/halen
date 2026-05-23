@@ -106,15 +106,15 @@ struct FindingsPopover: View {
                 Text(contextPreview)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
-                    .lineLimit(3)
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             if findings.isEmpty {
-                Spacer(minLength: 4)
+                Spacer(minLength: 2)
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 6) {
                         ForEach(findings) { FindingRow(finding: $0) }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -122,24 +122,26 @@ struct FindingsPopover: View {
                 .frame(maxHeight: .infinity)
             }
 
-            HStack {
+            HStack(spacing: 8) {
                 if let approveLabel, let onApprove {
                     Button(approveLabel, action: onApprove)
                         .buttonStyle(.borderless)
-                        .controlSize(.small)
+                        .controlSize(.regular)
                 }
                 Spacer()
                 if let primaryActionLabel, let onPrimaryAction {
                     Button(action: onPrimaryAction) {
                         Label(primaryActionLabel, systemImage: "sparkles")
+                            .font(.system(size: 12, weight: .medium))
                     }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .controlSize(.regular)
+                    .tint(.accentColor)
                 }
             }
         }
         .padding(14)
-        .frame(width: 360)
+        .frame(width: 320)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -178,7 +180,7 @@ private struct FindingsPopoverStreamingBody: View {
             }
         }
         .padding(14)
-        .frame(width: 360)
+        .frame(width: 320)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -192,15 +194,15 @@ private struct FindingsPopoverStreamingBody: View {
             Text(contextPreview)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
-                .lineLimit(3)
+                .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
 
         if findings.isEmpty {
-            Spacer(minLength: 4)
+            Spacer(minLength: 2)
         } else {
             ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     ForEach(findings) { FindingRow(finding: $0) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -208,19 +210,21 @@ private struct FindingsPopoverStreamingBody: View {
             .frame(maxHeight: .infinity)
         }
 
-        HStack {
+        HStack(spacing: 8) {
             if let approveLabel, let onApprove {
                 Button(approveLabel, action: onApprove)
                     .buttonStyle(.borderless)
-                    .controlSize(.small)
+                    .controlSize(.regular)
             }
             Spacer()
             if let primaryActionLabel, let onPrimaryAction {
                 Button(action: onPrimaryAction) {
                     Label(primaryActionLabel, systemImage: "sparkles")
+                        .font(.system(size: 12, weight: .medium))
                 }
                 .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .controlSize(.regular)
+                .tint(.accentColor)
             }
         }
     }
@@ -255,17 +259,19 @@ private struct FindingsPopoverStreamingBody: View {
         }
         .frame(maxHeight: .infinity)
 
-        HStack {
+        HStack(spacing: 8) {
             Button("Close", action: onDismiss)
                 .buttonStyle(.borderless)
-                .controlSize(.small)
+                .controlSize(.regular)
             Spacer()
             if let onCopy {
                 Button(action: onCopy) {
                     Label("Copy", systemImage: "doc.on.doc")
+                        .font(.system(size: 12, weight: .medium))
                 }
                 .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .controlSize(.regular)
+                .tint(.accentColor)
                 .disabled(streaming.phase != .done)
             }
         }
