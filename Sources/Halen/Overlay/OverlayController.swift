@@ -34,6 +34,10 @@ final class OverlayController {
     /// the prior signal instead of stacking. The combined severity drives the
     /// indicator's tint.
     private var activeFindings: [String: Event.FindingDetected] = [:]
+    /// Bundle id of the app the user is currently focused in. Tint only
+    /// shows for findings whose `appBundleId` matches; switching to a
+    /// different app hides the tint without forgetting the finding.
+    private var currentAppBundleId: String?
 
     private var subscribeTask: Task<Void, Never>?
     /// Single auto-hide task. Each `caret.moved` pushes `hideDeadline` out;
@@ -65,11 +69,6 @@ final class OverlayController {
     private var busyAnchor: Event.CaretRect?
 
     fileprivate static let dotSize: CGFloat = 16
-    /// Larger frame when a finding is active — gives a generous hover/click
-    /// target without the SwiftUI view needing to reposition. The panel is
-    /// always sized to this; the indicator art scales between `dotSize` and
-    /// `findingDotSize` based on `indicatorState.severity`.
-    fileprivate static let findingDotSize: CGFloat = 24
     private static let busySize: CGFloat = 40
     private static let glowKey = "halen.busy.glow"
 
@@ -89,15 +88,26 @@ final class OverlayController {
     func start() {
         // Caret indicator: the SwiftUI logo is the content view directly — no
         // container, no offset subview. This is the proven original layout.
-        // The indicator panel sizes to the larger `findingDotSize`; the
-        // SwiftUI view inside renders at `dotSize` when there are no findings
-        // (looks identical to the original) and expands to fill when one
-        // appears. The bigger frame gives the hover target a fighting chance
-        // without the panel having to reframe on every state change.
-        let caret = Self.makePanel(size: Self.findingDotSize)
+        // The indicator panel stays at the original 16×16 size whether or
+        // not a finding is active — only the *colour* of the mark changes.
+        // Earlier prototype enlarged the frame for hover targeting; user
+        // feedback was clear that a colour shift alone is the right read.
+        let caret = Self.makePanel(size: Self.dotSize)
         caret.contentView = NSHostingView(
             rootView: HalenCaretIndicator(state: indicatorState))
         caretPanel = caret
+
+        // Pop-action wiring: when a popover button is tapped, fan out a
+        // `findingActionRequested` event so the originating plugin
+        // (SentimentGuard / ClarityChecker / …) handles the actual work.
+        indicatorState.onAction = { [eventBus] finding, action in
+            eventBus.publish(.findingActionRequested(.init(
+                source: finding.source,
+                findingId: finding.id,
+                action: action,
+                timestamp: Date()
+            )))
+        }
 
         // Busy loader: a fixed 40×40 container with the 16×16 logo pinned dead
         // centre via Auto Layout (so NSHostingView sizing quirks can't shift
@@ -147,13 +157,14 @@ final class OverlayController {
                     self.upsertFinding(payload)
                 case .findingsCleared(let payload):
                     self.clearFindings(source: payload.source, id: payload.id)
-                case .appFocused:
-                    // Findings are paragraph-scoped; switching apps means the
-                    // user is doing something else and stale tints would lie.
-                    if !self.activeFindings.isEmpty {
-                        self.activeFindings.removeAll()
-                        self.recomputeIndicatorState()
-                    }
+                case .appFocused(let payload):
+                    // Track current app so findings tint only in their own
+                    // context. Findings themselves are kept — switching back
+                    // to the source app restores the tint, which matches the
+                    // user's mental model ("I had something flagged in Notes
+                    // and came back to it").
+                    self.currentAppBundleId = payload.appBundleId
+                    self.recomputeIndicatorState()
                 default:
                     break
                 }
@@ -234,6 +245,11 @@ final class OverlayController {
     }
 
     private func scheduleAutoHide() {
+        // While a finding is on screen, the indicator must persist — it is
+        // the entire signal the user has. Skip the auto-hide bookkeeping
+        // entirely; `recomputeIndicatorState` re-arms it when the finding
+        // clears.
+        if indicatorState.severity != nil { return }
         // Push the deadline out. If a hide task is already running, it will
         // observe the new deadline on its next wake and re-sleep — no need to
         // cancel and respawn a fresh `Task` per `caret.moved` event.
@@ -243,6 +259,13 @@ final class OverlayController {
         hideTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self, let target = self.hideDeadline else { return }
+                // Double-check on every wake — a finding may have landed
+                // while we were sleeping, and the indicator must stay up.
+                if self.indicatorState.severity != nil {
+                    self.hideTask = nil
+                    self.hideDeadline = nil
+                    return
+                }
                 let remaining = target.timeIntervalSinceNow
                 if remaining <= 0 {
                     self.caretPanel?.orderOut(nil)
@@ -385,22 +408,50 @@ final class OverlayController {
     }
 
     /// Rebuild the SwiftUI-visible indicator state from `activeFindings`. The
-    /// strongest-severity finding wins the tint; the summaries are joined for
-    /// the hover popover. Also flips the caret panel between click-through
-    /// (no findings) and interactive (findings — needed for hover events to
-    /// reach the SwiftUI view).
+    /// strongest-severity finding wins the tint; findings are exposed
+    /// severity-sorted for the hover popover. Also drives the indicator's
+    /// visibility (must persist while a finding is active) and its
+    /// pass-through behaviour (click-through when clean, interactive when a
+    /// finding exists so hover/click events can reach the SwiftUI view).
     private func recomputeIndicatorState() {
-        let highest = activeFindings.values.max(by: { $0.severity < $1.severity })
-        indicatorState.findings = activeFindings.values
-            .sorted { $0.severity > $1.severity }
+        // Only findings that belong to the currently-focused app drive the
+        // visible tint. A Notes finding shouldn't bleed into Safari/Warp —
+        // but it stays in `activeFindings` so returning to Notes restores it.
+        let visible = activeFindings.values.filter { f in
+            currentAppBundleId == nil || f.appBundleId == currentAppBundleId
+        }
+        let highest = visible.max(by: { $0.severity < $1.severity })
+        let wasActive = (indicatorState.severity != nil)
+        let isActive = (highest != nil)
+
+        indicatorState.findings = visible.sorted { $0.severity > $1.severity }
         indicatorState.severity = highest?.severity
 
-        // Toggle pass-through. While idle the panel must let clicks through
-        // (the user is still typing into the underlying field); during a
-        // finding it has to capture hover/clicks so the popover can engage.
-        // `.statusBar` level keeps it floating above target apps either way.
-        caretPanel?.ignoresMouseEvents = (highest == nil)
-        caretPanel?.acceptsMouseMovedEvents = (highest != nil)
+        // Pass-through: idle = clicks fall through to the app; finding =
+        // panel captures hover/click for the popover. `.statusBar` level
+        // keeps it floating above target apps either way.
+        caretPanel?.ignoresMouseEvents = !isActive
+        caretPanel?.acceptsMouseMovedEvents = isActive
+
+        if isActive {
+            // A finding just lit up (or replaced a prior one). Make sure
+            // the panel is visible at the last-known caret position — the
+            // auto-hide may have already retired it during the few hundred
+            // ms of classification latency.
+            hideTask?.cancel()
+            hideTask = nil
+            hideDeadline = nil
+            if let caret = lastCaretRect {
+                showCaret(at: caret)
+            } else {
+                caretPanel?.orderFrontRegardless()
+            }
+        } else if wasActive {
+            // The finding cleared. Resume the normal transient behaviour so
+            // the indicator fades after the next idle period rather than
+            // hanging around forever.
+            scheduleAutoHide()
+        }
     }
 }
 
@@ -416,9 +467,18 @@ final class OverlayIndicatorState {
     var severity: Event.FindingDetected.Severity?
     /// Active findings, severity-sorted. The popover shows these in order.
     var findings: [Event.FindingDetected] = []
-    /// SwiftUI `.onHover` toggles this. The popover uses it to know when
-    /// the user is engaging with the indicator.
+    /// SwiftUI `.onHover` toggles this — kept for the dot's own hover
+    /// affordance (a slight glow / shadow could read from this later).
     var isHovering: Bool = false
+    /// Set when the user clicks the indicator; `IndicatorPopover` is bound
+    /// to this so it appears anchored to the dot. Toggled back off when
+    /// the user picks an action or clicks outside.
+    var isShowingPopover: Bool = false
+    /// Closure invoked when the user picks an action in the popover.
+    /// `OverlayController` wires this to publish a `.findingActionRequested`
+    /// event so the originating plugin can handle the intent — keeps the
+    /// overlay layer ignorant of plugin internals.
+    var onAction: ((Event.FindingDetected, Event.FindingActionRequested.Action) -> Void)?
 }
 
 /// The Halen mark used as the caret indicator. Two states layered into one
@@ -442,65 +502,81 @@ struct HalenCaretIndicator: View {
     /// to tint (e.g. the busy-loader's centred logo).
     @Bindable var state: OverlayIndicatorState
 
-    private var assetName: String {
-        dotStyle == "outline" ? "HalenOutline" : "HalenIndicator"
-    }
-
     var body: some View {
-        ZStack {
+        // Same 16×16 footprint always. The mark itself recolours when a
+        // finding is active:
+        //
+        //  - Idle: the user's chosen mark style (solid/outline) renders
+        //    verbatim from the pre-rendered PNG. Unchanged from the
+        //    original implementation.
+        //  - Finding: the solid mark renders as a SwiftUI template image
+        //    tinted by `.foregroundStyle`. Switching to solid in the
+        //    tinted state is deliberate — the outline asset has a white
+        //    interior that template-rendering would also recolour
+        //    (producing a flat red blob, no contrast). Tinting needs a
+        //    single-colour silhouette, and solid is exactly that.
+        //
+        // The "preserve outline tint" arc requires a separate outline-only
+        // template asset; tracked under UX-1 alongside the inline overlay.
+        Group {
             if let severity = state.severity {
-                findingDot(for: severity)
+                tintedMark(color: Self.color(for: severity))
             } else {
                 idleMark
-                    .frame(width: OverlayController.dotSize,
-                           height: OverlayController.dotSize)
             }
         }
-        .frame(width: OverlayController.findingDotSize,
-               height: OverlayController.findingDotSize)
+        .frame(width: OverlayController.dotSize,
+               height: OverlayController.dotSize)
         .contentShape(Rectangle())
         .onHover { hovering in
             state.isHovering = hovering
         }
+        .onTapGesture {
+            // Only meaningful when the indicator is tinted. Toggling lets
+            // the user click again to dismiss without aiming for "outside".
+            guard state.severity != nil else { return }
+            state.isShowingPopover.toggle()
+        }
+        .popover(isPresented: Binding(
+            get: { state.isShowingPopover && state.severity != nil },
+            set: { state.isShowingPopover = $0 }
+        ), arrowEdge: .leading) {
+            IndicatorPopoverContent(state: state)
+                .frame(width: 280)
+        }
     }
 
-    /// Brand mark — exactly the original idle indicator, kept verbatim so
-    /// existing users see no visual change when nothing is flagged. No drop
-    /// shadow (the panel is exactly the icon size, so any blur radius clips
-    /// to a hard square; both marks are self-defining without it).
+    /// User-preferred idle mark — exactly the original rendering.
     private var idleMark: some View {
-        Group {
-            if let img = NSImage(named: assetName) {
+        let asset = dotStyle == "outline" ? "HalenOutline" : "HalenIndicator"
+        return Group {
+            if let img = NSImage(named: asset) {
                 Image(nsImage: img)
                     .resizable()
                     .interpolation(.high)
             } else {
-                Circle()
-                    .fill(Color.halenCobalt)
-                    .padding(2)
+                Circle().fill(Color.halenCobalt).padding(2)
             }
         }
     }
 
-    /// Severity-coloured dot. The brand mark sits in white at the centre so
-    /// it still reads as "Halen" rather than a generic system warning.
-    private func findingDot(for severity: Event.FindingDetected.Severity) -> some View {
-        let fill = Self.color(for: severity)
-        return ZStack {
-            Circle()
-                .fill(fill)
-                .overlay(
-                    Circle().stroke(Color.white.opacity(0.55), lineWidth: 1)
+    /// Tinted finding mark — solid silhouette as a template image, recoloured
+    /// by `.foregroundStyle`. Solid is forced (not the user's preference) so
+    /// template rendering produces a clean coloured mark instead of an
+    /// outline asset's filled blob.
+    private func tintedMark(color: Color) -> some View {
+        Group {
+            if let img = NSImage(named: "HalenIndicator") {
+                let templated = img.copy() as! NSImage
+                templated.isTemplate = true
+                return AnyView(
+                    Image(nsImage: templated)
+                        .resizable()
+                        .interpolation(.high)
+                        .foregroundStyle(color)
                 )
-                .shadow(color: fill.opacity(0.45), radius: 4)
-            if let img = NSImage(named: assetName) {
-                Image(nsImage: img)
-                    .resizable()
-                    .interpolation(.high)
-                    .colorMultiply(.white)        // recolour the mark white
-                    .opacity(0.95)
-                    .frame(width: OverlayController.dotSize - 4,
-                           height: OverlayController.dotSize - 4)
+            } else {
+                return AnyView(Circle().fill(color).padding(2))
             }
         }
     }
@@ -511,5 +587,85 @@ struct HalenCaretIndicator: View {
         case .conciseness: return Color(red: 0.96, green: 0.55, blue: 0.10)   // orange
         case .tone:        return Color(red: 0.91, green: 0.30, blue: 0.24)   // red
         }
+    }
+}
+
+/// Popover content shown when the user clicks a tinted Halen caret
+/// indicator. Lists every active finding by severity and offers the two
+/// common actions — Looks fine (allowlist + dismiss) and Rephrase (the
+/// plugin's rewrite path). Both publish a `.findingActionRequested` event
+/// on the EventBus; the originating plugin owns the actual behaviour, so
+/// this view stays plugin-agnostic.
+private struct IndicatorPopoverContent: View {
+    @Bindable var state: OverlayIndicatorState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let top = state.findings.first {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(HalenCaretIndicator.color(for: top.severity))
+                        .frame(width: 8, height: 8)
+                    Text(top.summary)
+                        .font(.system(.callout, weight: .semibold))
+                    Spacer()
+                }
+            }
+            if state.findings.count > 1 {
+                ForEach(state.findings.dropFirst(), id: \.id) { f in
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(HalenCaretIndicator.color(for: f.severity))
+                            .frame(width: 6, height: 6)
+                        Text(f.summary)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .padding(.leading, 2)
+                }
+            }
+            HStack(spacing: 8) {
+                Button("Looks fine") {
+                    invokeAction(.approve)
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.regular)
+                Spacer()
+                // Custom-styled button — `.borderedProminent` over the
+                // popover's `.regularMaterial` chrome renders as a faint
+                // translucent gray with near-invisible white text in this
+                // popover context. An explicit accent fill + white text
+                // gives reliable contrast regardless of macOS appearance.
+                Button {
+                    invokeAction(.rephrase)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("Rephrase")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(Color.accentColor)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+    }
+
+    /// Fire the chosen action against the strongest-severity finding (the
+    /// one shown as the headline) and dismiss the popover. Anything
+    /// secondary listed below the headline is still cleared in bulk when
+    /// the plugin processes the action — keeps the UX from forcing the
+    /// user to interact with each finding individually.
+    private func invokeAction(_ action: Event.FindingActionRequested.Action) {
+        guard let top = state.findings.first else { return }
+        state.onAction?(top, action)
+        state.isShowingPopover = false
     }
 }

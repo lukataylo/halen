@@ -46,6 +46,14 @@ final class Autocomplete: HalenPlugin {
     /// Don't bother suggesting until there's enough context to continue.
     private let minContextLength = 20
 
+    /// Plugin sources that currently have an active finding (Sentiment /
+    /// Clarity / Style flagged something). While non-empty, Autocomplete
+    /// stays silent — overlaying ghost text on top of the tinted Halen
+    /// indicator was a real visual collision the user flagged (UX-3), and
+    /// suggesting more text into a paragraph that just read as irritated
+    /// makes no semantic sense either.
+    private var activeFindingSources: Set<String> = []
+
     init(services: HalenServices) {
         self.services = services
         self.caretObserver = services.caretObserver
@@ -62,6 +70,14 @@ final class Autocomplete: HalenPlugin {
                 case .caretMoved, .appFocused:
                     // Any movement / focus change makes the ghost stale.
                     self.dismiss()
+                case .findingDetected(let p):
+                    // Another writing plugin flagged this paragraph — drop
+                    // the ghost so the indicator tint owns the surface, and
+                    // stay quiet until the finding clears.
+                    self.activeFindingSources.insert(p.source)
+                    self.dismiss()
+                case .findingsCleared(let p):
+                    self.activeFindingSources.remove(p.source)
                 default:
                     break
                 }
@@ -83,6 +99,12 @@ final class Autocomplete: HalenPlugin {
 
     private func maybeSuggest(text: String, caretOffset: Int) {
         dismiss()   // clear any previous ghost first
+
+        // Stand down whenever another writing plugin has something to say
+        // about the current paragraph — the tinted indicator + popover own
+        // that surface, and continuing the irritated/passive sentence with
+        // a model suggestion isn't useful.
+        guard activeFindingSources.isEmpty else { return }
 
         let ns = text as NSString
         // Only at end-of-text — mid-paragraph ghosting would overlap real text.

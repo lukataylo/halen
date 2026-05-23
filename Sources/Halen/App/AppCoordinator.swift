@@ -269,6 +269,8 @@ final class AppCoordinator {
                     Log.info("evt finding.detected source=\(payload.source) severity=\(payload.severity.rawValue) summary=\"\(payload.summary)\"")
                 case .findingsCleared(let payload):
                     Log.info("evt findings.cleared source=\(payload.source) id=\(payload.id ?? "*")")
+                case .findingActionRequested(let payload):
+                    Log.info("evt finding.action source=\(payload.source) action=\(payload.action.rawValue)")
                 }
             }
         }

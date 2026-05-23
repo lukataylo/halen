@@ -65,6 +65,21 @@ final class SentimentGuard: HalenPlugin {
     /// re-framed (and re-clamped to screen) when it grows for the rephrase pane.
     private var activeAnchor: CaretAnchoredPanel.Anchor?
 
+    /// In-memory cache of `findingId → (paragraph text, anchor, app)` so a
+    /// later `.findingActionRequested` event can re-open the streaming popup
+    /// without having to re-run classification. Cleared lazily as findings
+    /// roll over (one finding per source, so this stays small — typically
+    /// a single entry).
+    private struct ActiveFinding {
+        let paragraph: String
+        let anchor: CaretAnchoredPanel.Anchor?
+        let appBundleId: String
+        let rule: SentimentRule?
+        let fillers: [FillerMatch]
+        let hash: String
+    }
+    private var pendingFindings: [String: ActiveFinding] = [:]
+
     init(services: HalenServices) {
         self.services = services
         self.caretObserver = services.caretObserver
@@ -100,6 +115,11 @@ final class SentimentGuard: HalenPlugin {
                     self.scheduleClassification(text: payload.text,
                                                 caretOffset: payload.caretOffset,
                                                 appBundleId: payload.appBundleId)
+                case .findingActionRequested(let payload):
+                    // Only ours; other plugins (ClarityChecker, …) get their
+                    // own events keyed by their own source id.
+                    guard payload.source == self.id else { break }
+                    self.handleAction(payload)
                 default:
                     break
                 }
@@ -229,6 +249,9 @@ final class SentimentGuard: HalenPlugin {
     /// Publish a `.findingDetected` on the shared event bus. `OverlayController`
     /// consumes it to tint the Halen caret indicator (and surface the hover
     /// popover); plugins remain decoupled from any UI surface decisions.
+    /// Also caches everything we'll need to act on the finding later when
+    /// the user clicks Rephrase or Looks fine — the paragraph text itself
+    /// never leaves this process.
     private func publishFinding(paragraph: String, rule: SentimentRule?,
                                 fillers: [FillerMatch], appBundleId: String,
                                 anchor: CaretAnchoredPanel.Anchor?) {
@@ -243,12 +266,22 @@ final class SentimentGuard: HalenPlugin {
             summary = "\(fillers.count) wordy phrases"
         }
         let hash = sha256Hex(paragraph)
+        let findingId = "\(id):\(hash.prefix(12))"
         let anchorRect = anchor.map { Event.CaretRect(
             x: $0.rect.minX, y: $0.rect.minY,
             width: $0.rect.width, height: $0.rect.height) }
             ?? Event.CaretRect(x: 0, y: 0, width: 0, height: 0)
+
+        // Cache the context for a later .findingActionRequested. One per
+        // source — re-emitting a finding for a different paragraph drops
+        // the previous entry so the cache stays tiny.
+        pendingFindings.removeAll()
+        pendingFindings[findingId] = ActiveFinding(
+            paragraph: paragraph, anchor: anchor, appBundleId: appBundleId,
+            rule: rule, fillers: fillers, hash: hash)
+
         services.eventBus.publish(.findingDetected(.init(
-            id: "\(id):\(hash.prefix(12))",
+            id: findingId,
             source: id,
             severity: severity,
             summary: summary,
@@ -257,6 +290,48 @@ final class SentimentGuard: HalenPlugin {
             appBundleId: appBundleId,
             timestamp: Date()
         )))
+    }
+
+    /// Respond to a user-initiated action on a finding the indicator popover
+    /// fanned out. Resolves the cached paragraph context and either:
+    ///   - `.approve`: adds the paragraph hash to the persistent allowlist
+    ///     (so this exact paragraph never re-flags across sessions) and
+    ///     clears the finding.
+    ///   - `.rephrase`: opens the existing streaming popup at the cached
+    ///     anchor, which calls `beginRephrase` and surfaces the rewrite
+    ///     live. Clears the finding once the popup is in place — the
+    ///     popup is now the primary surface.
+    private func handleAction(_ request: Event.FindingActionRequested) {
+        guard let context = pendingFindings[request.findingId] else {
+            Log.warn("SentimentGuard: action \(request.action.rawValue) for unknown finding \(request.findingId)")
+            return
+        }
+        switch request.action {
+        case .approve:
+            approve(hash: context.hash)
+            Log.info("SentimentGuard: approved finding \(request.findingId)")
+            pendingFindings.removeValue(forKey: request.findingId)
+            services.eventBus.publish(.findingsCleared(.init(
+                source: id, id: request.findingId, timestamp: Date())))
+        case .rephrase:
+            Log.info("SentimentGuard: rephrase requested for \(request.findingId)")
+            // Reopen the legacy streaming popup to host the rewrite. It
+            // owns the FindingsPopover + StreamingRewriteState plumbing and
+            // wires Copy/Close cleanly. Clear the indicator's tint — the
+            // popup is now where the user's attention should be.
+            showPopup(text: context.paragraph,
+                      rule: context.rule,
+                      fillers: context.fillers,
+                      hash: context.hash,
+                      appBundleId: context.appBundleId,
+                      anchor: context.anchor)
+            pendingFindings.removeValue(forKey: request.findingId)
+            services.eventBus.publish(.findingsCleared(.init(
+                source: id, id: request.findingId, timestamp: Date())))
+            // Kick off streaming immediately — the user's intent is already
+            // "Rephrase," no need to make them click another button.
+            beginRephrase(originalText: context.paragraph)
+        }
     }
 
     // MARK: - Popup

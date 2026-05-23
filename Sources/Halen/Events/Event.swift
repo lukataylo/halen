@@ -12,15 +12,17 @@ enum Event: Sendable {
     case inferenceActivity(InferenceActivity)
     case findingDetected(FindingDetected)
     case findingsCleared(FindingsCleared)
+    case findingActionRequested(FindingActionRequested)
 
     var method: String {
         switch self {
-        case .textPaused:        return "text.pause"
-        case .caretMoved:        return "caret.moved"
-        case .appFocused:        return "app.focused"
-        case .inferenceActivity: return "inference.activity"
-        case .findingDetected:   return "finding.detected"
-        case .findingsCleared:   return "findings.cleared"
+        case .textPaused:              return "text.pause"
+        case .caretMoved:              return "caret.moved"
+        case .appFocused:              return "app.focused"
+        case .inferenceActivity:       return "inference.activity"
+        case .findingDetected:         return "finding.detected"
+        case .findingsCleared:         return "findings.cleared"
+        case .findingActionRequested:  return "finding.action"
         }
     }
 
@@ -125,6 +127,26 @@ enum Event: Sendable {
     struct FindingsCleared: Sendable, Codable {
         let source: String
         let id: String?
+        let timestamp: Date
+    }
+
+    /// User-initiated action on an active finding, emitted by the indicator
+    /// popover's buttons. The plugin (matching by `source`) subscribes and
+    /// does the right thing: `.approve` adds the paragraph to its allowlist
+    /// and clears the finding; `.rephrase` runs the plugin's rewrite path
+    /// (streaming text into a callout / clipboard). The overlay stays out
+    /// of plugin-specific business; it just emits the intent.
+    struct FindingActionRequested: Sendable, Codable {
+        enum Action: String, Sendable, Codable {
+            case approve
+            case rephrase
+        }
+        /// Plugin id, matches the `source` of the finding being acted on.
+        let source: String
+        /// Finding id (same as in `FindingDetected.id`) so the plugin knows
+        /// exactly which paragraph the user clicked through.
+        let findingId: String
+        let action: Action
         let timestamp: Date
     }
 }

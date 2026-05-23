@@ -262,11 +262,12 @@ extension Event {
             ] as [String: Any?]))
         case .inferenceActivity:
             return nil
-        case .findingDetected, .findingsCleared:
+        case .findingDetected, .findingsCleared, .findingActionRequested:
             // Internal overlay-routing events — they're consumed by the host's
-            // OverlayController to tint the caret indicator, not by plugins.
-            // External plugins shouldn't react to them (would just create
-            // feedback loops if a plugin re-emits findings off a finding).
+            // OverlayController to tint the caret indicator, or by the
+            // originating plugin to respond to a user click. External plugins
+            // shouldn't react to them (would just create feedback loops if a
+            // plugin re-emits findings off a finding).
             return nil
         }
     }
