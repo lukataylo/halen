@@ -22,3 +22,5 @@ Vendor/llama.xcframework/
 * [0-9].db
 * [0-9].app
 * [0-9].sh
+__pycache__/
+*.pyc
