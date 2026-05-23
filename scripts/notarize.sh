@@ -9,6 +9,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 APP_DIR="$ROOT/build/Halen.app"
+# When the build was staged outside the iCloud-synced tree, `build/Halen.app`
+# is a symlink to /tmp/halen-build/Halen.app. `xcrun stapler` refuses to
+# work through alias files ("Stapler is incapable of working with Alias
+# files"), and `ditto` archives the symlink itself, not the bundle. Resolve
+# to the real path up front so every step below operates on the bundle.
+if [[ -L "$APP_DIR" ]]; then
+    APP_DIR="$(readlink "$APP_DIR")"
+fi
 INFO_PLIST="$APP_DIR/Contents/Info.plist"
 
 # notarytool credentials profile, stored once in the login keychain with:

@@ -21,6 +21,12 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 APP_DIR="$ROOT/build/Halen.app"
+# Resolve the symlinked staging path (see notarize.sh for context).
+# `ditto` copies the symlink-as-symlink rather than the bundle behind it
+# unless we follow first; the DMG would then be empty.
+if [[ -L "$APP_DIR" ]]; then
+    APP_DIR="$(readlink "$APP_DIR")"
+fi
 INFO_PLIST="$APP_DIR/Contents/Info.plist"
 
 # Reuse the same keychain profile as notarize.sh. Override per-call with
