@@ -138,7 +138,12 @@ final class ModelDownloader {
             // surrounding closure (which the strict-concurrency checker
             // refuses to let cross actor boundaries). Snapshot the spec
             // fields the detached body needs into locals for the same reason.
-            weak let weakSelf = self
+            //
+            // `weak var` (not `weak let`) — Swift requires the weak storage
+            // to be mutable because the runtime nils it out when the
+            // referent dies. The local toolchain accepted the `let` form;
+            // the CI toolchain rejected it.
+            weak var weakSelf = self
             let sourceURL = spec.sourceURL
             let expectedSize = spec.expectedSize
             let inner = Task.detached(priority: .utility) {
