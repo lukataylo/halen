@@ -20,6 +20,9 @@ final class AppCoordinator {
     let modelDownloader = ModelDownloader()
     let inference: RouterInferenceClient
     let typoStore = TypoStore()
+    /// Per-app tone profiles — a host service (passed into `HalenServices`),
+    /// not a plugin-owned store, so every writing plugin reads the same data.
+    let toneProfileStore = AppToneProfileStore()
     let registry = PluginRegistry()
     /// Surfaced to Settings via HalenApp → HalenCenterView. Lives at app
     /// scope (not view scope) so its observable status survives the
@@ -167,6 +170,7 @@ final class AppCoordinator {
             inference: inference,
             caretObserver: observer,
             calendar: CalendarService(),
+            toneProfiles: toneProfileStore,
             appSupportDir: HalenServices.defaultAppSupportDir()
         )
 
@@ -180,6 +184,7 @@ final class AppCoordinator {
         registry.register(SentimentGuard(services: services))
         registry.register(VoiceDictation(services: services))
         registry.register(SnippetExpander(services: services))
+        registry.register(ToneProfiles(services: services))
 
         // Out-of-process plugins under ~/Library/Application Support/Halen/Plugins/.
         // Discover manifests synchronously (just filesystem scan + JSON parse),
