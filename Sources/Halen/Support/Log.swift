@@ -22,7 +22,11 @@ enum Log {
             fm.createFile(atPath: path, contents: nil)
         }
         let handle = try? FileHandle(forWritingTo: URL(fileURLWithPath: path))
-        try? handle?.seekToEnd()
+        // `seekToEnd()` is marked `@discardableResult` upstream but the
+        // strict toolchain on CI flagged the `try?` swallow as "result of
+        // 'try?' is unused" (warnings-as-errors). Bind to `_` to silence it;
+        // we genuinely don't care about the returned offset.
+        _ = try? handle?.seekToEnd()
         return handle
     }()
 

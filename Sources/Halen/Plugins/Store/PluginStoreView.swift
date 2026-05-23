@@ -14,6 +14,14 @@ import AppKit
 /// `StoreCard` (opaque `controlBackgroundColor`) rows. Deliberately *not*
 /// the translucent `GlassCard` used in the menubar dropdown — in a
 /// standalone window that material vibrancy-samples the desktop wallpaper.
+///
+/// `@MainActor` so the body can access `registry` / `model` / `plugin.id`
+/// (all main-actor-isolated). Without this, GitHub's CI Swift toolchain
+/// (stricter than the local one) flagged every property access from the
+/// body as a cross-actor reference. SwiftUI views are conventionally
+/// main-actor-bound in practice; making it explicit here keeps the build
+/// healthy across toolchains.
+@MainActor
 struct PluginStoreView: View {
     let registry: PluginRegistry
     @Bindable var model: PluginStoreModel
@@ -246,6 +254,7 @@ struct PluginStoreView: View {
 
 // MARK: - Installed row
 
+@MainActor
 private struct InstalledPluginRow: View {
     let plugin: any HalenPlugin
     @Binding var isEnabled: Bool
@@ -307,6 +316,7 @@ private struct InstalledPluginRow: View {
 
 // MARK: - Available row
 
+@MainActor
 private struct AvailablePluginRow: View {
     let entry: PluginRegistryEntry
     let state: PluginStoreModel.InstallState
