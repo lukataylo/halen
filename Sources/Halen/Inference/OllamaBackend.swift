@@ -17,7 +17,10 @@ import Foundation
 final class OllamaBackend: InferenceBackend, @unchecked Sendable {
     let kind: BackendKind = .ollama
     let capability = BackendCapability(
-        servesTiers: [.small, .medium, .large],
+        // `.classifier` listed as a last-resort fallback so classification
+        // still works when both Qwen 0.5B AND Apple FM are unavailable. The
+        // higher `basePriority` (20) keeps Ollama last in the ladder.
+        servesTiers: [.classifier, .small, .medium, .large],
         strongAt: [.classification, .generation],
         basePriority: 20
     )

@@ -587,7 +587,7 @@ struct SettingsView: View {
                 .confirmationDialog("Delete the downloaded Gemma 4 E4B model?",
                                     isPresented: $confirmingModelRemove,
                                     titleVisibility: .visible) {
-                    Button("Delete (\(formatBytes(ModelDownloader.expectedSize)))",
+                    Button("Delete (\(formatBytes(modelDownloader.expectedSize)))",
                            role: .destructive) {
                         modelDownloader.removeDownloaded()
                     }

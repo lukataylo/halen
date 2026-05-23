@@ -184,7 +184,11 @@ final class SentimentGuard: HalenPlugin {
         Text: \"\"\"\(paragraph)\"\"\"
         """
 
-        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 16,
+        // `.classifier` routes to the dedicated Qwen 0.5B classifier backend,
+        // an order of magnitude smaller + faster than Gemma for this single-
+        // label task. `maxTokens: 12` covers every label this prompt allows
+        // (longest is "passive-aggressive", ~5 BPE tokens) with headroom.
+        let request = InferenceRequest(prompt: prompt, tier: .classifier, maxTokens: 12,
                                        temperature: 0.1, taskKind: .classification)
         do {
             let response = try await services.inference.complete(request)

@@ -104,7 +104,13 @@ final class ClarityChecker: HalenPlugin {
 
         Text: \"\"\"\(paragraph)\"\"\"
         """
-        let request = InferenceRequest(prompt: prompt, tier: .small, maxTokens: 40,
+        // `.classifier` routes to the dedicated Qwen 0.5B classifier — fast
+        // enough to make text.pause → popover land sub-second. Output is a
+        // short comma-separated list of rule ids (longest plausible:
+        // "passive_voice, run_on, dangling_modifier, vague_pronoun, hedging"
+        // = ~32 BPE tokens). 32 is the right cap; 40 was the historical
+        // pre-Qwen value.
+        let request = InferenceRequest(prompt: prompt, tier: .classifier, maxTokens: 32,
                                        temperature: 0.1, taskKind: .classification)
         do {
             let response = try await services.inference.complete(request)

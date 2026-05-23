@@ -2,37 +2,29 @@ import Foundation
 import CryptoKit
 import Observation
 
-/// Downloads the bundled Gemma 4 E4B GGUF on demand from the canonical
-/// HuggingFace mirror into `ModelLocation.downloaded`. ~4.72 GB, so the
-/// download is resumable (HTTP Range requests), verified by SHA-256
-/// against a pinned hash, atomically installed (.part staging file is moved
-/// into place only after the hash matches).
+/// Downloads a `ModelSpec`'s GGUF on demand from its pinned HuggingFace
+/// mirror into `ModelLocation.downloaded(for: spec)`. Resumable (HTTP Range
+/// requests), verified by SHA-256 against the spec's pinned hash, atomically
+/// installed (the `.part` staging file is moved into place only after the
+/// hash matches).
+///
+/// One `ModelDownloader` instance per `ModelSpec` — the host creates one for
+/// Gemma (generation) and one for Qwen (classifier), each with its own
+/// SwiftUI-observable `state`.
 ///
 /// `@Observable` so SwiftUI can drive a download UI off `state` without an
 /// explicit Combine pipeline.
 @MainActor
 @Observable
 final class ModelDownloader {
-    /// Canonical download URL — the `unsloth/gemma-4-E4B-it-GGUF` mirror.
-    /// IQ4_XS is an importance-matrix 4-bit quant: ~260 MB smaller than the
-    /// Q4_K_M we previously shipped, with no measurable quality loss on
-    /// Halen's short rewrite/classification prompts. No auth token required;
-    /// supports HTTP Range; HuggingFace 302s to a CloudFront/xet signed URL
-    /// which `URLSession` follows automatically.
-    static let sourceURL = URL(string:
-        "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-IQ4_XS.gguf"
-    )!
+    /// The model this downloader manages. Frozen at init — one downloader
+    /// per model spec.
+    let spec: ModelSpec
 
-    /// Expected file size in bytes. Used for the progress denominator before
-    /// the body even starts streaming, and as a fast sanity check before the
-    /// SHA-256 verification.
-    static let expectedSize: Int64 = 4_715_414_688   // ~4.72 GB
-
-    /// Pinned content hash from HuggingFace's `x-linked-etag`. If this ever
-    /// fails to match, the upstream file changed — bump the hash here and
-    /// the user is forced to re-download.
-    static let expectedSHA256 =
-        "eb29c8519c4c07b880fb9cae7ff13ee2e30c5f38516268920ab85c04df6d52a2"
+    /// Convenient access to spec fields used by call sites that don't want to
+    /// drill through `.spec.*`.
+    var expectedSize: Int64 { spec.expectedSize }
+    var displayName: String { spec.displayName }
 
     // MARK: - Tunables
 
@@ -59,18 +51,19 @@ final class ModelDownloader {
 
     private var downloadTask: Task<Void, Never>?
 
-    init() {
+    init(spec: ModelSpec) {
+        self.spec = spec
         // On launch we trust the existence of the file; the (multi-second)
         // SHA-256 check only runs when the user explicitly triggers a verify
         // or after a fresh download.
-        self.state = ModelLocation.isAvailable ? .ready : .notDownloaded
+        self.state = ModelLocation.isAvailable(for: spec) ? .ready : .notDownloaded
     }
 
     /// Start (or resume) the download. Idempotent — calling while a download
     /// is already in flight is a no-op.
     func start() {
         if downloadTask != nil { return }
-        guard let installPath = ModelLocation.downloaded else {
+        guard let installPath = ModelLocation.downloaded(for: spec) else {
             state = .failed(message: "Couldn't resolve Application Support directory")
             return
         }
@@ -95,11 +88,11 @@ final class ModelDownloader {
     /// Remove the downloaded model file. The bundled fallback (if any) stays.
     func removeDownloaded() {
         cancel()
-        if let path = ModelLocation.downloaded {
+        if let path = ModelLocation.downloaded(for: spec) {
             try? FileManager.default.removeItem(at: path)
             try? FileManager.default.removeItem(at: path.appendingPathExtension("part"))
         }
-        state = ModelLocation.isAvailable ? .ready : .notDownloaded
+        state = ModelLocation.isAvailable(for: spec) ? .ready : .notDownloaded
     }
 
     // MARK: - Implementation
@@ -121,9 +114,9 @@ final class ModelDownloader {
 
         // Initial state — start the progress UI even before the first byte.
         state = .downloading(
-            fraction: Double(resumeOffset) / Double(Self.expectedSize),
+            fraction: Double(resumeOffset) / Double(spec.expectedSize),
             bytes: resumeOffset,
-            total: Self.expectedSize
+            total: spec.expectedSize
         )
 
         // Hand off the actual byte-pumping to a detached Task so the iter-
@@ -143,14 +136,17 @@ final class ModelDownloader {
             // Re-bind `self` to a local `weak` so the progress callback
             // captures a Sendable weak ref, not the `var self` of the
             // surrounding closure (which the strict-concurrency checker
-            // refuses to let cross actor boundaries).
+            // refuses to let cross actor boundaries). Snapshot the spec
+            // fields the detached body needs into locals for the same reason.
             weak let weakSelf = self
+            let sourceURL = spec.sourceURL
+            let expectedSize = spec.expectedSize
             let inner = Task.detached(priority: .utility) {
                 try await Self.performDownload(
-                    sourceURL: Self.sourceURL,
+                    sourceURL: sourceURL,
                     partPath: partPath,
                     resumeOffset: resumeOffset,
-                    expectedSize: Self.expectedSize,
+                    expectedSize: expectedSize,
                     requestTimeout: Self.requestTimeout,
                     resourceTimeout: Self.resourceTimeout,
                     progressInterval: Self.progressReportInterval,
@@ -203,9 +199,9 @@ final class ModelDownloader {
 
         // Size sanity-check before the (~3 s) full SHA-256 pass — catches
         // truncated transfers cheaply.
-        if written != Self.expectedSize {
+        if written != spec.expectedSize {
             state = .failed(message:
-                "Downloaded \(written) bytes, expected \(Self.expectedSize). Try again.")
+                "Downloaded \(written) bytes, expected \(spec.expectedSize). Try again.")
             return
         }
 
@@ -213,9 +209,10 @@ final class ModelDownloader {
 
             state = .verifying
             try Task.checkCancellation()
-            // SHA-256 on 770 MB is ~3 s. Off-main so the "Verifying…" state in
-            // Settings stays responsive — the main thread was previously stuck
-            // for the duration, locking the menu UI and any other plugin work.
+            // SHA-256 on a multi-GB GGUF is multi-second. Off-main so the
+            // "Verifying…" state in Settings stays responsive — the main thread
+            // was previously stuck for the duration, locking the menu UI and
+            // any other plugin work.
             let hashPath = partPath
             let actualHash: String
             do {
@@ -227,13 +224,19 @@ final class ModelDownloader {
                 state = .failed(message: "Couldn't verify downloaded file: \(error.localizedDescription)")
                 return
             }
-            guard actualHash == Self.expectedSHA256 else {
-                // Hash mismatch is almost always a corrupt mirror or
-                // bit-flipped transfer — wipe the .part so the next attempt
-                // starts fresh, never serve a wrong file to llama.cpp.
-                try? fm.removeItem(at: partPath)
-                state = .failed(message: "Downloaded file failed integrity check. Try again.")
-                return
+            // A `nil` pin in the spec skips verification — only valid for dev
+            // specs. Production specs always carry the pinned x-linked-etag.
+            if let pinned = spec.expectedSHA256 {
+                guard actualHash == pinned else {
+                    // Hash mismatch is almost always a corrupt mirror or a
+                    // bit-flipped transfer — wipe the .part so the next attempt
+                    // starts fresh, never serve a wrong file to llama.cpp.
+                    try? fm.removeItem(at: partPath)
+                    state = .failed(message: "Downloaded file failed integrity check. Try again.")
+                    return
+                }
+            } else {
+                Log.warn("ModelDownloader[\(spec.id)]: no SHA-256 pin — skipping integrity check (dev only)")
             }
 
             state = .installing
@@ -244,7 +247,7 @@ final class ModelDownloader {
             }
             try fm.moveItem(at: partPath, to: finalPath)
 
-            Log.info("ModelDownloader: installed \(finalPath.path) (\(written) bytes)")
+            Log.info("ModelDownloader[\(spec.id)]: installed \(finalPath.path) (\(written) bytes)")
             state = .ready
 
         } catch is CancellationError {

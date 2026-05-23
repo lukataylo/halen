@@ -17,7 +17,13 @@ final class AppCoordinator {
     let state = AppState()
     let eventBus = EventBus()
     let inferenceSettings = InferenceSettings()
-    let modelDownloader = ModelDownloader()
+    /// Downloader for the generation/rewrite model (Gemma 4 E4B). Surfaced
+    /// to `SettingsView` so the user can trigger / observe / cancel it.
+    let modelDownloader = ModelDownloader(spec: .gemma4E4B_IQ4_XS)
+    /// Downloader for the dedicated classifier model (Qwen 2.5 0.5B). ~10×
+    /// smaller than Gemma, so the first text.paused → popover stays in the
+    /// sub-second range. Same SwiftUI-observable shape as `modelDownloader`.
+    let classifierDownloader = ModelDownloader(spec: .qwen25_05B_Q4_K_M)
     let inference: RouterInferenceClient
     let typoStore = TypoStore()
     /// Per-app tone profiles — a host service (passed into `HalenServices`),
@@ -77,10 +83,17 @@ final class AppCoordinator {
         // focus change as belt-and-suspenders.
         axInstallGlobalMessagingTimeout()
         startEventLogger()
-        // Best-effort prewarm of Apple Foundation Models so the first inference
-        // call (typo classify, snippet expansion, Ask Halen) doesn't pay the
-        // weight-load latency in front of the user.
-        Task { @MainActor [backends] in
+        // Eagerly load both bundled models (Qwen 0.5B classifier + Gemma 4
+        // E4B generation) in parallel so the first user-facing inference —
+        // typo classify, snippet expansion, sentiment / clarity check, Ask
+        // Halen — doesn't pay the multi-second weight-load latency in front
+        // of the user. Apple FM is prewarmed in the same task group.
+        // Triggers downloads in the background too if either model is missing
+        // (state surfaces through `modelDownloader.state` /
+        // `classifierDownloader.state` for the Settings UI).
+        Task { @MainActor [backends, modelDownloader, classifierDownloader] in
+            if modelDownloader.state == .notDownloaded { modelDownloader.start() }
+            if classifierDownloader.state == .notDownloaded { classifierDownloader.start() }
             await InferenceBackends.prewarmAll(backends)
         }
 

@@ -61,7 +61,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum SelfTest {
     static func run() async {
         Log.info("SelfTest: starting")
-        let backend = LlamaCppBackend()
+        // Exercise the generation model (Gemma 4 E4B) by default; the
+        // classifier model is a separate spec and would warrant its own
+        // selftest if it ever ships its own quirks.
+        let backend = LlamaCppBackend(spec: .gemma4E4B_IQ4_XS)
         let availability = await backend.availability()
         Log.info("SelfTest: bundled-llama availability = \(availability)")
         guard case .available = availability else {

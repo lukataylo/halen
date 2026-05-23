@@ -9,11 +9,14 @@ import FoundationModels
 /// router falls through when unavailable.
 ///
 /// Serves `.small` and `.medium`; the system model isn't sized for `.large`.
+/// Also offered as a `.classifier` fallback for when the dedicated Qwen 0.5B
+/// classifier isn't downloaded — Qwen's lower `basePriority` (3 vs 10) keeps
+/// it preferred when both are present.
 @available(macOS 26, *)
 final class AppleFMBackend: InferenceBackend {
     let kind: BackendKind = .appleFoundationModels
     let capability = BackendCapability(
-        servesTiers: [.small, .medium],
+        servesTiers: [.classifier, .small, .medium],
         strongAt: [.classification, .generation],
         basePriority: 10
     )

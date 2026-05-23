@@ -29,12 +29,16 @@ final class ParagraphClassifier {
     private var seenOrder: [String] = []   // FIFO eviction (oldest at index 0)
 
     init(minLength: Int = 60,
-         settleDelay: TimeInterval = 2.5,
+         settleDelay: TimeInterval = 1.0,
          maxCacheSize: Int = 256) {
         self.minLength = minLength
         self.settleDelay = settleDelay
         self.maxCacheSize = maxCacheSize
     }
+    // Default `settleDelay` lowered from 2.5 s → 1.0 s now that the
+    // `.classifier` tier (Qwen 0.5B) keeps total classification well under
+    // a second warm. Combined: text-pause → popover lands in roughly 2 s.
+    // Per-plugin overrides (StyleGuide uses 1.5) still apply.
 
     /// Schedule a classification. The closures are captured per call, so each
     /// schedule can carry its own context (the focused-app bundle id at the

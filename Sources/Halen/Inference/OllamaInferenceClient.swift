@@ -73,9 +73,15 @@ final class OllamaInferenceClient: Sendable {
 
     private func modelName(for tier: ModelTier) -> String {
         switch tier {
-        case .small:  return "gemma4:e2b"
-        case .medium: return "gemma4:e4b"
-        case .large:  return "gemma4:26b"
+        // Ollama serves the bigger Gemma tiers; the dedicated `.classifier`
+        // tier is targeted at the bundled Qwen 0.5B and isn't run via Ollama.
+        // If a request makes it here at `.classifier`, fall back to the
+        // smallest Ollama model — same downstream behaviour as before this
+        // tier existed.
+        case .classifier: return "gemma4:e2b"
+        case .small:      return "gemma4:e2b"
+        case .medium:     return "gemma4:e4b"
+        case .large:      return "gemma4:26b"
         }
     }
 }

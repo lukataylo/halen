@@ -1,7 +1,6 @@
 import Foundation
 
-/// Single source of truth for where the bundled-Gemma backend looks for its
-/// model file. Two locations, in priority order:
+/// Resolves on-disk paths for a `ModelSpec`. Two locations, in priority order:
 ///
 ///  1. **Downloaded** — `~/Library/Application Support/Halen/Models/<filename>`.
 ///     Populated by `ModelDownloader` on first use, persists across launches,
@@ -13,41 +12,36 @@ import Foundation
 /// The downloaded copy takes precedence so a user-initiated re-download or a
 /// future model update can be picked up without rebuilding the app.
 enum ModelLocation {
-    /// Canonical filename. Matches the source HuggingFace asset
-    /// (`unsloth/gemma-4-E4B-it-GGUF`). IQ4_XS — an importance-matrix 4-bit
-    /// quant that is ~5% smaller than Q4_K_M at effectively equal quality.
-    static let filename = "gemma-4-E4B-it-IQ4_XS.gguf"
-
-    /// Best-available URL for the GGUF, or `nil` if neither location has it
-    /// (fresh install on a Mac without Apple Intelligence — `ModelDownloader`
-    /// must be invoked).
-    static var resolved: URL? {
-        if let downloaded, FileManager.default.fileExists(atPath: downloaded.path) {
+    /// Best-available URL for `spec`'s GGUF, or `nil` if neither location has
+    /// it (fresh install — `ModelDownloader` must be invoked).
+    static func resolved(for spec: ModelSpec) -> URL? {
+        if let downloaded = downloaded(for: spec),
+           FileManager.default.fileExists(atPath: downloaded.path) {
             return downloaded
         }
-        return bundled
+        return bundled(for: spec)
     }
 
-    /// Target path for `ModelDownloader`. Always returns a valid URL — the file
-    /// may or may not exist on disk yet.
-    static var downloaded: URL? {
+    /// Target path for `ModelDownloader`. Always returns a valid URL — the
+    /// file may or may not exist on disk yet.
+    static func downloaded(for spec: ModelSpec) -> URL? {
         guard let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
         return appSupport
             .appending(path: "Halen", directoryHint: .isDirectory)
             .appending(path: "Models", directoryHint: .isDirectory)
-            .appending(path: filename)
+            .appending(path: spec.filename)
     }
 
-    /// `Contents/Resources/Models/<filename>` inside the .app — only present in
-    /// `BUNDLE_MODEL=1` builds. `nil` in the default slim build.
-    static var bundled: URL? {
-        Bundle.main.url(forResource: "gemma-4-E4B-it-IQ4_XS",
+    /// `Contents/Resources/Models/<filename>` inside the .app — only present
+    /// in `BUNDLE_MODEL=1` builds. `nil` in the default slim build.
+    static func bundled(for spec: ModelSpec) -> URL? {
+        Bundle.main.url(forResource: spec.bundleResourceName,
                         withExtension: "gguf",
                         subdirectory: "Models")
     }
 
-    /// True iff a bundled-Gemma model is available somewhere on disk (either
-    /// downloaded or bundled).
-    static var isAvailable: Bool { resolved != nil }
+    /// True iff `spec`'s GGUF is available somewhere on disk (downloaded or
+    /// bundled).
+    static func isAvailable(for spec: ModelSpec) -> Bool { resolved(for: spec) != nil }
 }
