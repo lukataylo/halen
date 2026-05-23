@@ -56,6 +56,14 @@ enum InferenceBackends {
                         }
                     }
                 }
+                if let mlx = backend as? MLXBackend {
+                    group.addTask {
+                        if await mlx.availability().isAvailable {
+                            await mlx.prewarm()
+                            Log.info("MLXBackend: prewarmed")
+                        }
+                    }
+                }
                 #if canImport(FoundationModels)
                 if #available(macOS 26, *), let fm = backend as? AppleFMBackend {
                     group.addTask {

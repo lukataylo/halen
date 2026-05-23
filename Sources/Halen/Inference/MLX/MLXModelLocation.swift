@@ -8,17 +8,15 @@ import Foundation
 /// The `mlx-swift` `Hub` client handles fetching the whole repo and caching
 /// it; Halen only needs to name the repo and the cache root.
 ///
-/// The chosen repo is a 4-bit MLX conversion of the same Gemma 4 E4B model
-/// the bundled-llama backend runs, so the two backends are quality-comparable
-/// and the router can treat them as interchangeable for the `.medium` tier.
+/// Set to the same Qwen 2.5 0.5B Instruct model the llama.cpp classifier
+/// backend uses, just in MLX's `safetensors` format. Lets the router treat
+/// the two `.classifier`-tier backends as quality-comparable so we can
+/// benchmark MLX-vs-llama.cpp on identical work and promote the faster
+/// path. The mlx-community 4-bit conversion is the canonical MLX build.
 enum MLXModelLocation {
-    /// HuggingFace repo id for the MLX-format weights.
-    ///
-    /// NOTE: confirm the exact repo id on HuggingFace before first run — the
-    /// `mlx-community` org publishes the canonical conversions and the naming
-    /// of the Gemma 4 E4B 4-bit variant should be verified there. This is the
-    /// expected id; adjust if the published artifact differs.
-    static let repoId = "mlx-community/gemma-4-E4B-it-4bit"
+    /// HuggingFace repo id for the MLX-format Qwen 2.5 0.5B Instruct weights.
+    /// Confirmed in `mlx-community`; the 4-bit AWQ quant is ~150 MB on disk.
+    static let repoId = "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
 
     /// Cache root for downloaded MLX repos. Kept under Halen's Application
     /// Support dir (sibling of the llama.cpp `Models/` folder) so a user

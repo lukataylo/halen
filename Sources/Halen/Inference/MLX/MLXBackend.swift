@@ -21,32 +21,44 @@ import MLXLMCommon
 /// only once it is proven on real hardware.
 ///
 /// ── Integration status ──────────────────────────────────────────────────
-/// This is the scaffold. The backend compiles and is wired into the router
-/// today, but reports `.unavailable` until the `mlx-swift-examples` package
-/// is added to `Package.swift` (see the commented block there). Once the
-/// dependency is present, `canImport(MLXLLM)` flips true and the real
-/// implementation in the `#if canImport(MLXLLM)` extension below activates.
+/// The Swift code below — `loadContainer`, `runMLX`, `runStreaming`,
+/// `prewarm` — is complete and verified against `mlx-swift-examples` v2.29.
+/// What's missing is the **Metal shader pipeline**. mlx-swift's own README
+/// states: *"SwiftPM (command line) cannot build the Metal shaders so the
+/// ultimate build has to be done via Xcode."* Activating the dep in
+/// `Package.swift` and `swift build`-ing produces a binary that crashes
+/// at first use with `MLX error: Failed to load the default metallib`.
 ///
-/// Remaining work before MLX can serve traffic:
-///   1. Add the `mlx-swift-examples` dependency in `Package.swift`.
-///   2. Confirm the `mlx-community` repo id in `MLXModelLocation`.
-///   3. Verify the `MLXLLM` / `MLXLMCommon` API calls below against the
-///      pinned package version (the generate API has drifted across
-///      releases) and resolve any signature differences.
-///   4. Wire MLX into `InferenceBackends.prewarmAll` if a prewarm path
-///      exists, and add token streaming once the streaming inference path
-///      lands (see the separate streaming branch).
+/// Activation arc (deferred until perf justifies the build-pipeline lift):
+///   1. Switch (or dual-build) the project through `xcodebuild` so MLX's
+///      Metal compiler stage runs and `mlx-swift_Cmlx.bundle` is emitted.
+///   2. Update `scripts/build-app.sh` to copy that bundle into the .app's
+///      Contents/Resources/ alongside the existing llama framework.
+///   3. Uncomment the `mlx-swift-examples` dep in `Package.swift` and the
+///      product entries in the Halen target's `dependencies:`.
+///   4. CI workflow (`.github/workflows/...`) will need the same change.
+///
+/// Qwen 0.5B on llama.cpp already gives sub-100ms warm classification,
+/// so MLX is a perf-ceiling lift rather than a must-ship; the scaffold
+/// stays in tree so the activation arc is mechanical when picked up.
 ///
 /// An `actor`: the loaded model container is reused across requests and must
 /// not be torn down concurrently — same lifecycle contract as `LlamaCppBackend`.
 actor MLXBackend: InferenceBackend {
     nonisolated let kind: BackendKind = .mlx
     nonisolated let capability = BackendCapability(
-        servesTiers: [.small, .medium],
+        // `.classifier` is the primary tier — this backend ships pointing
+        // at the same Qwen 2.5 0.5B Instruct the llama.cpp `.classifier`
+        // backend serves, so the router can A/B between MLX and llama.cpp
+        // on identical work. `.small`/`.medium` are listed as fallbacks
+        // for callers that didn't opt into `.classifier`.
+        servesTiers: [.classifier, .small, .medium],
         strongAt: [.classification, .generation],
-        // Lower = preferred on a tie. Slightly ahead of bundled llama.cpp (5)
-        // because, once proven, MLX is the faster local path on Apple Silicon.
-        basePriority: 4
+        // Lower = preferred on a tie. `basePriority: 2` puts MLX *ahead* of
+        // the llama.cpp Qwen backend (3) so once proven, MLX wins
+        // identical-tier ties. The router still falls through to llama.cpp
+        // if MLX reports unavailable (Intel Mac, dep missing, load failed).
+        basePriority: 2
     )
 
     #if canImport(MLXLLM)
@@ -75,6 +87,34 @@ actor MLXBackend: InferenceBackend {
         return try await runMLX(request)
         #else
         throw MLXBackendError.runtimeNotIntegrated
+        #endif
+    }
+
+    /// Streaming variant — yields the cumulative completion as MLX produces
+    /// each chunk. `nonisolated` so it satisfies the non-`async` protocol
+    /// requirement from an `actor` (the real work hops onto the actor
+    /// inside the spawned `Task`). When MLX isn't compiled in, falls through
+    /// to the `InferenceBackend` default, which runs `complete()` and emits
+    /// the whole result as a single snapshot.
+    #if canImport(MLXLLM)
+    nonisolated func stream(_ request: InferenceRequest) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task { await self.runStreaming(request, into: continuation) }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+    #endif
+
+    /// Eagerly load the model into memory so the first user-facing request
+    /// doesn't pay the Hub-download + weight-load cost. Idempotent — a
+    /// second call is a no-op once loaded. Mirrors `LlamaCppBackend.prewarm()`
+    /// so `InferenceBackends.prewarmAll` can fan out to either backend.
+    /// Returns silently on failure; `availability()` will surface the issue
+    /// the next time the router probes.
+    func prewarm() async {
+        #if canImport(MLXLLM)
+        guard container == nil, !loadFailed else { return }
+        _ = try? await loadContainer()
         #endif
     }
 }
@@ -128,20 +168,34 @@ extension MLXBackend {
         let start = Date()
         let container = try await loadContainer()
 
-        // Gemma instruction-tuned chat template — identical framing to
-        // `LlamaCppBackend` so the two local backends behave the same.
-        let prompt = "<start_of_turn>user\n\(request.prompt)<end_of_turn>\n<start_of_turn>model\n"
+        // Qwen instruction-tuned chat template (ChatML). Must match the
+        // template `LlamaCppBackend` uses for the same model — Qwen does NOT
+        // use Gemma's `<start_of_turn>` framing; getting this wrong yields
+        // garbled or empty completions.
+        let prompt = "<|im_start|>user\n\(request.prompt)<|im_end|>\n<|im_start|>assistant\n"
         let parameters = GenerateParameters(
             maxTokens: request.maxTokens,
             temperature: Float(request.temperature)
         )
 
-        let text = try await container.perform { (context: ModelContext) -> String in
+        // `mlx-swift-examples` ships three `generate(...)` overloads: two
+        // legacy ones taking a `didGenerate` closure (`[Int] -> _` vs
+        // `Int -> _`) — those are ambiguous when the closure is the
+        // shorthand `{ _ in .more }` — and a modern one returning
+        // `AsyncStream<Generation>`. The modern variant is unambiguous
+        // (no `didGenerate:` label) and also gives us the chunked stream
+        // the streaming path will need; collect into a single string here.
+        let text: String = try await container.perform { (context: ModelContext) -> String in
             let input = try await context.processor.prepare(input: UserInput(prompt: prompt))
-            let result = try MLXLMCommon.generate(
-                input: input, parameters: parameters, context: context
-            ) { _ in .more }
-            return result.output
+            let stream = try MLXLMCommon.generate(
+                input: input, parameters: parameters, context: context)
+            var accumulator = ""
+            for await event in stream {
+                if case .chunk(let chunk) = event {
+                    accumulator += chunk
+                }
+            }
+            return accumulator
         }
 
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -152,6 +206,55 @@ extension MLXBackend {
             modelId: "mlx/\(MLXModelLocation.repoId)",
             latencyMs: latency
         )
+    }
+
+    /// Token-streaming variant. Each yielded value is the **cumulative**
+    /// completion text so far (matches `LlamaCppBackend.stream`'s contract).
+    /// Consumers (SentimentGuard's rephrase pane, SnippetExpander) render
+    /// the latest snapshot directly.
+    fileprivate func runStreaming(
+        _ request: InferenceRequest,
+        into continuation: AsyncThrowingStream<String, Error>.Continuation
+    ) async {
+        let container: ModelContainer
+        do {
+            container = try await loadContainer()
+        } catch {
+            continuation.finish(throwing: error)
+            return
+        }
+
+        let prompt = "<|im_start|>user\n\(request.prompt)<|im_end|>\n<|im_start|>assistant\n"
+        let parameters = GenerateParameters(
+            maxTokens: request.maxTokens,
+            temperature: Float(request.temperature)
+        )
+
+        do {
+            try await container.perform { (context: ModelContext) async throws -> Void in
+                let input = try await context.processor.prepare(input: UserInput(prompt: prompt))
+                let stream = try MLXLMCommon.generate(
+                    input: input, parameters: parameters, context: context)
+                var accumulator = ""
+                for await event in stream {
+                    if Task.isCancelled { return }
+                    if case .chunk(let chunk) = event {
+                        accumulator += chunk
+                        continuation.yield(accumulator.trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
+                }
+                // Final authoritative snapshot, then close.
+                let trimmed = accumulator.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    continuation.finish(throwing: MLXBackendError.emptyResponse)
+                } else {
+                    continuation.yield(trimmed)
+                    continuation.finish()
+                }
+            }
+        } catch {
+            continuation.finish(throwing: error)
+        }
     }
 }
 #endif

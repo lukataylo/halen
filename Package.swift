@@ -7,10 +7,23 @@ let package = Package(
     products: [
         .executable(name: "halen", targets: ["Halen"]),
     ],
-    // MLX backend (work in progress): to activate `MLXBackend`, uncomment the
-    // dependency below and add the `MLXLLM` product to the `Halen` target's
-    // `dependencies`. Until then `MLXBackend` compiles as an inert stub
-    // (`canImport(MLXLLM)` is false) and the router skips it.
+    // MLX backend (deferred): activating `MLXBackend` requires more than just
+    // adding the `mlx-swift-examples` dependency — mlx-swift's own README is
+    // explicit that **SwiftPM command-line cannot compile its Metal shaders**.
+    // The build succeeds, the binary links, but at runtime MLX fails to load
+    // `default.metallib` and crashes the process at first use:
+    //
+    //     MLX error: Failed to load the default metallib. library not found
+    //
+    // To activate properly the project would need to migrate (or dual-build)
+    // through `xcodebuild` so its Metal compiler stage runs and the
+    // `mlx-swift_Cmlx` resource bundle gets emitted next to the binary.
+    // That's a real engineering arc — new project file, new CI workflow,
+    // new build script — and Qwen 0.5B on llama.cpp already gives us
+    // sub-100 ms warm classification, so MLX is a perf-ceiling lift, not
+    // urgent. Keeping the dependency commented out (and `MLXBackend`
+    // compiling as an inert stub via `canImport(MLXLLM)`) until that arc
+    // is in scope.
     //
     // dependencies: [
     //     .package(url: "https://github.com/ml-explore/mlx-swift-examples", from: "2.21.0"),
@@ -18,7 +31,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Halen",
-            // Add when activating MLX:
+            // Add when activating MLX (also requires xcodebuild — see above):
             //     .product(name: "MLXLLM", package: "mlx-swift-examples"),
             //     .product(name: "MLXLMCommon", package: "mlx-swift-examples"),
             dependencies: ["llama"],
