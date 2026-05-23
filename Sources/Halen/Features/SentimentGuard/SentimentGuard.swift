@@ -53,8 +53,10 @@ final class SentimentGuard: HalenPlugin {
     /// short rewrites. The internal ScrollView can still expand for longer
     /// outputs; this is just the panel's outer frame.
     static let popupRephraseSize = NSSize(width: 320, height: 220)
-    /// Hashes the user explicitly approved as fine. Persisted.
-    private var approvedHashes: Set<String> = []
+    /// Persistent allowlist of paragraph fingerprints the user has marked
+    /// "looks fine." File I/O lives in `ApprovedHashesStore`; this file
+    /// only calls `contains(_:)`/`insert(_:)`/`removeAll()`.
+    private let approvedHashes: ApprovedHashesStore
     /// Number of times we surfaced a popover this session (any rule). In-memory only.
     private(set) var flaggedThisSession: Int = 0
     /// Most recent caret rect from `caret.moved` events; used to anchor the popover.
@@ -90,7 +92,9 @@ final class SentimentGuard: HalenPlugin {
         self.caretObserver = services.caretObserver
         let storageDir = services.storageDirectory(for: "com.halen.sentiment-guard")
         self.rulesStore = SentimentRulesStore(fileURL: storageDir.appending(path: "rules.json"))
-        loadApproved()
+        self.approvedHashes = ApprovedHashesStore(
+            fileURL: storageDir.appending(path: "approved.json"),
+            logPrefix: "SentimentGuard")
     }
 
     func makeDetailView() -> AnyView {
@@ -101,7 +105,6 @@ final class SentimentGuard: HalenPlugin {
                 flaggedCount: flaggedThisSession,
                 onClearApproved: { [weak self] in
                     self?.approvedHashes.removeAll()
-                    self?.saveApproved()
                 }
             )
         )
@@ -168,7 +171,7 @@ final class SentimentGuard: HalenPlugin {
                 }
                 // Permanent allowlist — user clicked "Looks fine" on this exact
                 // paragraph in a past session.
-                return !self.approvedHashes.contains(sha256Hex(paragraph))
+                return !self.approvedHashes.contains(sha256Hex(paragraph))   // ApprovedHashesStore
             },
             classify: { [weak self] paragraph in
                 await self?.runGemmaClassification(paragraph: paragraph, appBundleId: appBundleId)
@@ -446,8 +449,7 @@ final class SentimentGuard: HalenPlugin {
     }
 
     private func approve(hash: String) {
-        approvedHashes.insert(hash)
-        saveApproved()
+        approvedHashes.insert(hash)   // ApprovedHashesStore persists immediately
     }
 
     /// User explicitly (or implicitly, via auto-dismiss) closed the popup.
@@ -521,28 +523,8 @@ final class SentimentGuard: HalenPlugin {
         panel.setFrame(frame, display: true, animate: true)
     }
 
-    // MARK: - Persistence
-
-    private var approvedFileURL: URL {
-        services.storageDirectory(for: id).appending(path: "approved.json")
-    }
-
-    private func loadApproved() {
-        guard let data = try? Data(contentsOf: approvedFileURL),
-              let list = try? JSONDecoder().decode([String].self, from: data) else { return }
-        approvedHashes = Set(list)
-        Log.info("SentimentGuard: loaded \(approvedHashes.count) approved fingerprints")
-    }
-
-    private func saveApproved() {
-        let list = Array(approvedHashes).sorted()
-        do {
-            let data = try JSONEncoder().encode(list)
-            try data.write(to: approvedFileURL, options: .atomic)
-        } catch {
-            Log.error("SentimentGuard: saveApproved failed — \(error.localizedDescription)")
-        }
-    }
+    // Allowlist persistence lives in `ApprovedHashesStore` —
+    // `Features/SentimentGuard/ApprovedHashesStore.swift`.
 
     // MARK: - Few-shot prompt examples
 
