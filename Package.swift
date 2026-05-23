@@ -7,10 +7,21 @@ let package = Package(
     products: [
         .executable(name: "halen", targets: ["Halen"]),
     ],
+    dependencies: [
+        // Sparkle 2.x — the de-facto macOS auto-updater for non-MAS apps.
+        // Reads SUFeedURL from Info.plist, EdDSA-verifies update payloads
+        // against SUPublicEDKey, replaces the .app in /Applications, and
+        // relaunches. See docs/RELEASING.md "Cutting an update" for the
+        // release-side appcast.xml regeneration step.
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0"),
+    ],
     targets: [
         .executableTarget(
             name: "Halen",
-            dependencies: ["llama"],
+            dependencies: [
+                "llama",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
             path: "Sources/Halen"
         ),
         // Prebuilt llama.cpp (pinned tag in Vendor/LLAMA_CPP_VERSION). Produced

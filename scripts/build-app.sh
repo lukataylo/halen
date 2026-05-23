@@ -107,6 +107,18 @@ else
     echo "warning: $LLAMA_FW_SRC not found — run scripts/fetch-assets.sh" >&2
 fi
 
+# Embed Sparkle.framework (the auto-updater). Pulled in via SwiftPM; the
+# xcframework lives in .build/artifacts/. Without this, the .app crashes at
+# UpdaterController.init() with a Sparkle dyld error.
+SPARKLE_FW_SRC="$ROOT/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+if [[ -d "$SPARKLE_FW_SRC" ]]; then
+    echo "→ embedding Sparkle.framework"
+    mkdir -p "$FRAMEWORKS"
+    ditto "$SPARKLE_FW_SRC" "$FRAMEWORKS/Sparkle.framework"
+else
+    echo "warning: $SPARKLE_FW_SRC not found — run 'swift package resolve'" >&2
+fi
+
 # Bundling the GGUF inflates the .app from ~12 MB to ~4.8 GB. Default OFF —
 # `ModelDownloader` fetches the file on demand into Application Support, so
 # the .app users download stays small. Opt-in with BUNDLE_MODEL=1 for an
@@ -144,6 +156,25 @@ if [[ "$DIST" == "1" ]]; then
         codesign --force --options runtime --timestamp \
             --sign "$SIGN_IDENTITY" "$FRAMEWORKS/llama.framework"
     fi
+    if [[ -d "$FRAMEWORKS/Sparkle.framework" ]]; then
+        # Sparkle ships nested helper bundles (Autoupdate, Updater) that must
+        # each be signed individually; their internal symlinks make a single
+        # top-level codesign call insufficient. Sign deepest-first.
+        local sparkle="$FRAMEWORKS/Sparkle.framework"
+        for nested in \
+            "$sparkle/Versions/B/XPCServices/Installer.xpc" \
+            "$sparkle/Versions/B/XPCServices/Downloader.xpc" \
+            "$sparkle/Versions/B/Autoupdate" \
+            "$sparkle/Versions/B/Updater.app"; do
+            [[ -e "$nested" ]] || continue
+            xattr -cr "$nested" 2>/dev/null || true
+            codesign --force --options runtime --timestamp \
+                --sign "$SIGN_IDENTITY" "$nested"
+        done
+        xattr -cr "$sparkle" 2>/dev/null || true
+        codesign --force --options runtime --timestamp \
+            --sign "$SIGN_IDENTITY" "$sparkle"
+    fi
     xattr -cr "$APP_DIR" 2>/dev/null || true
     codesign --force --options runtime --timestamp \
         --entitlements "$ENTITLEMENTS" \
@@ -175,6 +206,20 @@ else
     if [[ -d "$FRAMEWORKS/llama.framework" ]]; then
         xattr -cr "$FRAMEWORKS/llama.framework" 2>/dev/null || true
         codesign --force --sign "$SIGN_IDENTITY" "$FRAMEWORKS/llama.framework" >/dev/null || codesign_failed
+    fi
+    if [[ -d "$FRAMEWORKS/Sparkle.framework" ]]; then
+        sparkle="$FRAMEWORKS/Sparkle.framework"
+        for nested in \
+            "$sparkle/Versions/B/XPCServices/Installer.xpc" \
+            "$sparkle/Versions/B/XPCServices/Downloader.xpc" \
+            "$sparkle/Versions/B/Autoupdate" \
+            "$sparkle/Versions/B/Updater.app"; do
+            [[ -e "$nested" ]] || continue
+            xattr -cr "$nested" 2>/dev/null || true
+            codesign --force --sign "$SIGN_IDENTITY" "$nested" >/dev/null || codesign_failed
+        done
+        xattr -cr "$sparkle" 2>/dev/null || true
+        codesign --force --sign "$SIGN_IDENTITY" "$sparkle" >/dev/null || codesign_failed
     fi
     xattr -cr "$APP_DIR" 2>/dev/null || true
     codesign --force --sign "$SIGN_IDENTITY" --identifier com.dadiani.halen "$APP_DIR" >/dev/null || codesign_failed

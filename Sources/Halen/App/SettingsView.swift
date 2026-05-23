@@ -18,6 +18,10 @@ struct SettingsView: View {
     /// down to `AppCoordinator.onboardingWindow.presentAgain()`. Surfaced
     /// in the About card.
     let onRunSetupAgain: () -> Void
+    /// Sparkle wrapper. About card uses this for the "Check for Updates"
+    /// action and to hide the button entirely when SUFeedURL/SUPublicEDKey
+    /// aren't configured (dev builds).
+    let updater: UpdaterController
 
     @State private var pollTask: Task<Void, Never>?
     @State private var confirmingModelRemove = false
@@ -782,7 +786,7 @@ struct SettingsView: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Halen")
                         .font(.system(.body, weight: .semibold))
-                    Text("v0.1.0")
+                    Text("v\(appVersion)")
                         .font(.system(.callout, design: .monospaced))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -808,6 +812,22 @@ struct SettingsView: View {
 
                 Divider().opacity(0.4).padding(.vertical, 2)
 
+                if updater.isActive {
+                    Button {
+                        updater.checkForUpdates()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 10))
+                            Text("Check for updates")
+                                .font(.system(size: 11))
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(Color.accentColor)
+                    .disabled(!updater.canCheckForUpdates)
+                }
+
                 Button {
                     onRunSetupAgain()
                 } label: {
@@ -820,8 +840,28 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(Color.accentColor)
+
+                Button {
+                    NSWorkspace.shared.open(URL(string: "https://halen.dev/changelog.html")!)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "list.bullet.rectangle")
+                            .font(.system(size: 10))
+                        Text("What's new")
+                            .font(.system(size: 11))
+                    }
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.accentColor)
             }
         }
+    }
+
+    /// Resolved at runtime from CFBundleShortVersionString. Keeps the
+    /// About card in sync with Info.plist without anyone hand-syncing the
+    /// version string in two places.
+    private var appVersion: String {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0.0.0"
     }
 
     // MARK: - Helpers

@@ -32,6 +32,9 @@ struct HalenCenterView: View {
     /// `AppCoordinator.onboardingWindow.presentAgain()`. Surfaced in
     /// SettingsView's About card.
     let onRunSetupAgain: () -> Void
+    /// Sparkle-backed auto-updater. Passed through to SettingsView for
+    /// the "Check for Updates" action.
+    let updater: UpdaterController
     @State private var nav: CenterNav = .marketplace
 
     var body: some View {
@@ -56,7 +59,8 @@ struct HalenCenterView: View {
                     webSocketBridge: webSocketBridge,
                     launchAtLogin: launchAtLogin,
                     onBack: { back() },
-                    onRunSetupAgain: onRunSetupAgain
+                    onRunSetupAgain: onRunSetupAgain,
+                    updater: updater
                 )
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }

@@ -11,9 +11,9 @@
     <key>CFBundleExecutable</key>
     <string>halen</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>2</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
+    <string>0.2.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleIconFile</key>
@@ -32,5 +32,21 @@
     <string>Halen reads your upcoming events to suggest breaks (Burnout Copilot) and prepare briefings before meetings (Meeting Prep). Calendar data is read locally only.</string>
     <key>NSInputMonitoringUsageDescription</key>
     <string>Halen listens for the ⌃H hotkey so the Ask Halen palette can open in any app. Only the hotkey is matched; no other keystrokes are recorded.</string>
+    <!-- Sparkle 2.x auto-updater. SUFeedURL points at the public appcast hosted
+         on halen.dev (GitHub Pages); SUPublicEDKey is the EdDSA public half
+         of the keypair stored in the maintainer's keychain. Update payloads
+         that don't verify against this key are refused on the user's machine,
+         independent of TLS — see docs/RELEASING.md "Cutting an update". -->
+    <key>SUFeedURL</key>
+    <string>https://halen.dev/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>fs4hoKqujBp62pEGUz12LK0oMr1Z+NG53nuZRuE0hWU=</string>
+    <!-- Don't pester the user; check daily, default to background install. -->
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
+    <key>SUEnableInstallerLauncherService</key>
+    <false/>
 </dict>
 </plist>

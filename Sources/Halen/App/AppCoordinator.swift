@@ -59,6 +59,12 @@ final class AppCoordinator {
         OnboardingWindowController(registry: registry)
     }()
 
+    /// Sparkle-backed auto-update controller. Eager (not lazy) because
+    /// Sparkle's daily check timer kicks in at app launch — we want the
+    /// updater running before the user even opens the dropdown. Settings →
+    /// About hosts the manual "Check for Updates…" button.
+    let updater = UpdaterController()
+
     /// Kept around so we can prewarm Apple FM at launch and re-probe
     /// availability from the Settings UI without going through the router.
     let backends: [InferenceBackend]

@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Changelog | Halen</title>
+<meta name="description" content="Every Halen release, in chronological order. What shipped, what changed, what got fixed." />
+<meta name="theme-color" content="#1635D6" />
+<meta name="author" content="Halen Labs" />
+<link rel="canonical" href="https://halen.dev/changelog.html" />
+
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="Halen" />
+<meta property="og:title" content="Changelog | Halen" />
+<meta property="og:description" content="What shipped in each Halen release." />
+<meta property="og:url" content="https://halen.dev/changelog.html" />
+<meta property="og:image" content="https://halen.dev/assets/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Halen: at your cursor, all on-device." />
+
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Changelog | Halen" />
+<meta name="twitter:description" content="What shipped in each Halen release." />
+<meta name="twitter:image" content="https://halen.dev/assets/og-image.png" />
+
+<link rel="icon" type="image/svg+xml" href="assets/halen-icon.svg" />
+<link rel="apple-touch-icon" href="assets/halen-icon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #ffffff;
+  --ink: #0A0A0A;
+  --ink-soft: #2A2A2A;
+  --muted: #6E6E6E;
+  --line: rgba(0,0,0,0.08);
+  --accent: #1635D6;
+  --accent-soft: rgba(22,53,214,0.08);
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--ink); }
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 16px; line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+.nav {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 28px;
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border-bottom: 1px solid var(--line);
+}
+.nav .brand {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-weight: 600; color: var(--ink); text-decoration: none;
+  font-size: 15px;
+}
+.nav .brand img { width: 22px; height: 22px; }
+.nav .links { display: flex; gap: 22px; }
+.nav .links a {
+  color: var(--ink-soft); text-decoration: none; font-size: 14px;
+  transition: color 0.18s ease;
+}
+.nav .links a:hover { color: var(--accent); }
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 64px 28px 96px;
+}
+h1 {
+  font-size: 44px; font-weight: 800; letter-spacing: -0.025em;
+  line-height: 1.08; margin: 0 0 8px;
+}
+.subtitle {
+  color: var(--muted); font-size: 16px; margin: 0 0 48px;
+}
+
+/* Release header — version + date.
+   The version is the big lockup; the date sits muted next to it. */
+.release {
+  padding-top: 36px;
+  margin-top: 36px;
+  border-top: 1px solid var(--line);
+}
+.release:first-of-type {
+  padding-top: 0;
+  margin-top: 0;
+  border-top: 0;
+}
+.release-head {
+  display: flex; align-items: baseline; gap: 14px;
+  margin-bottom: 6px; flex-wrap: wrap;
+}
+.release-head .v {
+  font-size: 26px; font-weight: 700; letter-spacing: -0.015em;
+  color: var(--ink);
+}
+.release-head .date {
+  font-family: var(--mono);
+  font-size: 13px; color: var(--muted);
+}
+.release-head .tag {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent); background: var(--accent-soft);
+  padding: 3px 8px; border-radius: 999px;
+}
+.release > .tagline {
+  color: var(--muted); font-size: 15px; margin: 0 0 22px;
+}
+
+h3.section {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--muted);
+  margin: 22px 0 8px;
+}
+p { margin: 0 0 14px; color: var(--ink-soft); }
+ul {
+  margin: 0 0 18px; padding-left: 22px;
+  color: var(--ink-soft);
+}
+ul li { margin-bottom: 10px; }
+ul li strong { color: var(--ink); font-weight: 600; }
+code, .mono {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+a.inline { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(22,53,214,0.25); }
+a.inline:hover { border-bottom-color: var(--accent); }
+
+footer.foot {
+  margin-top: 80px;
+  padding: 22px 28px;
+  border-top: 1px solid var(--line);
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; color: var(--muted);
+}
+footer.foot .links { display: flex; gap: 18px; }
+footer.foot .links a {
+  color: var(--muted); text-decoration: none;
+  transition: color 0.18s ease;
+}
+footer.foot .links a:hover { color: var(--accent); }
+
+@media (max-width: 600px) {
+  main { padding: 44px 22px 80px; }
+  h1 { font-size: 34px; }
+  .nav { padding: 12px 20px; }
+  .release-head .v { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="index.html" class="brand"><img src="assets/halen-icon.svg" alt="" /> Halen</a>
+  <div class="links">
+    <a href="index.html#demo">Demo</a>
+    <a href="index.html#download">Download</a>
+    <a href="changelog.html">Changelog</a>
+    <a href="privacy.html">Privacy</a>
+    <a href="https://github.com/lukataylo/halen" rel="noopener" target="_blank">Source</a>
+  </div>
+</nav>
+
+<main>
+  <h1>Changelog</h1>
+  <p class="subtitle">Every Halen release, newest first. <a class="inline" href="https://github.com/lukataylo/halen/blob/main/CHANGELOG.md" rel="noopener" target="_blank">View on GitHub</a> for the full source-of-truth file.</p>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       0.2.0
+       ═══════════════════════════════════════════════════════════ -->
+  <section class="release">
+    <div class="release-head">
+      <span class="v">v0.2.0</span>
+      <span class="date">2026-05-23</span>
+      <span class="tag">Current</span>
+    </div>
+    <p class="tagline">The first signed, notarized release. Drag-to-Install with no Gatekeeper warnings, ten built-in plugins, a first-run walkthrough, and auto-updates via Sparkle.</p>
+
+    <h3 class="section">Added</h3>
+    <ul>
+      <li><strong>Notarized DMG distribution.</strong> Downloaded from this site or GitHub Releases, the DMG opens cleanly on a fresh Mac. No right-click &rarr; Open detour. No Settings &rarr; Security override. The .app inside is also notarized and stapled.</li>
+      <li><strong>Sparkle 2.x auto-updates.</strong> Halen checks for new releases daily, verifies update payloads with EdDSA, and installs them in place. Settings &rarr; About has a manual &ldquo;Check for updates&rdquo; button.</li>
+      <li><strong>First-run setup walkthrough.</strong> Three glassmorphic steps &mdash; Welcome, Choose plugins, Permissions &mdash; that runs on first launch and is re-runnable from Settings.</li>
+      <li><strong>Five new bundled plugins.</strong> Personal Style Guide (banned-words/preferred-terms), Clarity Checker (passive voice, run-ons, vague pronouns, dangling modifiers), Tone Profiles (per-app formal/casual hints), Email Reply (<code>&#8963;&#8997;E</code> in Mail / Outlook / Spark / Airmail / Mimestream / Canary), Inline Autocomplete (ghost text, Tab to accept).</li>
+      <li><strong>Inline-underline overlay.</strong> Severity-tinted strip under flagged paragraphs, toggleable from Settings.</li>
+      <li><strong>Plugin Store window.</strong> Standalone window opened from the dropdown&rsquo;s header button, ready for third-party plugins via JSON-RPC over stdio.</li>
+      <li><strong>Burnout Copilot and Meeting Prep are now out-of-process plugins.</strong> They ship in this repo under <code>plugins/</code> and load via the same external-plugin path as any third-party plugin.</li>
+      <li><strong>Streaming rewrite.</strong> Sentiment Guard&rsquo;s rephrase action streams Gemma 4 output into the popover instead of waiting for the whole response.</li>
+      <li><strong>Default-off plugin set.</strong> Voice Dictation, Autocomplete, Style Guide, Email Reply, and Tone Profiles default to off on a fresh install; onboarding flips them on if you opt in.</li>
+    </ul>
+
+    <h3 class="section">Changed</h3>
+    <ul>
+      <li><strong>Dedicated classifier model.</strong> Tone scans now route through Qwen 2.5 0.5B (the <code>.classifier</code> tier) instead of Gemma 4. Sub-100&nbsp;ms warm latency.</li>
+      <li><strong>Apple-style microcopy pass.</strong> All user-facing copy &mdash; onboarding, Settings labels, popover headlines, plugin summaries &mdash; shortened and simplified.</li>
+      <li><strong>Paragraph-classification settle 2.5&nbsp;s &rarr; 1.0&nbsp;s.</strong> Faster popovers while typing.</li>
+    </ul>
+
+    <h3 class="section">Fixed</h3>
+    <ul>
+      <li><strong>StyleGuide word-boundary correctness.</strong> Banning &ldquo;form&rdquo; doesn&rsquo;t flag &ldquo;format&rdquo;; locked in by tests.</li>
+      <li><strong>Input-size guards.</strong> AskHalen, SnippetExpander, and the paragraph classifier all have explicit upper bounds to prevent pasted code/logs from blowing through model contexts.</li>
+      <li><strong>iCloud-synced repos can codesign.</strong> Build script stages to <code>/tmp/halen-build/</code> when the parent directory is iCloud-managed.</li>
+    </ul>
+
+    <h3 class="section">Removed</h3>
+    <ul>
+      <li><strong>MLX backend moved off main.</strong> mlx-swift can&rsquo;t compile its Metal shaders via <code>swift build</code>, so the MLX path lives on the <code>mlx-activation</code> branch until an xcodebuild pipeline lands.</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       0.1.0-alpha
+       ═══════════════════════════════════════════════════════════ -->
+  <section class="release">
+    <div class="release-head">
+      <span class="v">v0.1.0-alpha</span>
+      <span class="date">2026-05-16</span>
+    </div>
+    <p class="tagline">First public download. Ad-hoc signed (no Developer ID yet), so Gatekeeper blocks first launch and the user has to right-click &rarr; Open.</p>
+
+    <h3 class="section">Added</h3>
+    <ul>
+      <li>Seven first-party plugins out of the box: Ask Halen, Typo Fixer, Sentiment Guard, Voice Dictation, Snippet Expander, Burnout Copilot, Meeting Prep.</li>
+      <li>Inference routing: Apple Foundation Models on macOS 26+, bundled Gemma 4 E4B on llama.cpp, Ollama on localhost.</li>
+      <li>JSON-RPC plugin protocol &mdash; drop a script into <code>~/Library/Application Support/Halen/Plugins/</code> and Halen picks it up.</li>
+    </ul>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>&copy; 2026 Halen Labs &middot; <a href="https://github.com/lukataylo/halen/blob/main/LICENSE" rel="noopener" target="_blank">MIT Licensed</a></span>
+  <span class="links">
+    <a href="privacy.html">Privacy</a>
+    <a href="https://github.com/lukataylo/halen" rel="noopener" target="_blank">Source</a>
+    <a href="#" data-contact>Contact</a>
+  </span>
+</footer>
+
+<script>
+document.querySelectorAll('[data-contact]').forEach(el => {
+  el.addEventListener('click', (e) => {
+    e.preventDefault();
+    const u = ['luka', '.', 'taylor'].join('');
+    const d = ['gmail', '.', 'com'].join('');
+    window.location.href = 'mailto:' + u + '@' + d + '?subject=' + encodeURIComponent('Halen');
+  });
+});
+</script>
+</body>
+</html>
