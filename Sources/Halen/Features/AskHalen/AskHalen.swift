@@ -202,9 +202,23 @@ final class AskHalen: HalenPlugin {
 
     // MARK: - Inference
 
+    /// Soft cap on a pasted-in question. The local context window is ~8K
+    /// tokens; a single 50K-char paste blows that out before even adding
+    /// the captured-context preamble. Trim with a visible note rather than
+    /// silently sending a request the backend will refuse.
+    private static let maxQuestionChars = 8_000
+
     private func submit() {
-        let question = state.question.trimmingCharacters(in: .whitespacesAndNewlines)
+        var question = state.question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else { return }
+        if question.count > Self.maxQuestionChars {
+            Log.warn("AskHalen: question \(question.count) chars > cap \(Self.maxQuestionChars) — truncating")
+            // Trim from the end. The user's intent ("rewrite this email…")
+            // usually leads the text; the runaway paste tends to be a long
+            // tail.
+            question = String(question.prefix(Self.maxQuestionChars))
+            state.errorMessage = "Question trimmed to \(Self.maxQuestionChars) characters."
+        }
         inflightTask?.cancel()
         state.hasSubmitted = true
         state.isStreaming = true

@@ -10,6 +10,63 @@ struct SnippetExpanderDetailView: View {
     @State private var newKind: Snippet.Kind = .staticText
     @State private var newValue = ""
 
+    /// Sane bounds for a custom trigger. Two chars enforces "more than just
+    /// the leading `;`"; twenty caps the keystroke savings vs typing it out
+    /// at the point the trigger stops being a *shortcut*.
+    private static let triggerMinLength = 2
+    private static let triggerMaxLength = 20
+    /// Practical upper bound on snippet payload. AI snippets with multi-KB
+    /// prompts slow expansion to seconds and overflow the model's context;
+    /// static snippets that long are usually a paste accident.
+    private static let valueMaxLength = 4_000
+
+    /// User-facing warning for an obviously-broken trigger, or `nil` when
+    /// the field is empty or valid. Shown inline above the Add button.
+    private var triggerValidationMessage: String? {
+        let trimmed = newTrigger.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.count < Self.triggerMinLength {
+            return "Triggers need at least \(Self.triggerMinLength) characters."
+        }
+        if trimmed.count > Self.triggerMaxLength {
+            return "Triggers should be under \(Self.triggerMaxLength) characters."
+        }
+        if store.sorted.contains(where: { $0.trigger.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+            return "That trigger already exists."
+        }
+        return nil
+    }
+
+    /// Composite gate the Add button reads. Empty fields, validation
+    /// errors, or oversized values all block submission.
+    private var isFormValid: Bool {
+        let trigger = newTrigger.trimmingCharacters(in: .whitespaces)
+        let name = newName.trimmingCharacters(in: .whitespaces)
+        let value = newValue.trimmingCharacters(in: .whitespaces)
+        return triggerValidationMessage == nil
+            && !trigger.isEmpty
+            && !name.isEmpty
+            && !value.isEmpty
+            && value.count <= Self.valueMaxLength
+    }
+
+    /// Two-column field-row helper. Keeps the labels aligned in a tight
+    /// 52pt gutter so the input columns line up across rows without each
+    /// caller restating padding.
+    @ViewBuilder private func fieldRow<Content: View>(
+        label: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 52, alignment: .leading)
+                .padding(.top, 6)
+            content()
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
@@ -70,42 +127,81 @@ struct SnippetExpanderDetailView: View {
     }
 
     private var addForm: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                TextField(";trigger", text: $newTrigger)
+        // Field-per-row layout. The prior version crammed trigger +
+        // display-name into a single HStack which looked cramped at the
+        // dropdown's 380 pt width — and tucked "Add snippet" inside a
+        // sub-rect that fought for visual hierarchy with the kind picker.
+        // Each input gets its own row with a small monochrome label;
+        // primary action sits at the bottom-right of the card with a
+        // matched Cancel.
+        VStack(alignment: .leading, spacing: 10) {
+            fieldRow(label: "Trigger") {
+                TextField(";short", text: $newTrigger)
                     .textFieldStyle(.plain)
-                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .padding(.horizontal, 8).padding(.vertical, 6)
                     .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
                     .font(.system(.callout, design: .monospaced))
-                    .frame(maxWidth: 110)
+            }
 
-                TextField("Display name", text: $newName)
+            fieldRow(label: "Name") {
+                TextField("What to call it", text: $newName)
                     .textFieldStyle(.plain)
-                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .padding(.horizontal, 8).padding(.vertical, 6)
                     .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
                     .font(.system(size: 12))
             }
 
-            Picker("", selection: $newKind) {
-                Text("Static text").tag(Snippet.Kind.staticText)
-                Text("AI (Gemma prompt)").tag(Snippet.Kind.ai)
+            fieldRow(label: "Type") {
+                Picker("", selection: $newKind) {
+                    Text("Static text").tag(Snippet.Kind.staticText)
+                    Text("AI prompt").tag(Snippet.Kind.ai)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
 
-            TextField(
-                newKind == .staticText ? "Literal text to insert…" : "Prompt for Gemma (prior text is appended)…",
-                text: $newValue,
-                axis: .vertical
-            )
-            .textFieldStyle(.plain)
-            .padding(.horizontal, 8).padding(.vertical, 5)
-            .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
-            .font(.system(size: 12))
-            .lineLimit(2...5)
+            fieldRow(label: newKind == .staticText ? "Text" : "Prompt") {
+                TextField(
+                    newKind == .staticText
+                        ? "Literal text to insert…"
+                        : "Prompt for the model. Prior text is appended.",
+                    text: $newValue,
+                    axis: .vertical
+                )
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 8).padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
+                .font(.system(size: 12))
+                .lineLimit(3...6)
+            }
 
-            HStack {
+            // Validation hint when the trigger is suspiciously short/long
+            // or duplicates an existing one. Inline so the user can fix
+            // before reaching for the Add button.
+            if let warning = triggerValidationMessage {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.orange)
+                    Text(warning)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.leading, 60)   // align with field column
+            }
+
+            HStack(spacing: 8) {
                 Spacer()
+                Button("Cancel") {
+                    newTrigger = ""
+                    newName = ""
+                    newValue = ""
+                    newKind = .staticText
+                    withAnimation(.spring(duration: 0.2)) { showAdd = false }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
                 Button {
                     store.addCustom(trigger: newTrigger, kind: newKind, value: newValue, displayName: newName)
                     newTrigger = ""
@@ -114,21 +210,19 @@ struct SnippetExpanderDetailView: View {
                     newKind = .staticText
                     withAnimation(.spring(duration: 0.2)) { showAdd = false }
                 } label: {
-                    Label("Add snippet", systemImage: "plus")
+                    Label("Add", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .disabled(newTrigger.trimmingCharacters(in: .whitespaces).isEmpty
-                          || newName.trimmingCharacters(in: .whitespaces).isEmpty
-                          || newValue.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(!isFormValid)
             }
         }
-        .padding(8)
+        .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 10)
                 .fill(.background.opacity(0.4))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(.separator.opacity(0.4), lineWidth: 0.5)
                 )
         )

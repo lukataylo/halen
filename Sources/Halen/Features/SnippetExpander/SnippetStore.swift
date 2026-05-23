@@ -46,11 +46,25 @@ final class SnippetStore {
 
     // MARK: - Mutations
 
+    /// Defensive bounds — kept in lock-step with the addForm's inline
+    /// validation in `SnippetExpanderDetailView`. Re-checked here so a
+    /// future caller path that bypasses the form (sync, JSON import,
+    /// programmatic API) can't drop a 50KB prompt into the store.
+    static let triggerMaxLength = 32        // matches view + room for sigil
+    static let triggerMinChars  = 2         // ";" + at least one letter
+    static let valueMaxLength   = 4_000
+
     func addCustom(trigger: String, kind: Snippet.Kind, value: String, displayName: String) {
         let normalisedTrigger = normalise(trigger)
         guard !normalisedTrigger.isEmpty,
+              normalisedTrigger.count >= Self.triggerMinChars,
+              normalisedTrigger.count <= Self.triggerMaxLength,
+              value.count <= Self.valueMaxLength,
               !displayName.trimmingCharacters(in: .whitespaces).isEmpty,
-              !value.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+              !value.trimmingCharacters(in: .whitespaces).isEmpty else {
+            Log.warn("SnippetStore: rejected invalid snippet — trigger.len=\(normalisedTrigger.count), value.len=\(value.count)")
+            return
+        }
         // Replace if a non-builtin trigger exists, else append. Builtins get
         // overridden via `update(_:)` which writes a custom entry that
         // `ensureBuiltins` then suppresses the builtin for.

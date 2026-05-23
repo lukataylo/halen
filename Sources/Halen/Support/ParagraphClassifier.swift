@@ -23,6 +23,12 @@ import Foundation
 @MainActor
 final class ParagraphClassifier {
     private let minLength: Int
+    /// Upper bound on paragraph size in characters. A multi-KB paste is
+    /// almost always something the user doesn't want classified (a code
+    /// block, a quoted reply, a chunk of pasted log) — and would blow
+    /// through the classifier model's 2K-token context anyway. Skipping
+    /// is cheaper and friendlier than truncating.
+    private let maxLength: Int
     private let settleDelay: TimeInterval
     private let maxCacheSize: Int
 
@@ -34,9 +40,11 @@ final class ParagraphClassifier {
     private var seenLRU: [String] = []
 
     init(minLength: Int = 60,
+         maxLength: Int = 4_000,
          settleDelay: TimeInterval = 1.0,
          maxCacheSize: Int = 256) {
         self.minLength = minLength
+        self.maxLength = maxLength
         self.settleDelay = settleDelay
         self.maxCacheSize = maxCacheSize
     }
@@ -73,7 +81,12 @@ final class ParagraphClassifier {
                      eligibility: @MainActor (String) -> Bool,
                      classify: @MainActor (String) async -> Void) async {
         let paragraph = paragraphAroundCaret(text: text, caretOffset: caretOffset)
-        guard paragraph.count > minLength, eligibility(paragraph) else { return }
+        guard paragraph.count > minLength, paragraph.count <= maxLength, eligibility(paragraph) else {
+            if paragraph.count > maxLength {
+                Log.debug("ParagraphClassifier: skipping \(paragraph.count)-char paragraph (> \(maxLength))")
+            }
+            return
+        }
 
         let hash = sha256Hex(paragraph)
         // LRU touch: if we've seen this hash, move it to the most-recent
