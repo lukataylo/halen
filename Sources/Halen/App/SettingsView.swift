@@ -558,7 +558,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text("The 4.98 GB Gemma 4 E4B GGUF runs locally as a fallback when Apple Intelligence isn't available. Downloads on demand into Application Support — never bundled in the .app unless you build with BUNDLE_MODEL=1.")
+                Text("The 4.72 GB Gemma 4 E4B GGUF runs locally as a fallback when Apple Intelligence isn't available. Downloads on demand into Application Support — never bundled in the .app unless you build with BUNDLE_MODEL=1.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -636,7 +636,7 @@ struct SettingsView: View {
         case .installing:
             return "Moving into Application Support."
         case .ready:
-            return "Gemma 4 E4B Q4_K_M, ~4.98 GB on disk."
+            return "Gemma 4 E4B IQ4_XS, ~4.72 GB on disk."
         case .failed(let message):
             return message
         }

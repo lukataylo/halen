@@ -231,7 +231,7 @@ Three backends ship (`InferenceBackends.makeAll()`):
 | Backend (`BackendKind`)  | Serves tiers      | Notes |
 |--------------------------|-------------------|-------|
 | `appleFoundationModels`  | small, medium     | Apple's on-device system model via the Foundation Models framework, macOS 26+. Zero install; prewarmed at launch. |
-| `bundledLlama`           | small, medium     | Gemma 4 E4B (`Q4_K_M` GGUF) on a bundled llama.cpp runtime. Model fetched on first use by `ModelDownloader`, or baked into the `.app` with `BUNDLE_MODEL=1`. |
+| `bundledLlama`           | small, medium     | Gemma 4 E4B (`IQ4_XS` GGUF) on a bundled llama.cpp runtime. Model fetched on first use by `ModelDownloader`, or baked into the `.app` with `BUNDLE_MODEL=1`. |
 | `ollama`                 | small, medium, large | Local Ollama daemon (`OllamaBackend` → `OllamaInferenceClient`). The only backend serving `.large`. Endpoint configurable via `OllamaSettings`. |
 
 The default preference order is Apple FM → bundled llama.cpp → Ollama; the
