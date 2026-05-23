@@ -1,9 +1,10 @@
 import Foundation
 import Observation
 
-/// A single clarity-detection rule. `prompt` is the description fed to Gemma
-/// in a multi-label classification task ("which of these issues does the text
-/// have?"). Built-in rules can be toggled but not deleted; custom rules both.
+/// A single clarity-detection rule. `prompt` is the description fed to the
+/// classifier in a multi-label classification task ("which of these issues
+/// does the text have?"). Built-in rules can be toggled but not deleted;
+/// custom rules both.
 struct ClarityRule: Codable, Identifiable, Equatable, Sendable {
     let id: String
     let label: String
@@ -14,39 +15,39 @@ struct ClarityRule: Codable, Identifiable, Equatable, Sendable {
 
 /// JSON-backed, `@Observable` store of `ClarityRule`s. Seeded with sensible
 /// built-ins on first launch; user-added rules persist alongside them.
-/// Modeled directly on `SentimentRulesStore`.
+/// Modeled directly on `SentimentRulesStore`; load/save/slug plumbing lives
+/// in `JSONRuleStoreSupport`.
 @Observable
 @MainActor
 final class ClarityRulesStore {
     private(set) var rules: [ClarityRule] = []
 
     private let fileURL: URL
+    private static let storeName = "ClarityRulesStore"
 
     init(fileURL: URL) {
         self.fileURL = fileURL
-        load()
+        if let loaded = JSONRuleStoreSupport.load(
+            ClarityRule.self, from: fileURL, storeName: Self.storeName) {
+            rules = loaded
+        }
         ensureDefaults()
     }
 
     static let builtins: [ClarityRule] = [
-        .init(id: "passive_voice",
-              label: "Passive voice",
+        .init(id: "passive_voice", label: "Passive voice",
               prompt: "uses passive voice where active voice would be clearer and more direct",
               enabled: true, builtin: true),
-        .init(id: "run_on",
-              label: "Run-on sentences",
+        .init(id: "run_on", label: "Run-on sentences",
               prompt: "has run-on or overly long sentences that should be split for readability",
               enabled: true, builtin: true),
-        .init(id: "dangling_modifier",
-              label: "Dangling modifiers",
+        .init(id: "dangling_modifier", label: "Dangling modifiers",
               prompt: "has a dangling or misplaced modifier that attaches to the wrong subject",
               enabled: true, builtin: true),
-        .init(id: "vague_pronoun",
-              label: "Vague pronouns",
+        .init(id: "vague_pronoun", label: "Vague pronouns",
               prompt: "uses a vague pronoun (\"this\", \"it\", \"that\") with no clear referent",
               enabled: true, builtin: true),
-        .init(id: "hedging",
-              label: "Hedging language",
+        .init(id: "hedging", label: "Hedging language",
               prompt: "is weighed down with hedging — \"just\", \"sort of\", \"I think maybe\" — that weakens the point",
               enabled: false, builtin: true),
     ]
@@ -63,15 +64,12 @@ final class ClarityRulesStore {
         let trimmedLabel = label.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedLabel.isEmpty, !trimmedPrompt.isEmpty else { return }
-        let slug = trimmedLabel
-            .lowercased()
-            .replacingOccurrences(of: " ", with: "_")
-            .filter { $0.isLetter || $0.isNumber || $0 == "_" }
-        let id = "\(slug.isEmpty ? "rule" : slug)_\(UUID().uuidString.prefix(6).lowercased())"
-        rules.append(ClarityRule(id: id, label: trimmedLabel, prompt: trimmedPrompt,
-                                 enabled: true, builtin: false))
+        rules.append(ClarityRule(
+            id: JSONRuleStoreSupport.slugId(from: trimmedLabel),
+            label: trimmedLabel, prompt: trimmedPrompt,
+            enabled: true, builtin: false))
         save()
-        Log.info("ClarityRulesStore: added custom rule \"\(trimmedLabel)\"")
+        Log.info("\(Self.storeName): added custom rule \"\(trimmedLabel)\"")
     }
 
     func remove(_ id: String) {
@@ -91,22 +89,6 @@ final class ClarityRulesStore {
 
     // MARK: - Persistence
 
-    private struct Payload: Codable {
-        var version: Int
-        var rules: [ClarityRule]
-    }
-
-    private func load() {
-        do {
-            let data = try Data(contentsOf: fileURL)
-            let payload = try JSONDecoder().decode(Payload.self, from: data)
-            rules = payload.rules
-            Log.info("ClarityRulesStore: loaded \(rules.count) rules")
-        } catch {
-            Log.debug("ClarityRulesStore: no existing file")
-        }
-    }
-
     /// Add any built-in rules the user doesn't already have, preserving their
     /// toggles for built-ins they've already seen.
     private func ensureDefaults() {
@@ -120,16 +102,6 @@ final class ClarityRulesStore {
     }
 
     private func save() {
-        do {
-            let payload = Payload(version: 1, rules: rules)
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(payload)
-            try FileManager.default.createDirectory(
-                at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: fileURL, options: .atomic)
-        } catch {
-            Log.error("ClarityRulesStore save failed: \(error.localizedDescription)")
-        }
+        JSONRuleStoreSupport.save(rules, to: fileURL, storeName: Self.storeName)
     }
 }

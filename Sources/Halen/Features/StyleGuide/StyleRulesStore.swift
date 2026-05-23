@@ -27,16 +27,21 @@ struct StyleMatch: Identifiable {
 
 /// JSON-backed, `@Observable` store of personal-style rules. A pure rule
 /// engine — no inference, so scanning is instant and 100% deterministic.
+/// Load/save/slug plumbing lives in `JSONRuleStoreSupport`.
 @Observable
 @MainActor
 final class StyleRulesStore {
     private(set) var rules: [StyleRule] = []
 
     private let fileURL: URL
+    private static let storeName = "StyleRulesStore"
 
     init(fileURL: URL) {
         self.fileURL = fileURL
-        load()
+        if let loaded = JSONRuleStoreSupport.load(
+            StyleRule.self, from: fileURL, storeName: Self.storeName) {
+            rules = loaded
+        }
         ensureDefaults()
     }
 
@@ -59,19 +64,13 @@ final class StyleRulesStore {
     func addCustomRule(banned: String, preferred: String) {
         let trimmedBanned = banned.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedBanned.isEmpty else { return }
-        let slug = trimmedBanned
-            .lowercased()
-            .replacingOccurrences(of: " ", with: "_")
-            .filter { $0.isLetter || $0.isNumber || $0 == "_" }
-        let id = "\(slug.isEmpty ? "rule" : slug)_\(UUID().uuidString.prefix(6).lowercased())"
         rules.append(StyleRule(
-            id: id,
+            id: JSONRuleStoreSupport.slugId(from: trimmedBanned),
             banned: trimmedBanned,
             preferred: preferred.trimmingCharacters(in: .whitespacesAndNewlines),
-            enabled: true,
-            builtin: false))
+            enabled: true, builtin: false))
         save()
-        Log.info("StyleRulesStore: added custom rule \"\(trimmedBanned)\"")
+        Log.info("\(Self.storeName): added custom rule \"\(trimmedBanned)\"")
     }
 
     func remove(_ id: String) {
@@ -128,22 +127,6 @@ final class StyleRulesStore {
 
     // MARK: - Persistence
 
-    private struct Payload: Codable {
-        var version: Int
-        var rules: [StyleRule]
-    }
-
-    private func load() {
-        do {
-            let data = try Data(contentsOf: fileURL)
-            let payload = try JSONDecoder().decode(Payload.self, from: data)
-            rules = payload.rules
-            Log.info("StyleRulesStore: loaded \(rules.count) rules")
-        } catch {
-            Log.debug("StyleRulesStore: no existing file")
-        }
-    }
-
     private func ensureDefaults() {
         let existing = Set(rules.map(\.id))
         var changed = false
@@ -155,16 +138,6 @@ final class StyleRulesStore {
     }
 
     private func save() {
-        do {
-            let payload = Payload(version: 1, rules: rules)
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(payload)
-            try FileManager.default.createDirectory(
-                at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: fileURL, options: .atomic)
-        } catch {
-            Log.error("StyleRulesStore save failed: \(error.localizedDescription)")
-        }
+        JSONRuleStoreSupport.save(rules, to: fileURL, storeName: Self.storeName)
     }
 }

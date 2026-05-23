@@ -229,7 +229,17 @@ final class WebSocketBridge {
     }
 
     private func send(_ msg: RPCMessage, to targets: [Client]) {
-        guard let data = try? JSONEncoder().encode(msg) else { return }
+        let data: Data
+        do {
+            data = try JSONEncoder().encode(msg)
+        } catch {
+            // Should be unreachable for our internal `RPCMessage` (all
+            // Codable, all well-typed). If it ever happens we'd otherwise
+            // drop the message into the void with no diagnostic — explicit
+            // log so the cause is recoverable.
+            Log.error("WebSocketBridge: encode failed for method=\(msg.method ?? "?") — \(error.localizedDescription)")
+            return
+        }
         let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
         let context = NWConnection.ContentContext(identifier: "halen.ws", metadata: [metadata])
         for client in targets {
