@@ -72,7 +72,15 @@ actor LlamaContext {
     /// One-shot generation: tokenize `prompt`, prefill, then sample until EOG,
     /// `maxTokens`, a `stop` string, or the context window fills. Clears the KV
     /// cache afterward so successive calls don't bleed into each other.
-    func generate(prompt: String, maxTokens: Int, temperature: Double, stop: [String]) -> String {
+    ///
+    /// `onToken` is invoked after every flushed piece with the **cumulative**
+    /// output so far — the hook the streaming backend wires to its
+    /// `AsyncThrowingStream`. It defaults to a no-op, so non-streaming callers
+    /// are unaffected. The final (possibly stop-truncated) text is also the
+    /// return value, so a streaming caller can treat it as the authoritative
+    /// last snapshot.
+    func generate(prompt: String, maxTokens: Int, temperature: Double, stop: [String],
+                  onToken: @Sendable (String) -> Void = { _ in }) -> String {
         defer { llama_memory_clear(llama_get_memory(context), true) }
 
         var tokens = tokenize(text: prompt, addBOS: true)
@@ -107,6 +115,10 @@ actor LlamaContext {
         var generated: Int32 = 0
 
         while generated < maxNew {
+            // Streaming consumers cancel the enclosing Task when they stop
+            // reading; bail promptly rather than generating tokens nobody wants.
+            if Task.isCancelled { break }
+
             let newToken = llama_sampler_sample(sampler, context, batch.n_tokens - 1)
             if llama_vocab_is_eog(vocab, newToken) { break }
 
@@ -121,8 +133,10 @@ actor LlamaContext {
                     .compactMap({ output.range(of: $0)?.lowerBound })
                     .min() {
                     output = String(output[..<cut])
+                    onToken(output)
                     break
                 }
+                onToken(output)
             }
 
             llama_batch_clear(&batch)

@@ -41,4 +41,15 @@ struct InferenceResponse: Sendable {
 
 protocol InferenceClient: Sendable {
     func complete(_ request: InferenceRequest) async throws -> InferenceResponse
+
+    /// Streaming variant of `complete`. Each yielded value is the **cumulative**
+    /// completion text generated so far — not a delta. Yielding snapshots (vs
+    /// deltas) lets a consumer throttle freely and always render the latest
+    /// value, and lets the producer correct the tail (e.g. a stop-sequence
+    /// truncation) in a later snapshot.
+    ///
+    /// The stream finishes when generation ends, and throws if generation
+    /// fails. Backends with no native token streaming emit the whole
+    /// completion as a single final snapshot (see `InferenceBackend`'s default).
+    func stream(_ request: InferenceRequest) -> AsyncThrowingStream<String, Error>
 }

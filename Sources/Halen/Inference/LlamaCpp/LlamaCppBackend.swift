@@ -88,6 +88,51 @@ actor LlamaCppBackend: InferenceBackend {
         return InferenceResponse(text: text, modelId: "bundled/gemma-4-e4b", latencyMs: latency)
     }
 
+    /// Token-streaming variant of `complete`. `nonisolated` so it satisfies the
+    /// non-`async` protocol requirement from an `actor` — the real work hops
+    /// onto the actor inside the spawned `Task`.
+    nonisolated func stream(_ request: InferenceRequest) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task { await self.runStreaming(request, into: continuation) }
+            // Consumer stopped reading (panel closed, plugin cancelled) — cancel
+            // the generation Task; `LlamaContext.generate` checks `Task.isCancelled`.
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private func runStreaming(
+        _ request: InferenceRequest,
+        into continuation: AsyncThrowingStream<String, Error>.Continuation
+    ) async {
+        let context: LlamaContext
+        do {
+            context = try ensureContext()
+        } catch {
+            continuation.finish(throwing: error)
+            return
+        }
+        defer { scheduleIdleUnload() }
+
+        let prompt = "<start_of_turn>user\n\(request.prompt)<end_of_turn>\n<start_of_turn>model\n"
+        let raw = await context.generate(
+            prompt: prompt,
+            maxTokens: request.maxTokens,
+            temperature: request.temperature,
+            stop: request.stop + ["<end_of_turn>", "<start_of_turn>"],
+            onToken: { snapshot in
+                continuation.yield(snapshot.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+        )
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            continuation.finish(throwing: LlamaBackendError.emptyResponse)
+            return
+        }
+        // Re-emit the trimmed, authoritative final snapshot, then close.
+        continuation.yield(text)
+        continuation.finish()
+    }
+
     /// Loads the bundled model on first use and keeps it warm. Loading is slow
     /// (seconds, ~1-2GB RAM) so it's deferred until the first request.
     private func ensureContext() throws -> LlamaContext {

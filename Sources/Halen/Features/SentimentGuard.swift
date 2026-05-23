@@ -41,6 +41,13 @@ final class SentimentGuard: HalenPlugin {
     static var concisenessEnabled: Bool {
         UserDefaults.standard.object(forKey: concisenessDefaultsKey) as? Bool ?? true
     }
+
+    /// Popup footprint: compact while it only shows the warning + actions;
+    /// taller once the user asks for a rephrase and the streaming preview pane
+    /// appears. SentimentGuard uses these to size the host `NSPanel`; the
+    /// SwiftUI `FindingsPopover` inside grows to fill the available height.
+    static let popupIdleSize = NSSize(width: 360, height: 170)
+    static let popupRephraseSize = NSSize(width: 360, height: 330)
     /// Hashes the user explicitly approved as fine. Persisted.
     private var approvedHashes: Set<String> = []
     /// Number of times we surfaced a popover this session (any rule). In-memory only.
@@ -49,6 +56,14 @@ final class SentimentGuard: HalenPlugin {
     private var lastCaretRect: CGRect?
     private var activePanel: NSPanel?
     private var dismissTask: Task<Void, Never>?
+
+    /// Live state for the in-popup streaming rephrase. Non-nil only while a
+    /// popup is on screen; `FindingsPopover` observes it via `@ObservedObject`.
+    private var rephraseState: StreamingRewriteState?
+    private var rephraseTask: Task<Void, Never>?
+    /// Anchor used to place the current popup — kept so the panel can be
+    /// re-framed (and re-clamped to screen) when it grows for the rephrase pane.
+    private var activeAnchor: CaretAnchoredPanel.Anchor?
 
     init(services: HalenServices) {
         self.services = services
@@ -97,6 +112,9 @@ final class SentimentGuard: HalenPlugin {
         task = nil
         classifier.cancel()
         dismissTask?.cancel()
+        rephraseTask?.cancel()
+        rephraseTask = nil
+        rephraseState = nil
         activePanel?.orderOut(nil)
         activePanel = nil
     }
@@ -219,14 +237,17 @@ final class SentimentGuard: HalenPlugin {
             icon = "scissors"
         }
 
-        // Height grows with the findings list, capped so it never dominates.
-        let size = CGSize(width: 360, height: CGFloat(min(360, 170 + findings.count * 42)))
+        // Start at the idle size; `beginRephrase` grows the panel to
+        // `popupRephraseSize` once the user taps the streaming action.
         let panel = HalenFloatingPanel.make(
-            size: NSSize(width: size.width, height: size.height),
+            size: Self.popupIdleSize,
             level: .floating,
             interactive: true,
             shadow: true
         )
+
+        let state = StreamingRewriteState()
+        rephraseState = state
 
         let view = FindingsPopover(
             icon: icon,
@@ -235,14 +256,19 @@ final class SentimentGuard: HalenPlugin {
             contextPreview: text,
             findings: findings,
             primaryActionLabel: "Rephrase via Gemma 4",
+            // Rephrase no longer closes the popup — it streams the rewrite
+            // into the preview pane in place.
             onPrimaryAction: { [weak self] in
-                self?.rephrase(originalText: text)
-                self?.closePanel()
+                self?.beginRephrase(originalText: text)
             },
             approveLabel: "Looks fine",
             onApprove: { [weak self] in
                 self?.approve(hash: hash)
                 self?.closePanel()
+            },
+            streaming: state,
+            onCopy: { [weak self] in
+                self?.copyRephrase()
             },
             onDismiss: { [weak self] in
                 self?.recordDismiss(appBundleId: appBundleId)
@@ -253,9 +279,15 @@ final class SentimentGuard: HalenPlugin {
 
         // Use the snapshot taken at classification time; only fall back to a
         // fresh resolve if we never got one (shouldn't happen in practice).
+        // Cache it on `activeAnchor` so `resizePopup` can re-clamp the frame
+        // to the same screen when the panel grows for the streaming pane.
         let resolved = anchor ?? CaretAnchoredPanel.resolveAnchor(
             caretObserver: caretObserver, cachedCaretRect: lastCaretRect)
-        panel.setFrame(CaretAnchoredPanel.frame(for: resolved, size: size), display: true)
+        activeAnchor = resolved
+        panel.setFrame(CaretAnchoredPanel.frame(for: resolved,
+                                                size: CGSize(width: Self.popupIdleSize.width,
+                                                             height: Self.popupIdleSize.height)),
+                       display: true)
         panel.orderFrontRegardless()
 
         activePanel = panel
@@ -276,6 +308,10 @@ final class SentimentGuard: HalenPlugin {
         activePanel = nil
         dismissTask?.cancel()
         dismissTask = nil
+        rephraseTask?.cancel()
+        rephraseTask = nil
+        rephraseState = nil
+        activeAnchor = nil
     }
 
     private func approve(hash: String) {
@@ -291,24 +327,67 @@ final class SentimentGuard: HalenPlugin {
         Log.info("SentimentGuard: muted in \(appBundleId) for \(Int(Self.dismissCooldown / 60)) min after dismiss")
     }
 
-    private func rephrase(originalText: String) {
-        Task { @MainActor [services] in
-            let prompt = """
-            Rewrite the following message in a calmer, more constructive tone while keeping the original intent and length. Output only the rewritten text — no quotes, no preamble.
+    /// Stream a calmer rewrite of `originalText` into the popup's preview pane.
+    /// The popup grows to fit the pane and tokens appear as the local model
+    /// produces them; the result lands on the clipboard when the user taps Copy.
+    private func beginRephrase(originalText: String) {
+        guard let state = rephraseState else { return }
+        // The user is engaged now — stop the 12 s auto-dismiss.
+        dismissTask?.cancel()
+        dismissTask = nil
+        rephraseTask?.cancel()
 
-            Message: \"\"\"\(originalText)\"\"\"
-            """
-            let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 400, temperature: 0.5, taskKind: .generation)
+        state.rewrite = ""
+        state.phase = .streaming
+        resizePopup(to: Self.popupRephraseSize)
+
+        let prompt = """
+        Rewrite the following message in a calmer, more constructive tone while keeping the original intent and length. Output only the rewritten text — no quotes, no preamble.
+
+        Message: \"\"\"\(originalText)\"\"\"
+        """
+        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 400,
+                                       temperature: 0.5, taskKind: .generation)
+
+        rephraseTask = Task { @MainActor [services, weak self] in
             do {
-                let response = try await services.inference.complete(request)
-                let rewritten = response.text.unwrappedModelText
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(rewritten, forType: .string)
-                Log.info("SentimentGuard: rephrase copied to clipboard (\(response.latencyMs)ms)")
+                for try await snapshot in services.inference.stream(request) {
+                    guard !Task.isCancelled, let state = self?.rephraseState else { return }
+                    state.rewrite = snapshot
+                }
+                guard let state = self?.rephraseState else { return }
+                // Intermediate snapshots were raw; clean wrapper quotes off the
+                // final text.
+                let final = state.rewrite.unwrappedModelText
+                state.rewrite = final
+                state.phase = final.isEmpty ? .failed : .done
+                Log.info("SentimentGuard: rephrase streamed complete (\(final.count) chars)")
+            } catch is CancellationError {
+                // Popup closed mid-stream — nothing to surface.
             } catch {
+                self?.rephraseState?.phase = .failed
                 Log.warn("SentimentGuard: rephrase failed: \(error)")
             }
         }
+    }
+
+    /// Copy the streamed rewrite to the clipboard and close the popup.
+    private func copyRephrase() {
+        guard let rewrite = rephraseState?.rewrite, !rewrite.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(rewrite, forType: .string)
+        Log.info("SentimentGuard: rephrase copied to clipboard")
+        closePanel()
+    }
+
+    /// Re-frame the live panel to `size`, re-clamped to the screen around the
+    /// anchor resolved when the popup opened.
+    private func resizePopup(to size: NSSize) {
+        guard let panel = activePanel else { return }
+        let frame = CaretAnchoredPanel.frame(
+            for: activeAnchor,
+            size: CGSize(width: size.width, height: size.height))
+        panel.setFrame(frame, display: true, animate: true)
     }
 
     // MARK: - Persistence
@@ -331,5 +410,7 @@ final class SentimentGuard: HalenPlugin {
     }
 }
 
-// The popover UI now lives in the shared `FindingsPopover` (Features/), with
-// SentimentGuard supplying the single-finding configuration in `showPopup`.
+
+// The popover UI now lives in the shared `FindingsPopover` (Features/),
+// with SentimentGuard supplying the single-finding configuration in `showPopup`
+// and `StreamingRewriteState` driving the live rephrase pane.
