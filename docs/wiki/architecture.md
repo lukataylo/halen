@@ -17,7 +17,8 @@ Sources/Halen/
   Overlay/           # Caret-anchored NSWindow shell
   Plugins/           # HalenPlugin protocol, HalenServices DI container, registry,
                      #   External/ — out-of-process plugin host + WebSocket bridge
-  Features/          # The seven first-party plugins
+  Features/          # The ten in-process first-party plugins
+                     #   (out-of-process plugins live in /plugins at the repo root)
   Support/           # Logging, string diff, hashing, paragraph classifier
 ```
 
@@ -37,11 +38,13 @@ Sources/Halen/
        │  └─┬─────────────┬─────────────┬─────────────┬────────────┘  │
        │    │             │             │             │               │
        │    ▼             ▼             ▼             ▼               │
-       │  AskHalen  TypoFixer  SentimentGuard  VoiceDictation         │
-       │  SnippetExpander  BurnoutCopilot  MeetingPrep                │
-       │                       │           │                          │
-       │                       │           │ async calls              │
-       │                       ▼           ▼                          │
+       │  AskHalen  TypoFixer  SentimentGuard  SnippetExpander        │
+       │  ClarityChecker  VoiceDictation  Autocomplete  StyleGuide    │
+       │  EmailReply  ToneProfiles                                    │
+       │                       │            BurnoutCopilot ─┐         │
+       │                       │            MeetingPrep    ─┤ stdio   │
+       │                       │ async calls               ─┘ JSON-RPC│
+       │                       ▼                                      │
        │  ┌────────────────────────────────────────────────────────┐  │
        │  │              RouterInferenceClient                     │  │
        │  │   routes per request, falls through on failure:        │  │
@@ -86,14 +89,20 @@ protocol HalenPlugin: AnyObject {
 
 Categories: `writing`, `voice`, `scheduling`, `focus`, `productivity`.
 
-Today the first-party plugins are Swift classes wired into
-`AppCoordinator.startObservers()`. Seven of them ship: `AskHalen`,
-`TypoFixer`, `SentimentGuard`, `VoiceDictation`, `SnippetExpander`,
-`BurnoutCopilot`, `MeetingPrep`. The `PluginRegistry` (`@Observable`) persists
-each plugin's enabled state in `UserDefaults` under the key
-`plugin.<id>.enabled` and calls `start()` / `stop()` on toggle. Out-of-process
-plugins discovered under `~/Library/Application Support/Halen/Plugins/` are
-registered alongside them via `ExternalPluginAdapter`.
+Ten in-process plugins ship as Swift classes wired into
+`AppCoordinator.startObservers()`: `AskHalen`, `TypoFixer`,
+`SentimentGuard`, `SnippetExpander`, `ClarityChecker`, `VoiceDictation`,
+`Autocomplete`, `StyleGuide`, `EmailReply`, `ToneProfiles`. The
+`PluginRegistry` (`@Observable`) persists each plugin's enabled state in
+`UserDefaults` under the key `plugin.<id>.enabled` and calls `start()` /
+`stop()` on toggle. Default-off plugins (Voice, Autocomplete, StyleGuide,
+EmailReply, ToneProfiles) opt in via onboarding.
+
+Out-of-process plugins — `BurnoutCopilot` and `MeetingPrep` ship in this
+repo under `plugins/`; users can also drop their own into
+`~/Library/Application Support/Halen/Plugins/` — are registered alongside
+the in-process set via `ExternalPluginAdapter`. They speak the same
+`HalenPlugin` event surface over NDJSON-on-stdio.
 
 ## The DI container: `HalenServices`
 
@@ -270,9 +279,9 @@ appear without overwriting user customisations.
    Accessibility.
 2. Once granted, starts `CaretObserver`, the overlay window, and the plugin
    registry.
-3. Registers all seven first-party plugins with their stored enabled state,
-   discovers any out-of-process plugins, and starts the WebSocket bridge if
-   it's enabled in Settings.
+3. Registers all ten in-process first-party plugins with their stored enabled
+   state (or their default-on/off if never set), discovers any out-of-process
+   plugins, and starts the WebSocket bridge if it's enabled in Settings.
 4. On quit, runs the async shutdown ladder for out-of-process plugins, then
    calls `plugin.stop()` for everything so hotkeys, AX observers, and
    floating panels unwind cleanly.

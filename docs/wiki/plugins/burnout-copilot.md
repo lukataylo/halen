@@ -1,7 +1,14 @@
 # Burnout Copilot
 
 > Plugin id: `com.halen.burnout-copilot` · Category: Focus · Code:
-> [`Sources/Halen/Features/BurnoutCopilot/`](../../../Sources/Halen/Features/BurnoutCopilot/)
+> [`plugins/burnout-copilot/`](../../../plugins/burnout-copilot/)
+>
+> **Runs out-of-process** as a JSON-RPC plugin over stdio (extracted in
+> milestone M2.4). The menubar app brokers `text.pause` / `app.focused` /
+> `calendar.*` events to it and proxies the UI prompts it asks for. Same
+> `HalenPlugin` event surface in-process plugins use — just over a
+> socket. See [plugins/README.md](../../../plugins/README.md) for the
+> protocol.
 
 Three signals, 2-of-3 trip rule, one-button "Take 10?" popup. The signals
 come from the event bus (focus changes), local Gemma 4 (tone), and

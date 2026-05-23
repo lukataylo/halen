@@ -14,17 +14,22 @@ Halen is a menubar app that watches the text near your cursor and runs a set of 
 
 ## What's in the box
 
-Seven plugins ship with Halen out of the box. Each one is a small Swift module conforming to `HalenPlugin`; the marketplace dropdown lets you toggle them on/off and dive into per-plugin settings.
+Ten plugins ship with Halen out of the box. Each one is a small Swift module conforming to `HalenPlugin`; the marketplace dropdown lets you toggle them on/off and dive into per-plugin settings. A few default to off — onboarding walks you through what to enable.
 
-| Plugin | Category | What it does |
-|---|---|---|
-| **Ask Halen** | Productivity | Press ⌃H anywhere. A floating palette opens with your focused app, selected text, and recent clipboard already in context — ask a one-shot question and the answer is inserted at your cursor. |
-| **Typo Fixer** | Writing | Replaces your known typos inline as you type. Seeded with a personal dictionary of 32 frequent slips; learns new ones automatically from your edits. Backspace + retype to "undo" a bad correction — it demotes the entry forever. |
-| **Sentiment Guard** | Writing | When you finish a sentence in any text field, Gemma 4 classifies the tone against a set of rules you control (5 built-in + add your own). Hostile or irritated? Halen shows a popover asking whether to send anyway or have Gemma rephrase to your clipboard. |
-| **Voice Dictation** | Voice | Press ⌥⌘H anywhere. A live waveform pill follows your cursor while you speak. Apple's on-device speech recognition transcribes locally; the text lands at the caret on stop. |
-| **Snippet Expander** | Productivity | Type `;sig` or `;today` or `;summary` followed by a space — Halen swaps it for static text, computed values, or a Gemma-generated rewrite of whatever you wrote above. Add your own with custom Gemma prompts. Also: select text anywhere and press ⌃⌥R to rewrite just that selection in place. |
-| **Burnout Copilot** | Focus | Watches three signals — time in distraction apps, recent tone trend, calendar density — and pops a *"Take 10?"* suggestion when 2 of 3 trip. One click creates a calendar break and triggers your Focus Shortcut. |
-| **Meeting Prep** | Scheduling | 15 minutes before your next event, Gemma 4 reads the calendar entry and drops a 5-bullet briefing on your clipboard. A notification fires; the briefing also lives in the plugin's recent-briefings list. |
+| Plugin | Category | Default | What it does |
+|---|---|---|---|
+| **Ask Halen** | Productivity | On | Press ⌃H anywhere. A floating palette opens with your focused app, selected text, and recent clipboard already in context — ask a one-shot question and the answer is inserted at your cursor. |
+| **Typo Fixer** | Writing | On | Replaces your known typos inline as you type. Seeded with a personal dictionary of 32 frequent slips; learns new ones automatically from your edits. Backspace + retype to "undo" a bad correction — it demotes the entry forever. |
+| **Sentiment Guard** | Writing | On | When you finish a sentence in any text field, a local classifier judges the tone against rules you control (5 built-in + add your own). Hostile or irritated? Halen shows a popover asking whether to send anyway or have Gemma 4 rephrase it. |
+| **Snippet Expander** | Productivity | On | Type `;sig` or `;today` or `;summary` followed by a space — Halen swaps it for static text, computed values, or a Gemma-generated rewrite of whatever you wrote above. Add your own with custom Gemma prompts. Also: select text anywhere and press ⌃⌥R to rewrite just that selection in place. |
+| **Clarity Checker** | Writing | On | Flags passive voice, run-on sentences, and vague phrasing as you finish each paragraph. One-tap rewrite via Gemma 4. |
+| **Voice Dictation** | Voice | Off | Press ⌥⌘H anywhere. A live waveform pill follows your cursor while you speak. Apple's on-device speech recognition transcribes locally; the text lands at the caret on stop. |
+| **Inline Autocomplete** | Writing | Off | Suggests the next few words as ghost text after each pause. Tab to accept. Off by default because it's a continuous interruption — opt in if you want it. |
+| **Personal Style Guide** | Writing | Off | Your own banned-words → preferred-words list, scanned per paragraph. Catches the words *you* don't want to use, with one-tap replacement. |
+| **Email Reply** | Productivity | Off | Press ⌃⌥E while reading an email to draft a reply with Gemma 4, in the tone you pick. |
+| **Tone Profiles** | Writing | Off | Tell Halen which apps you write formally in (Mail, Outlook) and which you don't (Slack, iMessage). Other writing plugins use this hint to calibrate their suggestions. |
+
+External plugins live under `~/Library/Application Support/Halen/Plugins/` and communicate via JSON-RPC over stdio. **Burnout Copilot** (focus suggestions from app usage + calendar density + tone trend) and **Meeting Prep** (Gemma-written briefing 15 min before each event) ship in this repo under [`plugins/`](plugins/) and show up in the marketplace alongside the bundled set once installed.
 
 ## How it works
 
@@ -36,17 +41,23 @@ Seven plugins ship with Halen out of the box. Each one is a small Swift module c
 │  (AX events)     │                                               │
 │                  ▼                                               │
 │              EventBus ──► text.pause, caret.moved, ...           │
-│                  │                                               │
-│        ┌─────┬───┴──┬──────┬──────┬──────┬──────┐                │
-│        ▼     ▼      ▼      ▼      ▼      ▼      ▼                │
-│      Ask   Typo  Sentiment Snippet Voice  Burnout Meeting        │
-│      Halen  Fixer  Guard   Expand. Dict.  Copilot Prep           │
-│        │     │      │      │      │       │      │               │
-│        └──┬──┴──────┴──────┴──────┴───────┴──────┘               │
-│           ▼                                                      │
-│   RouterInferenceClient ──┬──► Apple Foundation Models           │
-│   (picks per request,     ├──► bundled Gemma 4 on llama.cpp      │
-│    falls through on fail) └──► Ollama on localhost:11434         │
+│                  │                                                │
+│   ┌──────┬──────┬┴─────┬──────┬──────┬──────┬──────┬─────┬─────┐ │
+│   ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼     ▼     ▼ │
+│  Ask   Typo  Sentim. Snippet Clarity Voice  Auto-  Style Email Tone
+│  Halen Fixer  Guard  Expand. Checker Dict.  compl. Guide Reply Prof.│
+│   │     │      │      │      │      │      │      │     │     │  │
+│   └──┬──┴──────┴──────┴──────┴──────┴──────┴──────┴─────┴─────┘  │
+│      │                                                            │
+│      │   External plugins (JSON-RPC over stdio)                   │
+│      │   ┌─ Burnout Copilot ─┐                                    │
+│      ├──►│ Meeting Prep      │  ~/Library/.../Halen/Plugins/      │
+│      │   └─ (your own…)    ──┘                                    │
+│      ▼                                                            │
+│   RouterInferenceClient ──┬──► Apple Foundation Models            │
+│   (picks per request,     ├──► bundled Gemma 4 on llama.cpp       │
+│    falls through on fail) ├──► Qwen 2.5 0.5B for classification   │
+│                           └──► Ollama on localhost:11434          │
 └──────────────────────────────────────────────────────────────────┘
 ```
 

@@ -1,7 +1,14 @@
 # Meeting Prep
 
 > Plugin id: `com.halen.meeting-prep` · Category: Scheduling · Code:
-> [`Sources/Halen/Features/MeetingPrep/`](../../../Sources/Halen/Features/MeetingPrep/)
+> [`plugins/meeting-prep/`](../../../plugins/meeting-prep/)
+>
+> **Runs out-of-process** as a JSON-RPC plugin over stdio (extracted in
+> milestone M2.3 — the first external plugin in the system). The menubar
+> app proxies calendar reads and clipboard / notification writes to it
+> via host methods. Same `HalenPlugin` event surface in-process plugins
+> use, just over a socket. See [plugins/README.md](../../../plugins/README.md)
+> for the protocol.
 
 Fifteen minutes before each upcoming calendar event, Gemma 4 E4B writes a
 5-bullet briefing, drops it on the clipboard, and posts a notification.
