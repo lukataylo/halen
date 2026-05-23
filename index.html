@@ -490,6 +490,7 @@ img { display: block; max-width: 100%; }
 .snip .key { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--accent); display: inline-flex; align-items: center; gap: 6px; }
 .snip .key.tx::before { content: "✓"; color: #1F9E5A; font-weight: 700; }
 .snip .key.sg::before { content: "!"; color: #C7352D; font-weight: 700; }
+.snip .key.sty::before { content: "✎"; color: #8A4BB8; font-weight: 700; }
 .snip .ms { font-family: var(--mono); font-size: 10.5px; color: var(--muted); letter-spacing: 0.04em; }
 .snip .label { font-size: 13.5px; font-weight: 500; color: var(--ink); margin-bottom: 1px; }
 .snip .desc { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
@@ -1318,6 +1319,11 @@ img { display: block; max-width: 100%; }
 </div>
 
 <!-- ============ MANIFESTO ============ -->
+<!-- 14-line cut. Each <p class="st"> renders as one beat on screen;
+     stanzas group beats that share a rhythm (the "Your drafts" triad,
+     the four-verb capability stanza, the three "No"s, the closing
+     punchline). Swarm-animated keywords map onto data-swarm types
+     defined in the interactions JS: cloud, subs, apps, models, caret. -->
 <section class="story">
 
   <p class="st">Writing tools moved to the <span class="kw" data-swarm="cloud">cloud</span> while you weren&rsquo;t looking.</p>
@@ -1328,18 +1334,13 @@ img { display: block; max-width: 100%; }
     <p class="st">Behind someone else&rsquo;s <span class="kw" data-swarm="subs">subscription</span>.</p>
   </div>
 
-  <p class="st">Your Mac doesn&rsquo;t need any of that anymore.</p>
-
-  <p class="st"><span class="kw" data-swarm="apps">Apple Silicon</span> runs real <span class="kw" data-swarm="models">models</span> locally. Fast enough to keep up with you.</p>
+  <p class="st">Your Mac doesn&rsquo;t need any of that anymore. <span class="kw" data-swarm="apps">Apple Silicon</span> runs real <span class="kw" data-swarm="models">models</span> locally.</p>
 
   <div class="stanza">
     <p class="st">Fix typos as you type.</p>
-    <p class="st">Expand a snippet.</p>
     <p class="st">Rewrite a paragraph in a friendlier tone.</p>
     <p class="st">Catch a sentence before you send it in anger.</p>
   </div>
-
-  <p class="st">Halen is the writing layer for all of it.</p>
 
   <div class="stanza">
     <p class="st">No cloud round-trips.</p>
@@ -1347,18 +1348,11 @@ img { display: block; max-width: 100%; }
     <p class="st">No accounts.</p>
   </div>
 
-  <div class="stanza">
-    <p class="st">Halen sits in your menu bar.</p>
-    <p class="st">Watches the text near your <span class="kw" data-swarm="caret">cursor</span>.</p>
-    <p class="st">Helps when you want it to.</p>
-  </div>
-
-  <p class="st">The models never leave your Mac.</p>
+  <p class="st">Halen sits in your menu bar, near your <span class="kw" data-swarm="caret">cursor</span>. The models never leave your Mac.</p>
 
   <div class="stanza">
     <p class="st">Your words stay yours.</p>
-    <p class="st">Not as a feature.</p>
-    <p class="st">As a default.</p>
+    <p class="st">Not as a feature. As a default.</p>
   </div>
 
   <p class="st-brand st-end"><span class="brand-text"></span><span class="mark"><img src="assets/halen-icon.svg" alt="" /></span></p>
@@ -1368,34 +1362,34 @@ img { display: block; max-width: 100%; }
 <section class="demo" id="demo">
   <div class="demo-head">
     <h2>Plugins for the cursor.</h2>
-    <p>Pick a plugin and see how it works.</p>
+    <p>Pick one. Watch what it does.</p>
   </div>
 
   <div class="stage">
     <div class="rail">
       <div class="list" id="rail">
         <button class="snip active" data-demo="typo">
-          <div class="row1"><span class="key tx">Typo Fixer</span><span class="ms">inline</span></div>
-          <div class="label">Auto-replace mistypes</div>
-          <div class="desc">Learns your typos. Backspace once and Halen never re-fixes that word.</div>
+          <div class="row1"><span class="key tx">Typo Fixer</span><span class="ms">instant</span></div>
+          <div class="label">Fixes the typos you actually make</div>
+          <div class="desc">Learns from your own corrections. Backspace once and it never re-fixes that word.</div>
+          <span class="bar"></span>
+        </button>
+        <button class="snip" data-demo="style">
+          <div class="row1"><span class="key sty">Style Guide</span><span class="ms">instant</span></div>
+          <div class="label">Your banned words, swapped</div>
+          <div class="desc">Add &ldquo;utilize&rdquo; once. Halen offers &ldquo;use&rdquo; every time after. No model call.</div>
+          <span class="bar"></span>
+        </button>
+        <button class="snip" data-demo="casual">
+          <div class="row1"><span class="key">;casual</span><span class="ms">~240 ms</span></div>
+          <div class="label">Rewrite, friendlier</div>
+          <div class="desc">Type the trigger. Halen rewrites the paragraph above it through local Gemma 4.</div>
           <span class="bar"></span>
         </button>
         <button class="snip" data-demo="sentiment">
           <div class="row1"><span class="key sg">Sentiment Guard</span><span class="ms">~120 ms</span></div>
-          <div class="label">Catch hostile tone</div>
-          <div class="desc">Gemma classifies your sentence. Pops up before you send.</div>
-          <span class="bar"></span>
-        </button>
-        <button class="snip" data-demo="casual">
-          <div class="row1"><span class="key">;casual</span><span class="ms">240 ms</span></div>
-          <div class="label">Soften the prior paragraph</div>
-          <div class="desc">Rewrites the paragraph you just typed in a friendlier tone via local Gemma 4.</div>
-          <span class="bar"></span>
-        </button>
-        <button class="snip" data-demo="today">
-          <div class="row1"><span class="key">;today</span><span class="ms">instant</span></div>
-          <div class="label">Insert today&rsquo;s date</div>
-          <div class="desc">Expands the trigger into the current date wherever you&rsquo;re typing.</div>
+          <div class="label">Read for tone before you send</div>
+          <div class="desc">A small local classifier checks each sentence. Pops up if the tone trips a rule.</div>
           <span class="bar"></span>
         </button>
       </div>
@@ -1404,7 +1398,7 @@ img { display: block; max-width: 100%; }
     <div class="field">
       <div class="field-top">
         <div class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
-        <span class="title">Untitled — Microsoft Outlook</span>
+        <span class="title">Untitled &middot; Microsoft Outlook</span>
         <span class="right"><span class="pulse"></span> Halen · idle</span>
       </div>
       <div class="field-toolbar">
@@ -2105,27 +2099,25 @@ const navIO = new IntersectionObserver(es => es.forEach(e => {
 }), { rootMargin: '-10% 0px 0px 0px', threshold: 0.05 });
 navIO.observe(document.getElementById('demo'));
 
-// ---------- demo (snippet / typo / sentiment) ----------
-// Mirrors the format the real `SnippetExpander.dynamicValue("today")`
-// produces in Sources/Halen/Features/SnippetExpander/SnippetExpander.swift
-// ("EEEE d MMMM yyyy") so what the lander shows matches what the user
-// will actually get when they install Halen.
-function todayLabel() {
-  const d = new Date();
-  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const months = ['January','February','March','April','May','June',
-                  'July','August','September','October','November','December'];
-  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}.`;
-}
+// ---------- demo (typo / style / casual / sentiment) ----------
+// Four demos, ordered to mirror the manifesto's four-verb stanza above:
+// fix typos → personal style fixes → tone rewrite → tone catch. Each
+// maps to an actual built-in plugin in the shipped app.
 
 const DEMOS = {
+  // Typo Fixer — learned-corrections dictionary. Inline replace at word
+  // boundary; no model call. See Sources/Halen/Features/TypoFixer.swift.
   typo: { type: 'typo' },
-  sentiment: { type: 'sentiment' },
-  // Matches the real `;casual` built-in: replacesPrior=true. The trigger
-  // dissolves the harsher paragraph the user just wrote and replaces it
-  // with a friendlier rewrite from local Gemma. (`;polite` was previously
-  // shown here but it appears to just expand into a new sentence without
-  // softening anything, which read as confusing.)
+
+  // Personal Style Guide — pure rule scan, no model. The built-in
+  // "utilize → use" rule matches StyleRulesStore.builtins[0]. Visual is
+  // a single-word swap inside a longer sentence, popover-driven.
+  style: { type: 'style' },
+
+  // ;casual — AI snippet, replacesPrior=true. The trigger dissolves
+  // the harsher paragraph the user just wrote and replaces it with a
+  // friendlier rewrite from local Gemma. Mirrors Snippet.replacesPrior
+  // in Sources/Halen/Features/SnippetExpander/Snippet.swift.
   casual: {
     type: 'snippet', trigger: ';casual',
     prefix: '',
@@ -2133,27 +2125,10 @@ const DEMOS = {
     expanded: 'Hey Alex, could we lock the scope this week? I want to make sure we land it cleanly.',
     pop: { l: 'HALEN · matched', v: 'softening prior paragraph via gemma4:e4b' }, delay: 950,
   },
-  brief: {
-    type: 'snippet', trigger: ';brief',
-    prefix: 'Hey Alex, thanks for the update. ',
-    expanded: 'Scope drifted. Let\u2019s realign Friday before lock.',
-    pop: { l: 'HALEN · matched', v: 'condensing ;brief via gemma4:e4b' }, delay: 700,
-  },
-  sig: {
-    type: 'snippet', trigger: ';sig',
-    prefix: 'Hey Alex, thanks for the update. We\u2019ll regroup Friday.\n\n',
-    expanded: 'Best,\nMichael · Halen Labs\nCET · sent from my Mac, no cloud',
-    pop: { l: 'HALEN · matched', v: 'expanding ;sig · static snippet' }, delay: 400,
-  },
-  // Dynamic built-in: SnippetExpander resolves `;today` to the current
-  // date in "EEEE d MMMM yyyy" format. No model call needed — that's why
-  // delay is short.
-  today: {
-    type: 'snippet', trigger: ';today',
-    prefix: 'Hey Alex, thanks for the update. Let’s regroup on ',
-    expanded: todayLabel(),
-    pop: { l: 'HALEN · snippet', v: 'expanding ;today (dynamic)' }, delay: 220,
-  },
+  // Sentiment Guard — Qwen 2.5 0.5B classifier on each sentence end.
+  // Hostile label triggers the guard card with Send-anyway and
+  // Rephrase actions. See Sources/Halen/Features/SentimentGuard/.
+  sentiment: { type: 'sentiment' },
 };
 
 const $prefix = document.getElementById('prefix');
@@ -2386,6 +2361,51 @@ async function playSentiment() {
   await wait(2200);
 }
 
+async function playStyle() {
+  resetField();
+  showProgress('style', 7500);
+  // Three-segment composition: lead-in, the flagged word, the tail.
+  // Halen sees "utilize" land at a word boundary, looks it up against
+  // the personal rules store, and offers "use" in the popover. No model
+  // is involved — that's why the chip on the rail says "instant".
+  const segments = [
+    { text: 'Hi Alex, want to ' },
+    { text: 'utilize', fix: 'use' },
+    { text: ' this thread to flag the timeline shift.' },
+  ];
+  for (const seg of segments) {
+    if (userInterrupt) return;
+    const span = document.createElement('span');
+    if (seg.fix) span.className = 'typo';   // reuse the typo underline + colour
+    $trigger.appendChild(span);
+    for (const c of seg.text) {
+      if (userInterrupt) return;
+      span.textContent += c;
+      showHalenCursor();
+      await wait(c === ' ' ? 30 : 52 + Math.random() * 18);
+    }
+    if (seg.fix) {
+      await wait(420);
+      $popL.textContent = 'HALEN · style guide';
+      $popV.textContent = `${seg.text} → ${seg.fix} · personal rule`;
+      $pop.classList.add('show');
+      // Hold the popover slightly longer than the typo demo's 420 ms —
+      // the user is reading "utilize → use · personal rule" plus the
+      // chip; the swap shouldn't beat them to it.
+      await wait(900);
+      span.classList.add('struck');
+      await wait(260);
+      span.textContent = seg.fix;
+      span.classList.remove('typo', 'struck');
+      span.classList.add('fixed-word');
+      await wait(380);
+      $pop.classList.remove('show');
+      await wait(220);
+    }
+  }
+  await wait(2200);
+}
+
 async function playDemo(name) {
   clearTimers();
   userInterrupt = false;
@@ -2394,6 +2414,7 @@ async function playDemo(name) {
   if (cfg.type === 'snippet') await playSnippet(cfg, name);
   else if (cfg.type === 'typo') await playTypo();
   else if (cfg.type === 'sentiment') await playSentiment();
+  else if (cfg.type === 'style') await playStyle();
 }
 
 async function loop() {
