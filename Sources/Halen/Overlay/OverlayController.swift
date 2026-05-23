@@ -17,12 +17,23 @@ import SwiftUI
 @MainActor
 final class OverlayController {
     private let eventBus: EventBus
+    /// Shared observable state for the caret indicator (severity tint,
+    /// hover state). Owned here; observed by `HalenCaretIndicator` so the
+    /// SwiftUI view re-renders on every change without recreating the
+    /// `NSHostingView`.
+    let indicatorState = OverlayIndicatorState()
 
     private var caretPanel: NSPanel?
     private var busyPanel: NSPanel?
     private var busyContainer: NSView?
     private var busyLogo: NSHostingView<HalenCaretIndicator>?
     private var ringLayer: CAShapeLayer?
+
+    /// Active findings keyed by source plugin id. One finding per source so
+    /// re-classifying the same paragraph (or the next one) cleanly replaces
+    /// the prior signal instead of stacking. The combined severity drives the
+    /// indicator's tint.
+    private var activeFindings: [String: Event.FindingDetected] = [:]
 
     private var subscribeTask: Task<Void, Never>?
     /// Single auto-hide task. Each `caret.moved` pushes `hideDeadline` out;
@@ -53,7 +64,12 @@ final class OverlayController {
     /// on-screen bounds). Preferred over `lastCaretRect` while busy.
     private var busyAnchor: Event.CaretRect?
 
-    private static let dotSize: CGFloat = 16
+    fileprivate static let dotSize: CGFloat = 16
+    /// Larger frame when a finding is active — gives a generous hover/click
+    /// target without the SwiftUI view needing to reposition. The panel is
+    /// always sized to this; the indicator art scales between `dotSize` and
+    /// `findingDotSize` based on `indicatorState.severity`.
+    fileprivate static let findingDotSize: CGFloat = 24
     private static let busySize: CGFloat = 40
     private static let glowKey = "halen.busy.glow"
 
@@ -73,8 +89,14 @@ final class OverlayController {
     func start() {
         // Caret indicator: the SwiftUI logo is the content view directly — no
         // container, no offset subview. This is the proven original layout.
-        let caret = Self.makePanel(size: Self.dotSize)
-        caret.contentView = NSHostingView(rootView: HalenCaretIndicator())
+        // The indicator panel sizes to the larger `findingDotSize`; the
+        // SwiftUI view inside renders at `dotSize` when there are no findings
+        // (looks identical to the original) and expands to fill when one
+        // appears. The bigger frame gives the hover target a fighting chance
+        // without the panel having to reframe on every state change.
+        let caret = Self.makePanel(size: Self.findingDotSize)
+        caret.contentView = NSHostingView(
+            rootView: HalenCaretIndicator(state: indicatorState))
         caretPanel = caret
 
         // Busy loader: a fixed 40×40 container with the 16×16 logo pinned dead
@@ -83,7 +105,7 @@ final class OverlayController {
         let busy = Self.makePanel(size: Self.busySize)
         let container = NSView(frame: NSRect(x: 0, y: 0, width: Self.busySize, height: Self.busySize))
         container.wantsLayer = true
-        let logo = NSHostingView(rootView: HalenCaretIndicator())
+        let logo = NSHostingView(rootView: HalenCaretIndicator(state: OverlayIndicatorState()))
         logo.translatesAutoresizingMaskIntoConstraints = false
         logo.sizingOptions = []
         logo.wantsLayer = true
@@ -120,6 +142,17 @@ final class OverlayController {
                         self.busyDepth = max(0, self.busyDepth - 1)
                         if self.busyDepth == 0 { self.exitBusy() }
                         else { self.armBusyWatchdog() }   // still busy — re-arm
+                    }
+                case .findingDetected(let payload):
+                    self.upsertFinding(payload)
+                case .findingsCleared(let payload):
+                    self.clearFindings(source: payload.source, id: payload.id)
+                case .appFocused:
+                    // Findings are paragraph-scoped; switching apps means the
+                    // user is doing something else and stale tints would lie.
+                    if !self.activeFindings.isEmpty {
+                        self.activeFindings.removeAll()
+                        self.recomputeIndicatorState()
                     }
                 default:
                     break
@@ -327,29 +360,115 @@ final class OverlayController {
         ringLayer = nil
         busyLogo?.layer?.removeAnimation(forKey: Self.glowKey)
     }
+
+    // MARK: - Findings
+
+    /// Apply (or replace) the active finding for `payload.source`. One
+    /// finding per source — re-classification of the same paragraph or a
+    /// fresh paragraph from the same plugin cleanly replaces the prior.
+    private func upsertFinding(_ payload: Event.FindingDetected) {
+        activeFindings[payload.source] = payload
+        recomputeIndicatorState()
+    }
+
+    /// Drop matching finding(s). `id == nil` clears every finding from
+    /// `source`; otherwise only the one whose id matches.
+    private func clearFindings(source: String, id: String?) {
+        if let id {
+            if activeFindings[source]?.id == id {
+                activeFindings.removeValue(forKey: source)
+            }
+        } else {
+            activeFindings.removeValue(forKey: source)
+        }
+        recomputeIndicatorState()
+    }
+
+    /// Rebuild the SwiftUI-visible indicator state from `activeFindings`. The
+    /// strongest-severity finding wins the tint; the summaries are joined for
+    /// the hover popover. Also flips the caret panel between click-through
+    /// (no findings) and interactive (findings — needed for hover events to
+    /// reach the SwiftUI view).
+    private func recomputeIndicatorState() {
+        let highest = activeFindings.values.max(by: { $0.severity < $1.severity })
+        indicatorState.findings = activeFindings.values
+            .sorted { $0.severity > $1.severity }
+        indicatorState.severity = highest?.severity
+
+        // Toggle pass-through. While idle the panel must let clicks through
+        // (the user is still typing into the underlying field); during a
+        // finding it has to capture hover/clicks so the popover can engage.
+        // `.statusBar` level keeps it floating above target apps either way.
+        caretPanel?.ignoresMouseEvents = (highest == nil)
+        caretPanel?.acceptsMouseMovedEvents = (highest != nil)
+    }
 }
 
-/// The Halen mark used as the caret indicator. Two styles, switched live via
-/// the `halen.overlayDotStyle` UserDefault:
-///   - `"solid"`   — filled cobalt mark (`HalenIndicator.png`, the default).
-///   - `"outline"` — white-filled speech bubble with a cobalt outline + eyes
-///                   (`HalenOutline.png`).
-/// Both are pre-rendered PNGs at the right colours, so no SwiftUI tinting is
-/// needed. Falls back to a coloured circle if the asset isn't bundled.
-private struct HalenCaretIndicator: View {
+/// Observable state for the Halen caret indicator. Updated by
+/// `OverlayController` whenever findings change; observed by the SwiftUI
+/// `HalenCaretIndicator` so the dot re-tints without recreating the host
+/// view. Hover state lives here so SwiftUI's `.onHover` can drive the
+/// popover surface (still to be added in this UX iteration).
+@MainActor
+@Observable
+final class OverlayIndicatorState {
+    /// Winning severity across all active findings, `nil` when clean.
+    var severity: Event.FindingDetected.Severity?
+    /// Active findings, severity-sorted. The popover shows these in order.
+    var findings: [Event.FindingDetected] = []
+    /// SwiftUI `.onHover` toggles this. The popover uses it to know when
+    /// the user is engaging with the indicator.
+    var isHovering: Bool = false
+}
+
+/// The Halen mark used as the caret indicator. Two states layered into one
+/// view:
+///
+///  - **Idle** — the original 16×16 cobalt brand mark. Two visual styles
+///    switched live via the `halen.overlayDotStyle` UserDefault
+///    (`"solid"` → `HalenIndicator.png`, `"outline"` → `HalenOutline.png`).
+///    Falls back to a coloured circle if neither asset is bundled.
+///  - **Finding present** — the dot becomes a 24×24 severity-coloured
+///    circle (yellow / orange / red) with the brand mark composited in
+///    white at the centre. `SentimentGuard`, `ClarityChecker`, etc. drive
+///    this via `OverlayController.indicatorState.severity`.
+///
+/// The host panel sizes to `findingDotSize` (24) always; the SwiftUI view
+/// fills with the right art for the current state so no panel reframe is
+/// needed when a finding appears or clears.
+struct HalenCaretIndicator: View {
     @AppStorage(OverlayController.dotStyleKey) private var dotStyle: String = "solid"
+    /// Pass an empty `OverlayIndicatorState` for indicators that never need
+    /// to tint (e.g. the busy-loader's centred logo).
+    @Bindable var state: OverlayIndicatorState
 
     private var assetName: String {
         dotStyle == "outline" ? "HalenOutline" : "HalenIndicator"
     }
 
     var body: some View {
-        // No drop shadow. The caret-indicator panel is exactly the icon
-        // size (16×16) and the image fills it edge-to-edge, so any blur
-        // radius has no margin to render into and clips to a hard square —
-        // very visible as a grey halo behind the white-filled outline mark
-        // on a light background. Both marks are self-defining without it
-        // (solid = dark cobalt fill, outline = crisp cobalt stroke).
+        ZStack {
+            if let severity = state.severity {
+                findingDot(for: severity)
+            } else {
+                idleMark
+                    .frame(width: OverlayController.dotSize,
+                           height: OverlayController.dotSize)
+            }
+        }
+        .frame(width: OverlayController.findingDotSize,
+               height: OverlayController.findingDotSize)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            state.isHovering = hovering
+        }
+    }
+
+    /// Brand mark — exactly the original idle indicator, kept verbatim so
+    /// existing users see no visual change when nothing is flagged. No drop
+    /// shadow (the panel is exactly the icon size, so any blur radius clips
+    /// to a hard square; both marks are self-defining without it).
+    private var idleMark: some View {
         Group {
             if let img = NSImage(named: assetName) {
                 Image(nsImage: img)
@@ -360,6 +479,37 @@ private struct HalenCaretIndicator: View {
                     .fill(Color.halenCobalt)
                     .padding(2)
             }
+        }
+    }
+
+    /// Severity-coloured dot. The brand mark sits in white at the centre so
+    /// it still reads as "Halen" rather than a generic system warning.
+    private func findingDot(for severity: Event.FindingDetected.Severity) -> some View {
+        let fill = Self.color(for: severity)
+        return ZStack {
+            Circle()
+                .fill(fill)
+                .overlay(
+                    Circle().stroke(Color.white.opacity(0.55), lineWidth: 1)
+                )
+                .shadow(color: fill.opacity(0.45), radius: 4)
+            if let img = NSImage(named: assetName) {
+                Image(nsImage: img)
+                    .resizable()
+                    .interpolation(.high)
+                    .colorMultiply(.white)        // recolour the mark white
+                    .opacity(0.95)
+                    .frame(width: OverlayController.dotSize - 4,
+                           height: OverlayController.dotSize - 4)
+            }
+        }
+    }
+
+    fileprivate static func color(for severity: Event.FindingDetected.Severity) -> Color {
+        switch severity {
+        case .clarity:     return Color(red: 0.93, green: 0.78, blue: 0.20)   // amber
+        case .conciseness: return Color(red: 0.96, green: 0.55, blue: 0.10)   // orange
+        case .tone:        return Color(red: 0.91, green: 0.30, blue: 0.24)   // red
         }
     }
 }

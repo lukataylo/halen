@@ -265,6 +265,10 @@ final class AppCoordinator {
                     Log.debug("evt caret.moved \(Int(payload.rect.x)),\(Int(payload.rect.y)) \(Int(payload.rect.width))x\(Int(payload.rect.height))")
                 case .inferenceActivity(let payload):
                     Log.debug("evt inference.activity \(payload.phase.rawValue) source=\(payload.source)")
+                case .findingDetected(let payload):
+                    Log.info("evt finding.detected source=\(payload.source) severity=\(payload.severity.rawValue) summary=\"\(payload.summary)\"")
+                case .findingsCleared(let payload):
+                    Log.info("evt findings.cleared source=\(payload.source) id=\(payload.id ?? "*")")
                 }
             }
         }

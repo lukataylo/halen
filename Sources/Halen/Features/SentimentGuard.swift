@@ -209,19 +209,54 @@ final class SentimentGuard: HalenPlugin {
             // Conciseness check — a zero-cost rule-based scan that runs
             // alongside the tone classifier, gated by a Settings toggle.
             let fillers = Self.concisenessEnabled ? FillerPhrases.scan(paragraph) : []
-            if let matched = enabled.first(where: { $0.label.lowercased() == label }) {
-                showPopup(text: paragraph, rule: matched, fillers: fillers,
-                          hash: sha256Hex(paragraph), appBundleId: appBundleId,
-                          anchor: anchorSnapshot)
-            } else if !fillers.isEmpty {
-                // No tone match, but wordy phrasing is still worth surfacing.
-                showPopup(text: paragraph, rule: nil, fillers: fillers,
-                          hash: sha256Hex(paragraph), appBundleId: appBundleId,
-                          anchor: anchorSnapshot)
+            let matched = enabled.first(where: { $0.label.lowercased() == label })
+            if matched != nil || !fillers.isEmpty {
+                publishFinding(paragraph: paragraph, rule: matched, fillers: fillers,
+                               appBundleId: appBundleId, anchor: anchorSnapshot)
+            } else {
+                // Paragraph reads clean from this plugin's perspective — clear
+                // any prior finding the overlay was still showing.
+                services.eventBus.publish(.findingsCleared(.init(
+                    source: id, id: nil, timestamp: Date())))
             }
         } catch {
             Log.warn("SentimentGuard: inference failed: \(error)")
         }
+    }
+
+    // MARK: - Finding emission
+
+    /// Publish a `.findingDetected` on the shared event bus. `OverlayController`
+    /// consumes it to tint the Halen caret indicator (and surface the hover
+    /// popover); plugins remain decoupled from any UI surface decisions.
+    private func publishFinding(paragraph: String, rule: SentimentRule?,
+                                fillers: [FillerMatch], appBundleId: String,
+                                anchor: CaretAnchoredPanel.Anchor?) {
+        flaggedThisSession += 1
+        let severity: Event.FindingDetected.Severity = (rule != nil) ? .tone : .conciseness
+        let summary: String
+        if let rule {
+            summary = "Reads as \(rule.label)"
+        } else if fillers.count == 1 {
+            summary = "1 wordy phrase"
+        } else {
+            summary = "\(fillers.count) wordy phrases"
+        }
+        let hash = sha256Hex(paragraph)
+        let anchorRect = anchor.map { Event.CaretRect(
+            x: $0.rect.minX, y: $0.rect.minY,
+            width: $0.rect.width, height: $0.rect.height) }
+            ?? Event.CaretRect(x: 0, y: 0, width: 0, height: 0)
+        services.eventBus.publish(.findingDetected(.init(
+            id: "\(id):\(hash.prefix(12))",
+            source: id,
+            severity: severity,
+            summary: summary,
+            anchor: anchorRect,
+            paragraphHash: hash,
+            appBundleId: appBundleId,
+            timestamp: Date()
+        )))
     }
 
     // MARK: - Popup

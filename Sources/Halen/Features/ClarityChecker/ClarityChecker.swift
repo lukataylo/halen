@@ -116,13 +116,48 @@ final class ClarityChecker: HalenPlugin {
             let response = try await services.inference.complete(request)
             let ids = parseIds(response.text, valid: Set(enabled.map(\.id)))
             Log.info("ClarityChecker: \(ids.count) issue(s) (\(response.latencyMs)ms)")
-            guard !ids.isEmpty else { return }
-            showPopup(paragraph: paragraph,
-                      rules: enabled.filter { ids.contains($0.id) },
-                      anchor: anchor)
+            if ids.isEmpty {
+                // No issues — clear any prior finding for this paragraph so
+                // the indicator tint disappears.
+                services.eventBus.publish(.findingsCleared(.init(
+                    source: id, id: nil, timestamp: Date())))
+                return
+            }
+            publishFinding(paragraph: paragraph,
+                           rules: enabled.filter { ids.contains($0.id) },
+                           appBundleId: appBundleId, anchor: anchor)
         } catch {
             Log.warn("ClarityChecker: inference failed: \(error)")
         }
+    }
+
+    // MARK: - Finding emission
+
+    /// Publish a `.findingDetected` on the shared event bus. `OverlayController`
+    /// renders the severity tint; the popup-on-classification is gone in
+    /// favour of the passive cursor-indicator + hover model.
+    private func publishFinding(paragraph: String, rules: [ClarityRule],
+                                appBundleId: String,
+                                anchor: CaretAnchoredPanel.Anchor?) {
+        flaggedThisSession += 1
+        let summary = rules.count == 1
+            ? "1 clarity issue"
+            : "\(rules.count) clarity issues"
+        let hash = sha256Hex(paragraph)
+        let anchorRect = anchor.map { Event.CaretRect(
+            x: $0.rect.minX, y: $0.rect.minY,
+            width: $0.rect.width, height: $0.rect.height) }
+            ?? Event.CaretRect(x: 0, y: 0, width: 0, height: 0)
+        services.eventBus.publish(.findingDetected(.init(
+            id: "\(id):\(hash.prefix(12))",
+            source: id,
+            severity: .clarity,
+            summary: summary,
+            anchor: anchorRect,
+            paragraphHash: hash,
+            appBundleId: appBundleId,
+            timestamp: Date()
+        )))
     }
 
     /// Pull valid rule ids out of the model's reply. Tolerant of stray words /
