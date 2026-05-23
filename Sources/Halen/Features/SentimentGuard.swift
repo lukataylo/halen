@@ -34,6 +34,13 @@ final class SentimentGuard: HalenPlugin {
     /// In-memory: a fresh launch starts with no cooldowns.
     private var cooldownUntil: [String: Date] = [:]
     private static let dismissCooldown: TimeInterval = 10 * 60
+
+    /// UserDefaults key for the conciseness-check toggle (see
+    /// `SentimentGuardDetailView`). The check is on by default.
+    static let concisenessDefaultsKey = "halen.sentiment-guard.conciseness"
+    static var concisenessEnabled: Bool {
+        UserDefaults.standard.object(forKey: concisenessDefaultsKey) as? Bool ?? true
+    }
     /// Hashes the user explicitly approved as fine. Persisted.
     private var approvedHashes: Set<String> = []
     /// Number of times we surfaced a popover this session (any rule). In-memory only.
@@ -165,8 +172,16 @@ final class SentimentGuard: HalenPlugin {
             let response = try await services.inference.complete(request)
             let label = response.text.modelLabelToken
             Log.info("SentimentGuard: \(label) (\(response.latencyMs)ms)")
+            // Conciseness check — a zero-cost rule-based scan that runs
+            // alongside the tone classifier, gated by a Settings toggle.
+            let fillers = Self.concisenessEnabled ? FillerPhrases.scan(paragraph) : []
             if let matched = enabled.first(where: { $0.label.lowercased() == label }) {
-                showPopup(text: paragraph, rule: matched,
+                showPopup(text: paragraph, rule: matched, fillers: fillers,
+                          hash: sha256Hex(paragraph), appBundleId: appBundleId,
+                          anchor: anchorSnapshot)
+            } else if !fillers.isEmpty {
+                // No tone match, but wordy phrasing is still worth surfacing.
+                showPopup(text: paragraph, rule: nil, fillers: fillers,
                           hash: sha256Hex(paragraph), appBundleId: appBundleId,
                           anchor: anchorSnapshot)
             }
@@ -177,27 +192,48 @@ final class SentimentGuard: HalenPlugin {
 
     // MARK: - Popup
 
-    private func showPopup(text: String, rule: SentimentRule, hash: String,
-                           appBundleId: String, anchor: CaretAnchoredPanel.Anchor? = nil) {
+    private func showPopup(text: String, rule: SentimentRule?, fillers: [FillerMatch],
+                           hash: String, appBundleId: String,
+                           anchor: CaretAnchoredPanel.Anchor? = nil) {
         flaggedThisSession += 1
         activePanel?.orderOut(nil)
         dismissTask?.cancel()
 
-        // Transient popover with two buttons — floating level, interactive.
+        // Wordy phrases become findings; a matched tone rule is the headline.
+        // With no tone match the conciseness count is the headline instead.
+        let findings = fillers.map {
+            Finding(title: "“\($0.phrase)”",
+                    detail: "Consider: \($0.suggestion)",
+                    colorName: "yellow")
+        }
+        let headline: String
+        let headlineColor: String
+        let icon: String
+        if let rule {
+            headline = "This reads as \(rule.label)"
+            headlineColor = rule.colorName
+            icon = "exclamationmark.bubble.fill"
+        } else {
+            headline = findings.count == 1 ? "1 wordy phrase" : "\(findings.count) wordy phrases"
+            headlineColor = "yellow"
+            icon = "scissors"
+        }
+
+        // Height grows with the findings list, capped so it never dominates.
+        let size = CGSize(width: 360, height: CGFloat(min(360, 170 + findings.count * 42)))
         let panel = HalenFloatingPanel.make(
-            size: NSSize(width: 360, height: 170),
+            size: NSSize(width: size.width, height: size.height),
             level: .floating,
             interactive: true,
             shadow: true
         )
 
-        // The single-finding case of the shared FindingsPopover: the matched
-        // tone rule is the headline, the flagged text the context preview.
         let view = FindingsPopover(
-            icon: "exclamationmark.bubble.fill",
-            headline: "This reads as \(rule.label)",
-            headlineColorName: rule.colorName,
+            icon: icon,
+            headline: headline,
+            headlineColorName: headlineColor,
             contextPreview: text,
+            findings: findings,
             primaryActionLabel: "Rephrase via Gemma 4",
             onPrimaryAction: { [weak self] in
                 self?.rephrase(originalText: text)
@@ -215,12 +251,11 @@ final class SentimentGuard: HalenPlugin {
         )
         panel.contentView = NSHostingView(rootView: view)
 
-        let popupSize = CGSize(width: 360, height: 170)
         // Use the snapshot taken at classification time; only fall back to a
         // fresh resolve if we never got one (shouldn't happen in practice).
         let resolved = anchor ?? CaretAnchoredPanel.resolveAnchor(
             caretObserver: caretObserver, cachedCaretRect: lastCaretRect)
-        panel.setFrame(CaretAnchoredPanel.frame(for: resolved, size: popupSize), display: true)
+        panel.setFrame(CaretAnchoredPanel.frame(for: resolved, size: size), display: true)
         panel.orderFrontRegardless()
 
         activePanel = panel
