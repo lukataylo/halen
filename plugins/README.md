@@ -114,6 +114,8 @@ its manifest's `events` array.
 | `caret.moved` | `appBundleId`, `rect: {x,y,width,height}`, `timestamp` |
 | `app.focused` | `appBundleId`, `appName`, `timestamp` |
 | `hotkey.fired` | `id` (the string the plugin chose at `hotkey/register` time), `timestamp` |
+| `finding.detected` | `source` (plugin id of the emitter), `id`, `severity` (`tone`/`conciseness`/`clarity`), `summary`, `timestamp`. Lets a plugin suppress itself when another writing plugin has flagged the paragraph (UX-3). Read-only — there's no host method to *emit* a finding, only subscribe. |
+| `finding.cleared` | `source`, `id?` (nil clears every finding from `source`), `timestamp` |
 
 ### Host methods (plugin → host request)
 
@@ -128,6 +130,9 @@ its manifest's `events` array.
 | `calendar/createEvent`    | `title`, `start` (epoch seconds), `durationMinutes?` (default 30) | `id` — the new event's identifier |
 | `hotkey/register`         | `id` (plugin-chosen string), `keyCode` (Carbon virtual key code, e.g. `kVK_ANSI_E` = 14), `modifiers` (Carbon modifier flag bitmask: `controlKey` 0x1000, `optionKey` 0x800, `cmdKey` 0x100, `shiftKey` 0x200) | `ok: true`. The plugin must also list `hotkey.fired` in its manifest `events` to receive the notification when the hotkey is pressed. |
 | `hotkey/unregister`       | `id` (matching a prior `hotkey/register`) | `ok: true`. Idempotent; unknown ids return ok without error. |
+| `profile/getToneProfile`  | `bundleId` | `tone` (`formal`/`casual`/`neutral`), `label`, `promptClause` — the sentence-form hint Sentiment Guard / Clarity Checker drop into their classifier prompts. |
+| `profile/setToneProfile`  | `bundleId`, `tone` (`formal`/`casual`/`neutral`) | `ok: true` or `{ok: false, error: …}`. The host's `AppToneProfileStore` is shared with the in-process writing plugins, so a write takes effect on the next classification. |
+| `profile/listToneProfiles` | — | `profiles: [{bundleId, tone, label}]` — sorted by bundle id. |
 
 The `calendar/*` methods are **gated** on the `calendar` permission — the
 plugin must list `"calendar"` in its manifest's `permissions` array, and the

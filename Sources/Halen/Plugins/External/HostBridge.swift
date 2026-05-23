@@ -54,6 +54,12 @@ final class HostBridge {
         case "calendar/createEvent":
             try require("calendar", in: grantedPermissions, for: method)
             return try await calendarCreateEvent(params: params)
+        case "profile/getToneProfile":
+            return profileGet(params: params)
+        case "profile/setToneProfile":
+            return profileSet(params: params)
+        case "profile/listToneProfiles":
+            return profileList()
         default:
             throw RPCErrorObject(code: PluginRPC.ErrorCode.methodNotFound.rawValue,
                                  message: "Unknown host method: \(method)", data: nil)
@@ -182,6 +188,58 @@ final class HostBridge {
         return .object(["action": choice] as [String: Any?])
     }
 
+    // MARK: - Tone profiles
+    //
+    // The host owns `AppToneProfileStore` as a shared `HalenServices`
+    // member because Sentiment Guard and Clarity Checker (still in-process
+    // in v0.2.0) read it on every classification. Exposing the store
+    // over RPC means an external Tone Profiles plugin can edit the
+    // *same* data the in-process readers see — no migration needed when
+    // the editor plugin is extracted before its in-process consumers.
+    //
+    // Ungated for now. A future security pass might gate writes on a
+    // `profiles` permission, but for v0.2.0 the data is per-user
+    // preference (formal vs casual register, not a privacy-sensitive
+    // signal) and the marketplace is the trust boundary.
+
+    private func profileGet(params: RPCValue?) -> RPCValue {
+        let bundleId = params?.objectValue?["bundleId"]?.stringValue ?? ""
+        let profile = services.toneProfiles.profile(for: bundleId)
+        return .object([
+            "tone": profile.rawValue,
+            "label": profile.label,
+            "promptClause": profile.promptClause
+        ] as [String: Any?])
+    }
+
+    private func profileSet(params: RPCValue?) -> RPCValue {
+        guard let obj = params?.objectValue,
+              let bundleId = obj["bundleId"]?.stringValue,
+              let toneRaw = obj["tone"]?.stringValue,
+              let tone = ToneProfile(rawValue: toneRaw) else {
+            // Invalid input is a JSON-RPC "method failed" rather than a
+            // protocol-level error — return ok: false with a hint so the
+            // plugin can surface a readable error.
+            return .object([
+                "ok": false,
+                "error": "profile/setToneProfile requires `bundleId` and a valid `tone` (formal|casual|neutral)"
+            ] as [String: Any?])
+        }
+        services.toneProfiles.setProfile(tone, for: bundleId)
+        return .object(["ok": true] as [String: Any?])
+    }
+
+    private func profileList() -> RPCValue {
+        let entries = services.toneProfiles.sortedEntries.map { entry -> RPCValue in
+            .object([
+                "bundleId": entry.bundleId,
+                "tone": entry.profile.rawValue,
+                "label": entry.profile.label
+            ] as [String: Any?])
+        }
+        return .object(["profiles": RPCValue.array(entries)] as [String: Any?])
+    }
+
     // MARK: - Calendar (gated on the `calendar` permission)
 
     private func calendarUpcomingEvents(params: RPCValue?) async throws -> RPCValue {
@@ -262,12 +320,33 @@ extension Event {
             ] as [String: Any?]))
         case .inferenceActivity:
             return nil
-        case .findingDetected, .findingsCleared, .findingActionRequested:
-            // Internal overlay-routing events — they're consumed by the host's
-            // OverlayController to tint the caret indicator, or by the
-            // originating plugin to respond to a user click. External plugins
-            // shouldn't react to them (would just create feedback loops if a
-            // plugin re-emits findings off a finding).
+        case .findingDetected(let p):
+            // Originally not broadcast — the concern was a plugin re-emitting
+            // findings in response to other plugins' findings, creating
+            // feedback loops. The mitigation now is that re-emitting a
+            // finding from a plugin requires a host method that doesn't
+            // exist (`finding/publish` isn't in the protocol), so subscribing
+            // is read-only by construction. Exposing the events lets external
+            // Autocomplete suppress its ghost suggestions when other writing
+            // plugins are flagging the paragraph — the UX-3 behaviour it had
+            // in-process.
+            return ("finding.detected", .object([
+                "source": p.source,
+                "id": p.id,
+                "severity": p.severity.rawValue,
+                "summary": p.summary,
+                "timestamp": p.timestamp.timeIntervalSince1970
+            ] as [String: Any?]))
+        case .findingsCleared(let p):
+            return ("finding.cleared", .object([
+                "source": p.source,
+                "id": p.id as Any?,
+                "timestamp": p.timestamp.timeIntervalSince1970
+            ] as [String: Any?]))
+        case .findingActionRequested:
+            // Plugin-targeted action requests (e.g. "user clicked Rephrase
+            // on a SentimentGuard finding") are still internal — they're
+            // addressed at a specific plugin id, not a broadcast.
             return nil
         }
     }

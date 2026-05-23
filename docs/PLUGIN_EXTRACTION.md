@@ -25,8 +25,8 @@ Three reasons to move plugins out of the menubar binary:
 |---|---|---|---|
 | **StyleGuide** | First-cut external version ships in v0.2.0 alongside the in-process one | [`plugins/style-guide/`](../plugins/style-guide/) | Auto-install pattern not built yet; in-process registration not removed |
 | **EmailReply** | First-cut external version ships in v0.2.0 alongside the in-process one. New `hotkey/register` host RPC method underpins it | [`plugins/email-reply/`](../plugins/email-reply/) | Same auto-install + in-process-removal cutover as StyleGuide; also needs `clipboard/set` and a richer `ax/readSelection` to match in-process UX exactly |
-| **Autocomplete** | In-process only | — | Needs finding-event topics (`finding.detected`/`finding.cleared`) in the plugin protocol so it can suppress itself when other writing plugins flag the paragraph |
-| **ToneProfiles** | In-process only | — | Other plugins read the host service directly; needs RPC `profile/getToneProfile` or push model |
+| **Autocomplete** | First-cut external version ships in v0.2.0 alongside the in-process one. New `finding.detected`/`finding.cleared` event topics underpin it | [`plugins/autocomplete/`](../plugins/autocomplete/) | UX regression — can't draw ghost text from a plugin; suggestion is invisible until Tab accepts. Needs a `ui/ghostText` host method to match in-process UX |
+| **ToneProfiles** | First-cut external version ships in v0.2.0 alongside the in-process one. New `profile/{get,set,list}ToneProfile` host RPC methods underpin it | [`plugins/tone-profiles/`](../plugins/tone-profiles/) | Editor only — host still owns the store, in-process Sentiment Guard / Clarity Checker continue reading the host service. Same auto-install cutover |
 | **VoiceDictation** | In-process only, likely stays | — | AVAudioEngine + SFSpeechRecognizer need framework access; would require a Swift-binary plugin and TCC inheritance work |
 
 ## The pattern
