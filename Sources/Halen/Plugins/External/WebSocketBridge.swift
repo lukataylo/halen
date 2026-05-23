@@ -93,7 +93,11 @@ final class WebSocketBridge {
         do {
             let listener = try makeListener()
             listener.newConnectionHandler = { [weak self] conn in
-                Task { @MainActor in self?.accept(conn) }
+                // Re-capture inside the Task so the @Sendable closure
+                // doesn't reach into the outer scope's `self` (CI's
+                // stricter toolchain flags that as a cross-concurrency
+                // var access).
+                Task { @MainActor [weak self] in self?.accept(conn) }
             }
             listener.stateUpdateHandler = { state in
                 if case .failed(let err) = state {
@@ -150,7 +154,7 @@ final class WebSocketBridge {
         // Sendable Client class into the @Sendable state-update closure.
         let clientID = client.id
         connection.stateUpdateHandler = { [weak self] state in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
                 switch state {
                 case .failed, .cancelled:
@@ -174,7 +178,7 @@ final class WebSocketBridge {
     private func receive(on client: Client) {
         let clientID = client.id
         client.connection.receiveMessage { [weak self] data, _, _, error in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self,
                       let resolved = self.clients.first(where: { $0.id == clientID })
                 else { return }
