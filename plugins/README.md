@@ -113,6 +113,7 @@ its manifest's `events` array.
 | `text.pause`  | `appBundleId`, `appName`, `text`, `caretOffset`, `timestamp` |
 | `caret.moved` | `appBundleId`, `rect: {x,y,width,height}`, `timestamp` |
 | `app.focused` | `appBundleId`, `appName`, `timestamp` |
+| `hotkey.fired` | `id` (the string the plugin chose at `hotkey/register` time), `timestamp` |
 
 ### Host methods (plugin → host request)
 
@@ -125,12 +126,20 @@ its manifest's `events` array.
 | `ui/prompt`               | `title?`, `body`, `actions: [String]`      | `action` — the chosen action string, or `null` on dismiss / timeout. **Blocks** until the user responds |
 | `calendar/upcomingEvents` | `withinHours?` (default 24), `max?` (default 20) | `events: [{ id, title, start, end, attendees, notes }]` — `start`/`end` are epoch seconds |
 | `calendar/createEvent`    | `title`, `start` (epoch seconds), `durationMinutes?` (default 30) | `id` — the new event's identifier |
+| `hotkey/register`         | `id` (plugin-chosen string), `keyCode` (Carbon virtual key code, e.g. `kVK_ANSI_E` = 14), `modifiers` (Carbon modifier flag bitmask: `controlKey` 0x1000, `optionKey` 0x800, `cmdKey` 0x100, `shiftKey` 0x200) | `ok: true`. The plugin must also list `hotkey.fired` in its manifest `events` to receive the notification when the hotkey is pressed. |
+| `hotkey/unregister`       | `id` (matching a prior `hotkey/register`) | `ok: true`. Idempotent; unknown ids return ok without error. |
 
 The `calendar/*` methods are **gated** on the `calendar` permission — the
 plugin must list `"calendar"` in its manifest's `permissions` array, and the
 host requests the macOS Calendar TCC grant on first use. Without the manifest
 permission the call returns error `-32001` (permission denied). The host owns
 the single `EKEventStore`; a plugin never links EventKit itself.
+
+The `hotkey/*` methods are ungated — system-wide hotkeys are an annoyance at
+worst, not a privilege. Hotkeys are unregistered automatically when the
+plugin process terminates, so a misbehaving plugin can't leave a Carbon
+registration hanging around. Re-registering the same `id` replaces the
+prior binding rather than stacking two on the same key combo.
 
 ### Errors
 

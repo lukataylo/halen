@@ -24,8 +24,8 @@ Three reasons to move plugins out of the menubar binary:
 | Plugin | Status | Lives at | Blocker |
 |---|---|---|---|
 | **StyleGuide** | First-cut external version ships in v0.2.0 alongside the in-process one | [`plugins/style-guide/`](../plugins/style-guide/) | Auto-install pattern not built yet; in-process registration not removed |
-| **EmailReply** | In-process only | — | Needs new `hotkey/register` host method |
-| **Autocomplete** | In-process only | — | Needs new `hotkey/register` + finding-event protocol additions |
+| **EmailReply** | First-cut external version ships in v0.2.0 alongside the in-process one. New `hotkey/register` host RPC method underpins it | [`plugins/email-reply/`](../plugins/email-reply/) | Same auto-install + in-process-removal cutover as StyleGuide; also needs `clipboard/set` and a richer `ax/readSelection` to match in-process UX exactly |
+| **Autocomplete** | In-process only | — | Needs finding-event topics (`finding.detected`/`finding.cleared`) in the plugin protocol so it can suppress itself when other writing plugins flag the paragraph |
 | **ToneProfiles** | In-process only | — | Other plugins read the host service directly; needs RPC `profile/getToneProfile` or push model |
 | **VoiceDictation** | In-process only, likely stays | — | AVAudioEngine + SFSpeechRecognizer need framework access; would require a Swift-binary plugin and TCC inheritance work |
 
@@ -71,13 +71,12 @@ caret-anchored `FindingsPopover` becomes a system modal via
 
 ## What the next extractions need
 
-### EmailReply, Autocomplete — `hotkey/register`
+### EmailReply, Autocomplete — `hotkey/register` ✅ shipped in v0.2.0
 
-Both use Carbon hotkeys (⌃⌥E and Tab-while-ghost-showing
-respectively). External plugins have no way to register a hotkey today
-— the in-process `HotkeyRegistrar` runs inside the menubar app.
-
-Proposed:
+Both use Carbon hotkeys (⌃⌥E and Tab-while-ghost-showing respectively).
+`hotkey/register` and `hotkey/unregister` are now host RPC methods —
+the host owns the Carbon registration and pushes `event/hotkey.fired`
+notifications back to the registering plugin.
 
 ```jsonc
 { "method": "hotkey/register",
@@ -93,9 +92,13 @@ Proposed:
   "params": { "payload": { "id": "string", "timestamp": number } } }
 ```
 
-The host owns the actual Carbon registration; plugins get an event-
-driven callback when their hotkey fires. Clean separation, no
-plugin-side Carbon dependency.
+The plugin must list `hotkey.fired` in its manifest's `events` array to
+actually receive the notification. Hotkeys are unregistered
+automatically when the plugin process terminates — a misbehaving plugin
+can't leave a stale Carbon registration around. See
+[`plugins/README.md`](../plugins/README.md) for the protocol details
+and [`plugins/email-reply/`](../plugins/email-reply/) for a worked
+example.
 
 ### Autocomplete — finding events
 
