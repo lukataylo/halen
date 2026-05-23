@@ -25,7 +25,30 @@ else
     SIGN_IDENTITY="${SIGN_IDENTITY:-Apple Development: luka dadiani (75R33YUT6M)}"
 fi
 
-APP_DIR="$ROOT/build/Halen.app"
+# When the repo lives inside an iCloud-synced folder (Documents, Desktop)
+# the fileprovider keeps re-stamping `com.apple.FinderInfo` on the assembled
+# bundle and its nested framework. codesign rejects that as
+# "resource fork, Finder information, or similar detritus not allowed", and
+# nothing short of staging the build outside iCloud reliably escapes the
+# race. So: detect iCloud (parent dir tagged with the fileprovider xattr)
+# and stage to /tmp/halen-build/ when present. A `build/Halen.app` symlink
+# at the canonical location keeps `run-dev.sh` and the user's muscle memory
+# pointing at the right place.
+#
+# Override with OUT_DIR=… to force a specific staging directory (e.g. CI).
+parent_dir="$(dirname "$ROOT")"
+icloud_detected=0
+if xattr "$parent_dir" 2>/dev/null | grep -q 'com.apple.fileprovider'; then
+    icloud_detected=1
+fi
+if [[ -n "${OUT_DIR:-}" ]]; then
+    APP_DIR="$OUT_DIR/Halen.app"
+elif [[ "$icloud_detected" == "1" ]]; then
+    APP_DIR="/tmp/halen-build/Halen.app"
+    echo "→ iCloud-synced parent detected — staging to $APP_DIR"
+else
+    APP_DIR="$ROOT/build/Halen.app"
+fi
 CONTENTS="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
@@ -101,6 +124,8 @@ fi
 
 # Sign nested code (the framework) before the app so the app seals a valid
 # signature. No --deep (deprecated; doesn't handle nested code correctly).
+# Each codesign call is preceded by its own `xattr -cr` to defeat iCloud's
+# FinderInfo re-stamping (see the staging block at the top of this script).
 echo "→ signing with: $SIGN_IDENTITY"
 if [[ "$DIST" == "1" ]]; then
     # Every Mach-O in a notarized bundle must opt into the Hardened Runtime and
@@ -112,9 +137,11 @@ if [[ "$DIST" == "1" ]]; then
         exit 1
     fi
     if [[ -d "$FRAMEWORKS/llama.framework" ]]; then
+        xattr -cr "$FRAMEWORKS/llama.framework" 2>/dev/null || true
         codesign --force --options runtime --timestamp \
             --sign "$SIGN_IDENTITY" "$FRAMEWORKS/llama.framework"
     fi
+    xattr -cr "$APP_DIR" 2>/dev/null || true
     codesign --force --options runtime --timestamp \
         --entitlements "$ENTITLEMENTS" \
         --sign "$SIGN_IDENTITY" --identifier com.dadiani.halen "$APP_DIR"
@@ -137,9 +164,26 @@ else
         echo "  re-prompts cleanly." >&2
         exit 1
     }
+    # Clear xattrs *immediately before each* codesign call. iCloud's
+    # fileprovider re-stamps `com.apple.FinderInfo` over seconds, not
+    # milliseconds, so the sub-ms window between clear and sign is safe — but
+    # the gap between the framework sign and the app sign is enough for it to
+    # re-add. Clear twice.
     if [[ -d "$FRAMEWORKS/llama.framework" ]]; then
+        xattr -cr "$FRAMEWORKS/llama.framework" 2>/dev/null || true
         codesign --force --sign "$SIGN_IDENTITY" "$FRAMEWORKS/llama.framework" >/dev/null || codesign_failed
     fi
+    xattr -cr "$APP_DIR" 2>/dev/null || true
     codesign --force --sign "$SIGN_IDENTITY" --identifier com.dadiani.halen "$APP_DIR" >/dev/null || codesign_failed
     echo "✓ built $APP_DIR"
+fi
+
+# Back-compat symlink: when the build was staged to /tmp (iCloud avoidance),
+# keep `$ROOT/build/Halen.app` pointing at the real bundle so run-dev.sh and
+# any other tooling still finds it without changes.
+if [[ "$APP_DIR" != "$ROOT/build/Halen.app" ]]; then
+    mkdir -p "$ROOT/build"
+    rm -rf "$ROOT/build/Halen.app"
+    ln -s "$APP_DIR" "$ROOT/build/Halen.app"
+    echo "✓ symlinked $ROOT/build/Halen.app -> $APP_DIR"
 fi
