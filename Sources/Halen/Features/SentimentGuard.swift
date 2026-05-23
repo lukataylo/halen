@@ -138,7 +138,8 @@ final class SentimentGuard: HalenPlugin {
         // judge. The Gemma call below takes 1–4 s; by the time it returns the
         // user may have moved the caret, scrolled, or switched fields, and
         // anchoring then would float the popup far from the text it's about.
-        let anchorSnapshot = anchorRect()
+        let anchorSnapshot = CaretAnchoredPanel.resolveAnchor(
+            caretObserver: caretObserver, cachedCaretRect: lastCaretRect)
 
         let categoriesBlock = enabled
             .map { "- \($0.label.lowercased()): \($0.prompt)" }
@@ -172,8 +173,7 @@ final class SentimentGuard: HalenPlugin {
     // MARK: - Popup
 
     private func showPopup(text: String, rule: SentimentRule, hash: String,
-                           appBundleId: String, anchor: AnchorResult? = nil) {
-        let label = rule.label.lowercased()
+                           appBundleId: String, anchor: CaretAnchoredPanel.Anchor? = nil) {
         flaggedThisSession += 1
         activePanel?.orderOut(nil)
         dismissTask?.cancel()
@@ -186,20 +186,25 @@ final class SentimentGuard: HalenPlugin {
             shadow: true
         )
 
-        let view = SentimentGuardPopup(
-            text: text,
-            label: label,
-            tone: rule.colorName,
-            onDismiss: { [weak self] in
-                self?.recordDismiss(appBundleId: appBundleId)
+        // The single-finding case of the shared FindingsPopover: the matched
+        // tone rule is the headline, the flagged text the context preview.
+        let view = FindingsPopover(
+            icon: "exclamationmark.bubble.fill",
+            headline: "This reads as \(rule.label)",
+            headlineColorName: rule.colorName,
+            contextPreview: text,
+            primaryActionLabel: "Rephrase via Gemma 4",
+            onPrimaryAction: { [weak self] in
+                self?.rephrase(originalText: text)
                 self?.closePanel()
             },
+            approveLabel: "Looks fine",
             onApprove: { [weak self] in
                 self?.approve(hash: hash)
                 self?.closePanel()
             },
-            onRephrase: { [weak self] in
-                self?.rephrase(originalText: text)
+            onDismiss: { [weak self] in
+                self?.recordDismiss(appBundleId: appBundleId)
                 self?.closePanel()
             }
         )
@@ -208,7 +213,9 @@ final class SentimentGuard: HalenPlugin {
         let popupSize = CGSize(width: 360, height: 170)
         // Use the snapshot taken at classification time; only fall back to a
         // fresh resolve if we never got one (shouldn't happen in practice).
-        panel.setFrame(popupFrame(for: anchor ?? anchorRect(), size: popupSize), display: true)
+        let resolved = anchor ?? CaretAnchoredPanel.resolveAnchor(
+            caretObserver: caretObserver, cachedCaretRect: lastCaretRect)
+        panel.setFrame(CaretAnchoredPanel.frame(for: resolved, size: popupSize), display: true)
         panel.orderFrontRegardless()
 
         activePanel = panel
@@ -222,130 +229,6 @@ final class SentimentGuard: HalenPlugin {
                 self?.closePanel()
             }
         }
-    }
-
-    /// Resolve where to anchor the popup. Tries progressively coarser anchors
-    /// so apps with poor AX support (Electron, browser text fields, Notion)
-    /// don't fall through to a screen-corner pin — the popup should always
-    /// appear near the work the user was doing, not floating off in the
-    /// bottom-right of the display.
-    ///
-    /// Each step's rect is validated against the screen list because some
-    /// apps misreport AX bounds in window-local coords; pinning the popup
-    /// to those would put it at (0,0).
-    private func anchorRect() -> AnchorResult? {
-        // 1. Exact caret bounds — the ideal: popup pops right below the caret.
-        if let element = caretObserver?.currentElement,
-           let axRect = axReadCaretBounds(element) {
-            let cocoa = axRectToCocoa(axRect)
-            if rectIsOnScreen(cocoa) { return .init(rect: cocoa, kind: .caret) }
-        }
-        // 2. Cached caret rect from the most recent caret.moved event.
-        if let cached = lastCaretRect, cached.width > 0 || cached.height > 0,
-           rectIsOnScreen(cached) {
-            return .init(rect: cached, kind: .caret)
-        }
-        // 3. The focused element's frame. Electron / web text fields refuse
-        //    to expose caret bounds but almost always expose AXFrame on the
-        //    field itself — we can anchor below that field, which still lands
-        //    near where the user was typing.
-        if let element = caretObserver?.currentElement,
-           let axFrame = axReadFrame(element) {
-            let cocoa = axRectToCocoa(axFrame)
-            if rectIsOnScreen(cocoa) { return .init(rect: cocoa, kind: .element) }
-        }
-        // 4. The containing window's frame. Last-stop "right region of the
-        //    screen": at minimum we land on the app the user is in, not
-        //    a different display's corner.
-        if let element = caretObserver?.currentElement,
-           let axWindow = axReadContainingWindowFrame(element) {
-            let cocoa = axRectToCocoa(axWindow)
-            if rectIsOnScreen(cocoa) { return .init(rect: cocoa, kind: .window) }
-        }
-        return nil
-    }
-
-    /// Tagged anchor — the *kind* of region influences placement (a caret
-    /// gets a popup directly below it; an element/window anchor gets the
-    /// popup at the field's bottom-left, inside the window's bounds).
-    private struct AnchorResult {
-        let rect: CGRect
-        let kind: Kind
-        enum Kind { case caret, element, window }
-    }
-
-    private func rectIsOnScreen(_ rect: CGRect) -> Bool {
-        NSScreen.screens.contains(where: { $0.frame.intersects(rect) })
-    }
-
-    /// Place the popup near whichever anchor we resolved, clamped into the
-    /// `visibleFrame` of the screen that actually contains it. Anchor kind
-    /// changes the placement strategy:
-    ///   - `.caret`: 25 px below the caret (closest to where the user looked).
-    ///   - `.element`: 12 px below the bottom-left of the focused field.
-    ///   - `.window`: bottom-left of the window's content area, 24 px inset
-    ///     (Electron fallback — the window frame is the best we can get).
-    /// The final fallback (no anchor at all, never reached unless we have
-    /// no AX info whatsoever) lands at the centre of the main screen, not
-    /// the corner: anything in the corner reads as "system notification",
-    /// which is the wrong mental model.
-    private func popupFrame(for anchor: AnchorResult?, size: CGSize) -> NSRect {
-        if let anchor, let screen = screenContaining(anchor.rect) {
-            let visible = screen.visibleFrame
-            var x = anchor.rect.minX
-            var y: CGFloat
-            switch anchor.kind {
-            case .caret:
-                // Sit right under the caret with a small 10 px gap so the
-                // popup reads as attached to the line the user just typed.
-                // If there's no room below (caret near the screen bottom),
-                // flip above the caret rather than letting the clamp drag
-                // the popup back up over the text.
-                let below = anchor.rect.minY - size.height - 10
-                let above = anchor.rect.maxY + 10
-                y = (below >= visible.minY + 8) ? below : above
-            case .element:
-                // No caret precision — anchor in the element's upper area
-                // (where text content usually begins) rather than its
-                // bottom-left, which on a tall editor is nowhere near the
-                // line being typed.
-                x = anchor.rect.minX + 12
-                y = anchor.rect.maxY - size.height - 44
-            case .window:
-                // Window-anchored: nestle in the window's bottom-left inset
-                // rather than directly below (windows extend to screen edges).
-                x = anchor.rect.minX + 24
-                y = anchor.rect.minY + 24
-            }
-            x = min(max(visible.minX + 8, x), visible.maxX - size.width - 8)
-            y = min(max(visible.minY + 8, y), visible.maxY - size.height - 8)
-            let frame = NSRect(x: x, y: y, width: size.width, height: size.height)
-            Log.info("SentimentGuard popup anchor=\(anchor.kind) rect=\(anchor.rect) frame=\(frame)")
-            return frame
-        }
-        // No usable anchor at all. Centre on the main screen — feels like a
-        // dialog, not a system toast. Screen-corner pin was the old fallback
-        // and it read as "completely unrelated to what I was doing."
-        if let screen = NSScreen.main {
-            let f = screen.visibleFrame
-            return NSRect(x: f.midX - size.width / 2,
-                          y: f.midY - size.height / 2,
-                          width: size.width, height: size.height)
-        }
-        return NSRect(x: 200, y: 200, width: size.width, height: size.height)
-    }
-
-    /// Resolve which screen the caret sits on. Uses `contains(point)` on the
-    /// anchor's centre rather than `intersects(rect)` — a zero-width caret
-    /// (most text fields report the caret as a vertical line) is
-    /// `CGRectIsEmpty`, which fails the intersect test against every screen
-    /// and silently falls back to `NSScreen.main`. On a multi-monitor setup
-    /// that's a different display than the one the user is typing on, and the
-    /// popup ends up clamped to the wrong screen's bounds.
-    private func screenContaining(_ anchor: CGRect) -> NSScreen? {
-        let center = CGPoint(x: anchor.midX, y: anchor.midY)
-        return NSScreen.screens.first(where: { $0.frame.contains(center) })
-            ?? NSScreen.main
     }
 
     private func closePanel() {
@@ -408,74 +291,5 @@ final class SentimentGuard: HalenPlugin {
     }
 }
 
-// MARK: - SwiftUI popup
-
-private struct SentimentGuardPopup: View {
-    let text: String
-    let label: String
-    let tone: String
-    let onDismiss: () -> Void
-    let onApprove: () -> Void
-    let onRephrase: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.bubble.fill")
-                    .foregroundStyle(toneColor)
-                Text("This reads as ")
-                    .font(.system(.callout))
-                  + Text(label)
-                    .font(.system(.callout, weight: .semibold))
-                    .foregroundColor(toneColor)
-                Spacer()
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 18, height: 18)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.borderless)
-            }
-
-            Text(preview)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 4)
-
-            HStack {
-                Button("Looks fine", action: onApprove)
-                    .buttonStyle(.borderless)
-                    .controlSize(.small)
-                Spacer()
-                Button {
-                    onRephrase()
-                } label: {
-                    Label("Rephrase via Gemma 4", systemImage: "sparkles")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-        }
-        .padding(14)
-        .frame(width: 360, height: 170)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(toneColor.opacity(0.25), lineWidth: 1)
-        )
-    }
-
-    private var toneColor: Color {
-        sentimentRuleColor(tone)
-    }
-
-    private var preview: String {
-        let truncated = text.prefix(180)
-        return text.count > 180 ? "\(truncated)…" : String(truncated)
-    }
-}
+// The popover UI now lives in the shared `FindingsPopover` (Features/), with
+// SentimentGuard supplying the single-finding configuration in `showPopup`.
