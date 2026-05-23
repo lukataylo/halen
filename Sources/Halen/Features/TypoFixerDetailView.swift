@@ -8,15 +8,76 @@ struct TypoFixerDetailView: View {
     @State private var search: String = ""
     @State private var confirmingReset = false
     @FocusState private var typoFieldFocused: Bool
+    /// User-tunable "how many times must I see a typo before auto-fixing?"
+    /// Stored at the global defaults key so the running TypoStore reads
+    /// the latest value live (it's a `var` not a `let` on the store).
+    @AppStorage(TypoStore.activeThresholdKey) private var activeThreshold: Int = TypoStore.activeThresholdDefault
 
     var body: some View {
         VStack(spacing: 10) {
+            thresholdCard
             addCard
             searchField
             entriesList
             footer
         }
         .padding(12)
+    }
+
+    // MARK: - Threshold
+
+    /// "How aggressive should auto-correct be?" — the only real per-user
+    /// tuning knob for Typo Fixer. Three labelled positions on the slider
+    /// (aggressive / balanced / conservative) cover most of what the user
+    /// would actually want; finer than that is just noise.
+    private var thresholdCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Auto-fix sensitivity")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.4)
+                    Spacer()
+                    Text(thresholdLabel)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                let lo = Double(TypoStore.activeThresholdRange.lowerBound)
+                let hi = Double(TypoStore.activeThresholdRange.upperBound)
+                Slider(
+                    value: Binding(
+                        get: { Double(activeThreshold) },
+                        set: { activeThreshold = Int($0.rounded()) }
+                    ),
+                    in: lo...hi,
+                    step: 1
+                )
+                Text(thresholdHint)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var thresholdLabel: String {
+        switch activeThreshold {
+        case 1: return "1 — aggressive"
+        case 2: return "2 — balanced"
+        case 3: return "3 — careful"
+        case 4: return "4 — conservative"
+        default: return "\(activeThreshold) — very conservative"
+        }
+    }
+
+    private var thresholdHint: String {
+        switch activeThreshold {
+        case 1: return "Halen auto-fixes after seeing a typo once. Catches more, false-positives more."
+        case 2: return "Default. Auto-fixes after two confirmations from your edits."
+        case 3: return "Waits for three confirmations before activating an entry. Quieter."
+        default: return "Auto-fixes only after \(activeThreshold) observations. Personal seeds and user-added entries skip the warm-up."
+        }
     }
 
     // MARK: - Add new

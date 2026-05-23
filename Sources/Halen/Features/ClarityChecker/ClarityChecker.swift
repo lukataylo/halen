@@ -18,6 +18,43 @@ final class ClarityChecker: HalenPlugin {
     let icon = "text.magnifyingglass"
     let category: PluginCategory = .writing
 
+    /// Strict / balanced / lax — same idea as SentimentGuard. Pushed into
+    /// the classifier prompt as a single sentence; we don't have logits to
+    /// threshold against, so prompt shaping is the lever.
+    enum Sensitivity: String, CaseIterable, Sendable {
+        case strict, balanced, lax
+    }
+    static let sensitivityKey = "halen.clarity-checker.sensitivity"
+    static var sensitivity: Sensitivity {
+        let raw = UserDefaults.standard.string(forKey: sensitivityKey) ?? ""
+        return Sensitivity(rawValue: raw) ?? .balanced
+    }
+    static func sensitivityClause(_ s: Sensitivity) -> String {
+        switch s {
+        case .strict:
+            return "Be sensitive — surface any rule the text plausibly violates, even when borderline."
+        case .balanced:
+            return "Only list a rule when the text clearly violates it; when in doubt, leave it off."
+        case .lax:
+            return "Only list a rule when the violation is unambiguous and material; ignore minor or stylistic edges."
+        }
+    }
+
+    /// "Ask before rewrite" (default — popup with rewrite action) vs
+    /// "Just flag" (the popup is informational only; the user copies
+    /// passages manually). No "auto-rewrite" mode — auto-replacing the
+    /// user's paragraph is hostile by default and would need its own
+    /// undo path before we could ship it.
+    enum SuggestionMode: String, CaseIterable, Sendable {
+        case askBeforeRewrite     // default
+        case flagOnly             // no rewrite action surfaced
+    }
+    static let suggestionModeKey = "halen.clarity-checker.suggestionMode"
+    static var suggestionMode: SuggestionMode {
+        let raw = UserDefaults.standard.string(forKey: suggestionModeKey) ?? ""
+        return SuggestionMode(rawValue: raw) ?? .askBeforeRewrite
+    }
+
     private let services: HalenServices
     private weak var caretObserver: CaretObserver?
     let rulesStore: ClarityRulesStore
@@ -94,11 +131,13 @@ final class ClarityChecker: HalenPlugin {
 
         let rulesBlock = enabled.map { "- \($0.id): \($0.prompt)" }.joined(separator: "\n")
         let toneClause = services.toneProfiles.profile(for: appBundleId).promptClause
+        let sensitivityClause = Self.sensitivityClause(Self.sensitivity)
         let prompt = """
         You are a writing-clarity checker. The text below may have one or more of these issues:
         \(rulesBlock)
 
         \(toneClause)
+        \(sensitivityClause)
 
         Reply with ONLY a comma-separated list of the ids that genuinely apply, or the word none. No other text.
 
@@ -189,16 +228,22 @@ final class ClarityChecker: HalenPlugin {
             size: NSSize(width: size.width, height: size.height),
             level: .floating, interactive: true, shadow: true)
 
+        // "Flag only" mode strips the rewrite action entirely — the popup
+        // becomes informational, and the user copies passages themselves.
+        // Default mode keeps the streaming Gemma rewrite.
+        let mode = Self.suggestionMode
         let view = FindingsPopover(
             icon: "text.magnifyingglass",
             headline: rules.count == 1 ? "1 clarity issue" : "\(rules.count) clarity issues",
             headlineColorName: "blue",
             findings: findings,
-            primaryActionLabel: "Rewrite",
-            onPrimaryAction: { [weak self] in
-                self?.rewrite(paragraph: paragraph)
-                self?.closePanel()
-            },
+            primaryActionLabel: mode == .askBeforeRewrite ? "Rewrite" : nil,
+            onPrimaryAction: mode == .askBeforeRewrite
+                ? { [weak self] in
+                    self?.rewrite(paragraph: paragraph)
+                    self?.closePanel()
+                }
+                : nil,
             onDismiss: { [weak self] in self?.closePanel() }
         )
         panel.contentView = NSHostingView(rootView: view)

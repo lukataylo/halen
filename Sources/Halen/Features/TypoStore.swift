@@ -18,7 +18,24 @@ final class TypoStore {
     }
 
     private(set) var entries: [String: Entry] = [:]
-    private let activeThreshold = 2
+
+    /// How many times a (typo → correction) pair has to be observed before
+    /// Halen will auto-apply it. 1 = aggressive (first time is enough),
+    /// 5 = conservative (five confirmations). The detail view exposes this
+    /// as a slider; user-added entries skip the warm-up regardless (they
+    /// land with `observations == activeThreshold` from the start).
+    static let activeThresholdKey = "halen.typoFixer.activeThreshold"
+    static let activeThresholdDefault = 2
+    static let activeThresholdRange = 1...5
+
+    /// Live-read from defaults. Cheap (single integer lookup); not cached
+    /// so a slider drag in Settings takes effect on the next keystroke
+    /// without anyone having to invalidate state.
+    var activeThreshold: Int {
+        let raw = UserDefaults.standard.object(forKey: Self.activeThresholdKey) as? Int
+        return raw.flatMap { Self.activeThresholdRange.contains($0) ? $0 : nil }
+            ?? Self.activeThresholdDefault
+    }
 
     static var fileURL: URL {
         HalenSupportDirectory.root.appending(path: "typos.json")

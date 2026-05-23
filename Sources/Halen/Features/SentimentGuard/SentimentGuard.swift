@@ -42,6 +42,51 @@ final class SentimentGuard: HalenPlugin {
         UserDefaults.standard.object(forKey: concisenessDefaultsKey) as? Bool ?? true
     }
 
+    /// Comma-separated list of bundle ids the user has asked Sentiment Guard
+    /// to stay silent in (e.g. iMessage threads, gaming voice channels —
+    /// places blunt phrasing is the register). Edited from the detail view's
+    /// per-app overrides card.
+    static let ignoredAppsKey = "halen.sentiment-guard.ignoredApps"
+    static var ignoredAppBundleIds: Set<String> {
+        let raw = UserDefaults.standard.string(forKey: ignoredAppsKey) ?? ""
+        return Set(
+            raw.split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+        )
+    }
+
+    /// Minimum "confidence" required before a flagged tone reaches the user.
+    /// We don't have a true logit-based confidence from Qwen 0.5B, so the
+    /// score is a discrete tier — strict / balanced / lax — that maps onto
+    /// the prompt's bar for what counts as a hit. Detail view exposes this
+    /// as a three-position picker.
+    enum Sensitivity: String, CaseIterable, Sendable {
+        case strict          // flag anything that smells; more false positives
+        case balanced        // the existing default
+        case lax             // only the obvious ones; fewer false positives
+    }
+    static let sensitivityKey = "halen.sentiment-guard.sensitivity"
+    static var sensitivity: Sensitivity {
+        let raw = UserDefaults.standard.string(forKey: sensitivityKey) ?? ""
+        return Sensitivity(rawValue: raw) ?? .balanced
+    }
+    /// Clause appended to the classifier prompt so the model's threshold for
+    /// "does this match" shifts with the user's preference. Strict lowers
+    /// the bar (more flags), lax raises it. Implemented in the prompt
+    /// instead of as a logit threshold because Qwen 0.5B emits a single
+    /// label, not a probability vector.
+    static func sensitivityClause(_ s: Sensitivity) -> String {
+        switch s {
+        case .strict:
+            return "Be sensitive — flag the slightest hint of the labelled tones, even when borderline."
+        case .balanced:
+            return "Reply with the label only when the text clearly matches; when in doubt, prefer neutral."
+        case .lax:
+            return "Reply with a non-neutral label only for unambiguous, strong examples; lean strongly toward neutral."
+        }
+    }
+
     /// Popup footprint: compact while it only shows the warning + actions;
     /// taller once the user asks for a rephrase and the streaming preview pane
     /// appears. SentimentGuard uses these to size the host `NSPanel`; the
@@ -160,6 +205,11 @@ final class SentimentGuard: HalenPlugin {
             caretOffset: caretOffset,
             eligibility: { [weak self] paragraph in
                 guard let self else { return false }
+                // User-set per-app silence list — Sentiment Guard never
+                // classifies in apps the user has opted out of. Read live
+                // from defaults so toggling in Settings takes effect
+                // without an app relaunch.
+                if Self.ignoredAppBundleIds.contains(appBundleId) { return false }
                 // Opportunistic cooldown prune + per-app gate.
                 let now = Date()
                 self.cooldownUntil = self.cooldownUntil.filter { $0.value > now }
@@ -209,12 +259,17 @@ final class SentimentGuard: HalenPlugin {
         // Bias the classifier by the app's tone profile — a blunt Slack
         // message shouldn't be judged the way a blunt email is.
         let toneClause = services.toneProfiles.profile(for: appBundleId).promptClause
+        // Sensitivity slider — strict/balanced/lax. Appended as a single
+        // sentence; Qwen 0.5B doesn't expose logits we could threshold, so
+        // we lean on the prompt to shift the bar instead.
+        let sensitivityClause = Self.sensitivityClause(Self.sensitivity)
         let prompt = """
         You are a tone classifier. Categorise the tone of the following text as one of these labels:
         \(categoriesBlock)
         - neutral: the text doesn't strongly match any of the above
 
         \(toneClause)
+        \(sensitivityClause)
 
         Examples:
         \(examplesBlock)

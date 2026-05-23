@@ -28,6 +28,26 @@ struct AskHalenContext {
                                        selectedText: nil, currentParagraph: nil,
                                        clipboardText: nil, focusedElement: nil)
 
+    /// Returns a copy with `clipboardText` blanked out. Used when the user
+    /// has disabled "Include clipboard" in Ask Halen's settings — the
+    /// capture still happens (otherwise the toggle would only apply to
+    /// the next palette open), it just isn't sent to the model.
+    func removingClipboard() -> AskHalenContext {
+        AskHalenContext(appName: appName, appBundleId: appBundleId, appPID: appPID,
+                        selectedText: selectedText, currentParagraph: currentParagraph,
+                        clipboardText: nil, focusedElement: focusedElement)
+    }
+
+    /// Returns a copy with `currentParagraph` blanked out. The selection
+    /// is left intact — a user opting into "no surrounding paragraph" is
+    /// most likely still happy to send the text they explicitly
+    /// highlighted.
+    func removingParagraph() -> AskHalenContext {
+        AskHalenContext(appName: appName, appBundleId: appBundleId, appPID: appPID,
+                        selectedText: selectedText, currentParagraph: nil,
+                        clipboardText: clipboardText, focusedElement: focusedElement)
+    }
+
     /// Snapshot the user's current state. Reads AX + frontmost app + clipboard
     /// synchronously — runs in microseconds for healthy apps; a 200 ms cap on
     /// AX reads keeps a hung Electron app from freezing the palette.

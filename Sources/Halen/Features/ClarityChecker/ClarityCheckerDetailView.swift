@@ -8,14 +8,77 @@ struct ClarityCheckerDetailView: View {
     @State private var showAddRule = false
     @State private var newLabel = ""
     @State private var newPrompt = ""
+    /// Strict / balanced / lax. See ClarityChecker.sensitivityClause for
+    /// the prompt-side effect.
+    @AppStorage(ClarityChecker.sensitivityKey) private var sensitivityRaw: String =
+        ClarityChecker.Sensitivity.balanced.rawValue
+    /// askBeforeRewrite (default) vs flagOnly (no rewrite button).
+    @AppStorage(ClarityChecker.suggestionModeKey) private var suggestionModeRaw: String =
+        ClarityChecker.SuggestionMode.askBeforeRewrite.rawValue
 
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
                 rulesCard
+                sensitivityCard
+                modeCard
                 aboutCard
             }
             .padding(12)
+        }
+    }
+
+    // MARK: - Sensitivity / suggestion mode
+
+    private var sensitivityCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                cardLabel("Sensitivity")
+                Picker("", selection: $sensitivityRaw) {
+                    Text("Strict").tag(ClarityChecker.Sensitivity.strict.rawValue)
+                    Text("Balanced").tag(ClarityChecker.Sensitivity.balanced.rawValue)
+                    Text("Lax").tag(ClarityChecker.Sensitivity.lax.rawValue)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                Text(sensitivityHint)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var sensitivityHint: String {
+        switch ClarityChecker.Sensitivity(rawValue: sensitivityRaw) ?? .balanced {
+        case .strict:   return "Surface anything that plausibly violates a rule. Most popovers, most noise."
+        case .balanced: return "Default. Flag a rule only when the text clearly violates it."
+        case .lax:      return "Only flag unambiguous, material violations. Quiet by design."
+        }
+    }
+
+    private var modeCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                cardLabel("When a paragraph is flagged")
+                Picker("", selection: $suggestionModeRaw) {
+                    Text("Offer rewrite").tag(ClarityChecker.SuggestionMode.askBeforeRewrite.rawValue)
+                    Text("Just flag").tag(ClarityChecker.SuggestionMode.flagOnly.rawValue)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                Text(modeHint)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var modeHint: String {
+        switch ClarityChecker.SuggestionMode(rawValue: suggestionModeRaw) ?? .askBeforeRewrite {
+        case .askBeforeRewrite: return "Popover shows the issues plus a one-tap Gemma 4 rewrite."
+        case .flagOnly:         return "Popover shows the issues only. You rewrite the text yourself."
         }
     }
 

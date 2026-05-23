@@ -16,17 +16,147 @@ struct SentimentGuardDetailView: View {
     /// Conciseness check — surfaces wordy filler phrases alongside the tone
     /// classifier. On by default; the scan is rule-based and free.
     @AppStorage(SentimentGuard.concisenessDefaultsKey) private var concisenessEnabled = true
+    /// Strict / balanced / lax — see SentimentGuard.sensitivityClause.
+    @AppStorage(SentimentGuard.sensitivityKey) private var sensitivityRaw: String =
+        SentimentGuard.Sensitivity.balanced.rawValue
+    /// Comma-separated bundle ids. Bound directly to defaults via @AppStorage
+    /// so changes are picked up by the running plugin's eligibility check
+    /// on the next typed paragraph.
+    @AppStorage(SentimentGuard.ignoredAppsKey) private var ignoredAppsCSV: String = ""
+    /// Local-only field for adding a new bundle id to the silence list.
+    @State private var newIgnoredApp: String = ""
 
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
                 rulesCard
+                sensitivityCard
+                ignoredAppsCard
                 concisenessCard
                 statsCard
                 modelCard
             }
             .padding(12)
         }
+    }
+
+    // MARK: - Sensitivity
+
+    private var sensitivityCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                cardLabel("Sensitivity")
+                Picker("", selection: $sensitivityRaw) {
+                    Text("Strict").tag(SentimentGuard.Sensitivity.strict.rawValue)
+                    Text("Balanced").tag(SentimentGuard.Sensitivity.balanced.rawValue)
+                    Text("Lax").tag(SentimentGuard.Sensitivity.lax.rawValue)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                Text(sensitivityHint)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var sensitivityHint: String {
+        switch SentimentGuard.Sensitivity(rawValue: sensitivityRaw) ?? .balanced {
+        case .strict:   return "Flag the slightest hint of the labelled tones. More popovers, more false positives."
+        case .balanced: return "Default. Flag only when the text clearly matches an enabled rule."
+        case .lax:      return "Only flag strong, unambiguous matches. Fewer popovers, less likely to misjudge."
+        }
+    }
+
+    // MARK: - Per-app ignore list
+
+    /// Persisted CSV split into a usable list. Kept as a computed accessor
+    /// so the view always reflects the latest defaults value.
+    private var ignoredApps: [String] {
+        ignoredAppsCSV
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    private var ignoredAppsCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                cardLabel("Ignored apps")
+                Text("Sentiment Guard stays silent in these apps. Type a bundle id (e.g. com.apple.iChat).")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 6) {
+                    TextField("com.apple.iChat", text: $newIgnoredApp)
+                        .textFieldStyle(.plain)
+                        .font(.system(.callout, design: .monospaced))
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
+                    Button {
+                        addIgnoredApp()
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 16))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(newIgnoredApp.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .foregroundStyle(newIgnoredApp.trimmingCharacters(in: .whitespaces).isEmpty
+                                     ? Color.secondary.opacity(0.4) : Color.accentColor)
+                }
+
+                if ignoredApps.isEmpty {
+                    Text("No apps ignored.")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 2)
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(ignoredApps, id: \.self) { bundleId in
+                            HStack {
+                                Text(bundleId)
+                                    .font(.system(.callout, design: .monospaced))
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                Button {
+                                    removeIgnoredApp(bundleId)
+                                } label: {
+                                    Image(systemName: "minus.circle.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Remove from ignore list")
+                            }
+                            .padding(.horizontal, 6).padding(.vertical, 3)
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            }
+        }
+    }
+
+    private func addIgnoredApp() {
+        let trimmed = newIgnoredApp.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        // Defensive: dedup against the existing list.
+        var current = ignoredApps
+        guard !current.contains(trimmed) else {
+            newIgnoredApp = ""
+            return
+        }
+        current.append(trimmed)
+        ignoredAppsCSV = current.joined(separator: ",")
+        newIgnoredApp = ""
+    }
+
+    private func removeIgnoredApp(_ bundleId: String) {
+        var current = ignoredApps
+        current.removeAll { $0 == bundleId }
+        ignoredAppsCSV = current.joined(separator: ",")
     }
 
     // MARK: - Conciseness card

@@ -208,6 +208,38 @@ final class AskHalen: HalenPlugin {
     /// silently sending a request the backend will refuse.
     private static let maxQuestionChars = 8_000
 
+    /// User-tunable settings — model tier, temperature, what to include in
+    /// the captured context. Read fresh on each `submit()`; the detail view
+    /// edits the same `UserDefaults` keys via `@AppStorage`.
+    private struct UserSettings {
+        let tier: ModelTier
+        let temperature: Double
+        let includeClipboard: Bool
+        let includeParagraph: Bool
+
+        static var current: UserSettings {
+            let defaults = UserDefaults.standard
+            let tierRaw = defaults.string(forKey: tierKey) ?? ModelTier.medium.rawValue
+            let tier = ModelTier(rawValue: tierRaw) ?? .medium
+            // `object(forKey:) as? Double` is nil when unset → fall back to
+            // 0.4 (the long-standing default). A raw `double(forKey:)` would
+            // return 0.0 and silently make every reply deterministic, which
+            // is not the desired default.
+            let temp = (defaults.object(forKey: temperatureKey) as? Double) ?? 0.4
+            // Both context toggles default to true — the whole point of
+            // Ask Halen is that it sees what you're working on.
+            let clip  = (defaults.object(forKey: clipboardKey) as? Bool) ?? true
+            let para  = (defaults.object(forKey: paragraphKey) as? Bool) ?? true
+            return UserSettings(tier: tier, temperature: temp,
+                                includeClipboard: clip, includeParagraph: para)
+        }
+    }
+
+    static let tierKey        = "halen.askhalen.tier"
+    static let temperatureKey = "halen.askhalen.temperature"
+    static let clipboardKey   = "halen.askhalen.includeClipboard"
+    static let paragraphKey   = "halen.askhalen.includeParagraph"
+
     private func submit() {
         var question = state.question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else { return }
@@ -225,9 +257,24 @@ final class AskHalen: HalenPlugin {
         state.response = ""
         state.errorMessage = nil
 
-        let prompt = AskHalenContext.buildPrompt(question: question, context: state.context)
-        let request = InferenceRequest(prompt: prompt, tier: .medium,
-                                       maxTokens: 600, temperature: 0.4,
+        // Snapshot user settings at submit time — changing the tier or
+        // privacy toggles mid-stream shouldn't retroactively alter a
+        // request already in flight.
+        let settings = UserSettings.current
+        // Optionally strip the parts of `context` the user disabled in
+        // settings. Clipboard contents are the obvious privacy concern;
+        // the paragraph toggle is for users who want the palette to act
+        // as a pure question/answer surface untainted by what's on screen.
+        var effectiveContext = state.context
+        if !settings.includeClipboard {
+            effectiveContext = effectiveContext.removingClipboard()
+        }
+        if !settings.includeParagraph {
+            effectiveContext = effectiveContext.removingParagraph()
+        }
+        let prompt = AskHalenContext.buildPrompt(question: question, context: effectiveContext)
+        let request = InferenceRequest(prompt: prompt, tier: settings.tier,
+                                       maxTokens: 600, temperature: settings.temperature,
                                        taskKind: .generation)
 
         inflightTask = Task { @MainActor [services, weak self] in
@@ -388,26 +435,148 @@ final class AskHalenState: ObservableObject {
     @Published var hasSubmitted: Bool = false
 }
 
-/// Default detail view — Ask Halen has nothing to configure today; the hotkey
-/// is the surface. Future settings (custom hotkey, default model tier) land here.
+/// Ask Halen's per-plugin detail view. The hotkey is the surface; the
+/// detail panel surfaces the knobs that affect how the palette answers:
+/// which model tier to use, how creative the response is allowed to be,
+/// and which pieces of on-screen context get sent to the model.
 @MainActor
 private struct AskHalenDetailView: View {
+    @AppStorage(AskHalen.tierKey) private var tierRaw: String = ModelTier.medium.rawValue
+    // SwiftUI's `@AppStorage` stores `Double` values, falling back to 0.0
+    // when unset — which is why `UserSettings.current` reads via
+    // `object(forKey:) as? Double` instead. Here the binding controls the
+    // Slider so the absent → 0.4 default needs to be primed in `.onAppear`.
+    @AppStorage(AskHalen.temperatureKey) private var temperature: Double = 0.4
+    @AppStorage(AskHalen.clipboardKey) private var includeClipboard: Bool = true
+    @AppStorage(AskHalen.paragraphKey) private var includeParagraph: Bool = true
+
     var body: some View {
-        VStack(spacing: 14) {
+        ScrollView {
+            VStack(spacing: 14) {
+                hero
+                modelCard
+                contextCard
+                privacyNote
+            }
+            .padding(14)
+        }
+    }
+
+    private var hero: some View {
+        VStack(spacing: 8) {
             Image(systemName: "sparkles.rectangle.stack")
-                .font(.system(size: 32, weight: .light))
+                .font(.system(size: 30, weight: .light))
                 .foregroundStyle(Color.halenCobalt)
             Text("Press ⌃H anywhere")
                 .font(.system(.callout, weight: .medium))
-            Text("A floating palette opens with your focused app, selected text, and recent clipboard already in context. Ask anything — Halen answers locally using whichever backend is active. Note: terminals consume ⌃H as backspace, so the hotkey won't fire inside Terminal / iTerm.")
+            Text("A floating palette opens with your focused app, selection, and clipboard in context. Terminals consume ⌃H as backspace, so the hotkey won't fire inside Terminal or iTerm.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 24)
-            Spacer()
+                .padding(.horizontal, 12)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 36)
+        .padding(.top, 8)
+    }
+
+    private var modelCard: some View {
+        card {
+            cardHeader("Model")
+            Picker("", selection: $tierRaw) {
+                Text("Small — fastest").tag(ModelTier.small.rawValue)
+                Text("Medium — balanced").tag(ModelTier.medium.rawValue)
+                Text("Large — best quality").tag(ModelTier.large.rawValue)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            HStack(alignment: .firstTextBaseline) {
+                Text("Temperature")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(String(format: "%.2f", temperature))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 4)
+            Slider(value: $temperature, in: 0.0...1.0, step: 0.05)
+            Text("Lower is more literal. Higher is more creative. 0.40 reads as a balanced default for question answering.")
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var contextCard: some View {
+        card {
+            cardHeader("Context")
+            Toggle(isOn: $includeParagraph) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Include surrounding paragraph")
+                        .font(.system(size: 12))
+                    Text("The paragraph your cursor is in. Off makes Ask Halen a pure Q&A surface.")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(.switch)
+            .controlSize(.small)
+
+            Divider().opacity(0.3)
+
+            Toggle(isOn: $includeClipboard) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Include clipboard contents")
+                        .font(.system(size: 12))
+                    Text("Recent clipboard text. Useful for \"summarise what I just copied,\" off if your clipboard has sensitive things you don't want a model to see.")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(.switch)
+            .controlSize(.small)
+        }
+    }
+
+    private var privacyNote: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .padding(.top, 1)
+            Text("Whatever you turn on here is sent to the local model only. Nothing leaves your Mac.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: - Reusable card shell
+
+    private func card<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            content()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(.background.opacity(0.4))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(.separator.opacity(0.4), lineWidth: 0.5)
+                )
+        )
+    }
+
+    private func cardHeader(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10.5, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .tracking(0.6)
     }
 }
