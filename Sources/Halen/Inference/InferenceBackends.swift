@@ -14,18 +14,17 @@ enum InferenceBackends {
         // tier. Array order doesn't matter; the router sorts by
         // `InferenceSettings.preferenceOrder`.
         //
-        // Two `LlamaCppBackend` instances now ship: a Qwen 2.5 0.5B for the
+        // Two `LlamaCppBackend` instances ship: a Qwen 2.5 0.5B for the
         // dedicated `.classifier` tier (sub-second classification path) and
         // a Gemma 4 E4B for `.small`/`.medium` generation/rewrite. Each owns
         // its own context + idle-eviction timer.
         //
-        // `MLXBackend` is included unconditionally: until the mlx-swift
-        // dependency is added it is a harmless stub that reports
-        // `.unavailable`, so the router simply skips it and falls through.
+        // An MLX-backed parallel of `LlamaCppBackend(spec: .qwen…)` exists on
+        // the `mlx-activation` branch — pending an xcodebuild pipeline lift
+        // since `swift build` cannot compile mlx-swift's Metal shaders.
         var backends: [InferenceBackend] = [
             LlamaCppBackend(spec: .qwen25_05B_Q4_K_M),
             LlamaCppBackend(spec: .gemma4E4B_IQ4_XS),
-            MLXBackend(),
             OllamaBackend(),
         ]
         #if canImport(FoundationModels)
@@ -53,14 +52,6 @@ enum InferenceBackends {
                         if await llama.availability().isAvailable {
                             await llama.prewarm()
                             Log.info("LlamaCppBackend[\(llama.spec.id)]: prewarmed")
-                        }
-                    }
-                }
-                if let mlx = backend as? MLXBackend {
-                    group.addTask {
-                        if await mlx.availability().isAvailable {
-                            await mlx.prewarm()
-                            Log.info("MLXBackend: prewarmed")
                         }
                     }
                 }

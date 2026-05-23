@@ -44,14 +44,12 @@ enum BackendKind: String, Sendable, Codable, CaseIterable {
     case bundledLlama          = "bundled-llama"
     case appleFoundationModels = "apple-fm"
     case ollama                = "ollama"
-    case mlx                   = "mlx"
 
     var displayName: String {
         switch self {
         case .bundledLlama:          return "Built-in (Gemma 4 E4B)"
         case .appleFoundationModels: return "Apple Intelligence"
         case .ollama:                return "Ollama"
-        case .mlx:                   return "MLX (Apple Silicon)"
         }
     }
 }

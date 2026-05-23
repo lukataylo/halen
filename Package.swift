@@ -7,33 +7,9 @@ let package = Package(
     products: [
         .executable(name: "halen", targets: ["Halen"]),
     ],
-    // MLX backend (deferred): activating `MLXBackend` requires more than just
-    // adding the `mlx-swift-examples` dependency — mlx-swift's own README is
-    // explicit that **SwiftPM command-line cannot compile its Metal shaders**.
-    // The build succeeds, the binary links, but at runtime MLX fails to load
-    // `default.metallib` and crashes the process at first use:
-    //
-    //     MLX error: Failed to load the default metallib. library not found
-    //
-    // To activate properly the project would need to migrate (or dual-build)
-    // through `xcodebuild` so its Metal compiler stage runs and the
-    // `mlx-swift_Cmlx` resource bundle gets emitted next to the binary.
-    // That's a real engineering arc — new project file, new CI workflow,
-    // new build script — and Qwen 0.5B on llama.cpp already gives us
-    // sub-100 ms warm classification, so MLX is a perf-ceiling lift, not
-    // urgent. Keeping the dependency commented out (and `MLXBackend`
-    // compiling as an inert stub via `canImport(MLXLLM)`) until that arc
-    // is in scope.
-    //
-    // dependencies: [
-    //     .package(url: "https://github.com/ml-explore/mlx-swift-examples", from: "2.21.0"),
-    // ],
     targets: [
         .executableTarget(
             name: "Halen",
-            // Add when activating MLX (also requires xcodebuild — see above):
-            //     .product(name: "MLXLLM", package: "mlx-swift-examples"),
-            //     .product(name: "MLXLMCommon", package: "mlx-swift-examples"),
             dependencies: ["llama"],
             path: "Sources/Halen"
         ),
@@ -50,3 +26,13 @@ let package = Package(
         ),
     ]
 )
+
+// MLX backend — The Apple-Silicon-native MLX path lives on the
+// `mlx-activation` branch, not here. mlx-swift's command-line SwiftPM build
+// can't compile its Metal shaders, so any binary built via `swift build`
+// against the dep crashes at first use with "Failed to load the default
+// metallib." Activating that branch needs an xcodebuild pipeline step (or a
+// manual `xcrun metal` over mlx-swift's .metal sources) that produces the
+// `mlx-swift_Cmlx.bundle` resource expected by mlx-swift at runtime. Until
+// that lands, `main` ships the llama.cpp Qwen 0.5B classifier as the fast
+// path — already sub-100 ms warm, which was the original speed goal.
