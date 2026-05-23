@@ -123,6 +123,12 @@ final class BusyLoaderPanel {
     private func addGlow() {
         guard let container, let layer = container.layer else { return }
 
+        // Honors macOS "Reduce motion" — vestibular-disorder users get a
+        // still cobalt dot in place of the spinning ring + breathing glow.
+        // The hosted logo remains visible underneath, so "Halen is busy"
+        // still reads visually; it just doesn't move.
+        let reduceMotion = AccessibilityPreferences.shared.reduceMotion
+
         // Rotating cobalt arc in the margin around the logo.
         let ring = CAShapeLayer()
         ring.frame = container.bounds
@@ -135,22 +141,34 @@ final class BusyLoaderPanel {
         )
         ring.path = CGPath(ellipseIn: ringRect, transform: nil)
         ring.fillColor = NSColor.clear.cgColor
-        ring.strokeColor = CGColor.halenCobalt.copy(alpha: 0.55)
+        // Alpha was 0.55 — marginal on the rendered material; 0.80 keeps the
+        // spinner readable when the background blends toward grey (e.g. when
+        // the busy panel is anchored over a light-text-on-light-surface app
+        // like Pages or Notes). At 0.55 the cobalt arc dropped below WCAG AA
+        // 3:1 non-text contrast against typical document backgrounds; 0.80
+        // clears that bar comfortably without making the ring feel garish.
+        ring.strokeColor = CGColor.halenCobalt.copy(alpha: 0.80)
         ring.lineWidth = 2
         ring.lineCap = .round
         ring.strokeStart = 0.0
-        ring.strokeEnd = 0.7
-        let spin = CABasicAnimation(keyPath: "transform.rotation.z")
-        spin.fromValue = 0.0
-        spin.toValue = 2 * Double.pi
-        spin.duration = 1.0
-        spin.repeatCount = .infinity
-        ring.add(spin, forKey: "spin")
+        // With reduceMotion the ring becomes a full closed circle so the
+        // missing arc-gap doesn't read like a broken/cropped indicator.
+        ring.strokeEnd = reduceMotion ? 1.0 : 0.7
+        if !reduceMotion {
+            let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+            spin.fromValue = 0.0
+            spin.toValue = 2 * Double.pi
+            spin.duration = 1.0
+            spin.repeatCount = .infinity
+            ring.add(spin, forKey: "spin")
+        }
         layer.addSublayer(ring)
         ringLayer = ring
 
-        // Breathing glow on the logo itself — opacity only, so its size is untouched.
-        if let logoLayer = logo?.layer {
+        // Breathing glow on the logo itself — opacity only, so its size is
+        // untouched. Skipped entirely under reduceMotion; the logo stays at
+        // full opacity instead of pulsing.
+        if !reduceMotion, let logoLayer = logo?.layer {
             let pulse = CABasicAnimation(keyPath: "opacity")
             pulse.fromValue = 0.55
             pulse.toValue = 1.0

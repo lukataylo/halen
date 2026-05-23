@@ -8,6 +8,13 @@ import SwiftUI
 extension Color {
     /// Halen's signature cobalt blue. Use for the menubar caret, busy ring,
     /// chat bubbles, and any "this came from Halen" surface.
+    ///
+    /// Cobalt brand. Use at full saturation for accent strokes/icons; the
+    /// 0.18-opacity wash is decorative only — never put body text directly
+    /// on it. The wash sits well below WCAG AA contrast for text, so any
+    /// glyph rendered over it must use a higher-contrast colour (typically
+    /// `.primary` or pure `tint` at full alpha) and treat the wash purely
+    /// as a tint surface, not a foreground.
     static let halenCobalt = Color(red: 0, green: 0.30, blue: 0.99)
 }
 
@@ -49,9 +56,17 @@ func sentimentRuleColor(_ name: String) -> Color {
 
 /// A glass-styled card used by detail views. Always full-width so cards align
 /// vertically regardless of intrinsic content size.
+///
+/// Honors macOS "Reduce transparency": when the pref is on the
+/// `.ultraThinMaterial` fill is swapped for an opaque window-background
+/// colour so the card has solid, high-contrast chrome instead of a glassy
+/// frosted look. Single point of change here covers every settings card
+/// and most plugin detail views.
 @MainActor
 struct GlassCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
+
+    @State private var prefs = AccessibilityPreferences.shared
 
     var body: some View {
         content()
@@ -59,12 +74,23 @@ struct GlassCard<Content: View>: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                    .fill(cardFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .strokeBorder(.separator.opacity(0.4), lineWidth: 0.5)
                     )
             )
+    }
+
+    /// `AnyShapeStyle` so we can return either the translucent material or
+    /// a plain opaque `Color` from the same expression. The slightly-tinted
+    /// fallback (window background with a hair of white) keeps the card
+    /// visually distinct from the dropdown's own background.
+    private var cardFill: AnyShapeStyle {
+        if prefs.reduceTransparency {
+            return AnyShapeStyle(Color(nsColor: .controlBackgroundColor))
+        }
+        return AnyShapeStyle(Material.ultraThinMaterial)
     }
 }
 
@@ -179,10 +205,14 @@ struct HalenChatBubble: View {
 
 /// Three pulsing dots, iMessage-style. Used inside `HalenChatBubble` while a
 /// Gemma response is in flight.
+///
+/// Honors macOS "Reduce motion": when on, the dots render at full opacity
+/// without pulsing — still readable as "thinking", just not animated.
 @MainActor
 struct TypingDots: View {
     let color: Color
     @State private var animating = false
+    @State private var prefs = AccessibilityPreferences.shared
 
     var body: some View {
         HStack(spacing: 6) {
@@ -190,19 +220,22 @@ struct TypingDots: View {
             dot(delay: 0.18)
             dot(delay: 0.36)
         }
-        .onAppear { animating = true }
+        .onAppear {
+            guard !prefs.reduceMotion else { return }
+            animating = true
+        }
     }
 
     private func dot(delay: Double) -> some View {
         Circle()
             .fill(color)
             .frame(width: 7, height: 7)
-            .opacity(animating ? 1.0 : 0.3)
-            .scaleEffect(animating ? 1.0 : 0.65)
+            .opacity(animating ? 1.0 : (prefs.reduceMotion ? 1.0 : 0.3))
+            .scaleEffect(animating ? 1.0 : (prefs.reduceMotion ? 1.0 : 0.65))
             .animation(
-                .easeInOut(duration: 0.6)
-                    .repeatForever()
-                    .delay(delay),
+                prefs.reduceMotion
+                    ? nil
+                    : .easeInOut(duration: 0.6).repeatForever().delay(delay),
                 value: animating
             )
     }

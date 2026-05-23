@@ -90,16 +90,18 @@ struct PluginStoreView: View {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(Color.halenCobalt.opacity(0.16))
                 Image(systemName: "puzzlepiece.extension.fill")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.headline)
                     .foregroundStyle(Color.halenCobalt)
             }
             .frame(width: 30, height: 30)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Plugin Store")
                     .font(.system(.headline, weight: .semibold))
+                    .accessibilityAddTraits(.isHeader)
                 Text("Discover and manage plugins")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
@@ -109,7 +111,7 @@ struct PluginStoreView: View {
                 onClose()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(Color.primary.opacity(0.06)))
@@ -117,6 +119,8 @@ struct PluginStoreView: View {
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.cancelAction)
+            .accessibilityLabel("Close")
+            .accessibilityHint("Close the Plugin Store window.")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -191,10 +195,12 @@ struct PluginStoreView: View {
                 ProgressView()
                     .controlSize(.small)
                 Text("Loading…")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Loading available plugins")
         }
     }
 
@@ -203,24 +209,26 @@ struct PluginStoreView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "wifi.slash")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.body.weight(.medium))
                         .foregroundStyle(.orange)
                     Text("Registry unavailable")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                 }
                 Text(message)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Button {
                     Task { await model.refresh() }
                 } label: {
                     Label("Try again", systemImage: "arrow.clockwise")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.caption.weight(.medium))
                 }
                 .buttonStyle(.borderless)
                 .controlSize(.small)
                 .padding(.top, 2)
+                .accessibilityLabel("Try again")
+                .accessibilityHint("Refetch the plugin registry.")
             }
         }
     }
@@ -232,7 +240,7 @@ struct PluginStoreView: View {
             cardLabel(title)
             if let count {
                 Text("\(count)")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1)
@@ -241,12 +249,14 @@ struct PluginStoreView: View {
             Spacer()
         }
         .padding(.horizontal, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func emptyHint(_ text: String) -> some View {
         StoreCard {
             Text(text)
-                .font(.system(size: 11))
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -265,6 +275,7 @@ private struct InstalledPluginRow: View {
         StoreCard {
             HStack(alignment: .center, spacing: 11) {
                 PluginIconBadge(systemName: plugin.icon, tint: tint)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
@@ -275,7 +286,7 @@ private struct InstalledPluginRow: View {
                         }
                     }
                     Text(plugin.summary)
-                        .font(.system(size: 11))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -288,13 +299,17 @@ private struct InstalledPluginRow: View {
                         .toggleStyle(.switch)
                         .controlSize(.small)
                         .labelsHidden()
+                        .accessibilityLabel("Enable \(plugin.name)")
+                        .accessibilityHint(plugin.summary)
                     if let onRemove {
                         Button(role: .destructive, action: onRemove) {
                             Text("Remove")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.caption2.weight(.medium))
                         }
                         .buttonStyle(.borderless)
                         .controlSize(.small)
+                        .accessibilityLabel("Remove \(plugin.name)")
+                        .accessibilityHint("Uninstall this external plugin.")
                     }
                 }
             }
@@ -327,6 +342,7 @@ private struct AvailablePluginRow: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 11) {
                     PluginIconBadge(systemName: entry.iconName, tint: tint)
+                        .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
@@ -337,12 +353,12 @@ private struct AvailablePluginRow: View {
                             }
                         }
                         Text(entry.summary)
-                            .font(.system(size: 11))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                         Text("by \(entry.author) · v\(entry.version)")
-                            .font(.system(size: 10))
+                            .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
 
@@ -354,13 +370,15 @@ private struct AvailablePluginRow: View {
                 if case .failed(let message) = state {
                     HStack(alignment: .top, spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 10))
+                            .font(.caption2)
                             .foregroundStyle(.orange)
                         Text(message)
-                            .font(.system(size: 10))
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Install failed: \(message)")
                 }
 
                 if let source = URL(string: entry.sourceURL) {
@@ -368,10 +386,12 @@ private struct AvailablePluginRow: View {
                         NSWorkspace.shared.open(source)
                     } label: {
                         Label("View source", systemImage: "arrow.up.right.square")
-                            .font(.system(size: 10))
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("View source for \(entry.name)")
+                    .accessibilityHint("Open the plugin's source URL in your browser.")
                 }
             }
         }
@@ -384,19 +404,25 @@ private struct AvailablePluginRow: View {
             HStack(spacing: 5) {
                 ProgressView().controlSize(.small)
                 Text("Installing…")
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Installing \(entry.name)")
         case .available, .failed:
             Button(action: onInstall) {
                 Text(isRetry ? "Retry" : "Install")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 4)
                     .background(Capsule().fill(Color.halenCobalt))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(isRetry ? "Retry installing \(entry.name)" : "Install \(entry.name)")
+            .accessibilityHint(isRetry
+                               ? "Try installing this plugin again after the previous attempt failed."
+                               : "Download and install this plugin.")
         }
     }
 
@@ -420,7 +446,7 @@ private struct PluginIconBadge: View {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(tint.opacity(0.18))
             Image(systemName: systemName)
-                .font(.system(size: 14, weight: .medium))
+                .font(.headline)
                 .foregroundStyle(tint)
         }
         .frame(width: 32, height: 32)

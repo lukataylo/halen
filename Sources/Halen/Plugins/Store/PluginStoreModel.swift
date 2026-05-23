@@ -14,8 +14,12 @@ import Observation
 final class PluginStoreModel {
 
     /// Where the curated index lives. Raw GitHub content, HTTPS, public.
-    static let registryURL = URL(string:
-        "https://raw.githubusercontent.com/lukataylo/halen/main/plugin-registry.json")!
+    /// Optional rather than force-unwrapped — the literal is well-formed today,
+    /// but a future typo or owner change should fail loudly into the UI's
+    /// failure card, not crash the menubar app on launch.
+    static let registryURLString =
+        "https://raw.githubusercontent.com/lukataylo/halen/main/plugin-registry.json"
+    static let registryURL: URL? = URL(string: registryURLString)
 
     enum FetchState: Equatable {
         case idle
@@ -57,8 +61,15 @@ final class PluginStoreModel {
     func refresh() async {
         if case .loading = fetchState { return }
         fetchState = .loading
+        guard let url = Self.registryURL else {
+            // Should be impossible with a literal URL — but if a typo ever
+            // slips in, surface it in the UI rather than crashing the app.
+            fetchState = .failed("Plugin registry URL is malformed.")
+            Log.warn("PluginStore: registryURL parse failed — \(Self.registryURLString)")
+            return
+        }
         do {
-            var request = URLRequest(url: Self.registryURL)
+            var request = URLRequest(url: url)
             request.timeoutInterval = 20
             request.cachePolicy = .reloadIgnoringLocalCacheData
             let (data, response) = try await URLSession.shared.data(for: request)

@@ -57,6 +57,12 @@ final class StreamingRewriteState: ObservableObject {
 /// fills the available height.
 @MainActor
 struct FindingsPopover: View {
+    /// Identifies the focusable controls inside the popover. SwiftUI's
+    /// `@FocusState` enum form lets us point the focus at exactly one button
+    /// on appear so keyboard / VoiceOver users land on the primary action
+    /// instead of the popover container.
+    enum Field: Hashable { case primary, approve }
+
     let icon: String
     let headline: String
     let headlineColorName: String
@@ -75,6 +81,8 @@ struct FindingsPopover: View {
     /// "Copy" action for the streaming pane. Required if `streaming` is set.
     var onCopy: (() -> Void)? = nil
     let onDismiss: () -> Void
+
+    @FocusState private var focusedField: Field?
 
     var body: some View {
         if let streaming {
@@ -105,10 +113,11 @@ struct FindingsPopover: View {
 
             if let contextPreview {
                 Text(contextPreview)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("Flagged text: \(contextPreview)")
             }
 
             if findings.isEmpty {
@@ -128,16 +137,22 @@ struct FindingsPopover: View {
                     Button(approveLabel, action: onApprove)
                         .buttonStyle(.borderless)
                         .controlSize(.regular)
+                        .focused($focusedField, equals: .approve)
+                        .accessibilityLabel(approveLabel)
+                        .accessibilityHint("Dismiss this suggestion and remember the choice.")
                 }
                 Spacer()
                 if let primaryActionLabel, let onPrimaryAction {
                     Button(action: onPrimaryAction) {
                         Label(primaryActionLabel, systemImage: "sparkles")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.callout.weight(.medium))
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.regular)
                     .tint(.accentColor)
+                    .focused($focusedField, equals: .primary)
+                    .accessibilityLabel(primaryActionLabel)
+                    .accessibilityHint("Generate a rewritten version of the flagged text.")
                 }
             }
         }
@@ -148,6 +163,16 @@ struct FindingsPopover: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(sentimentRuleColor(headlineColorName).opacity(0.25), lineWidth: 1)
         )
+        // Focus the primary action on appear — VoiceOver users otherwise land
+        // on the popover container with no obvious next move, and keyboard-only
+        // users would have to Tab in from the previously-focused app window.
+        // The short hop on the main actor lets the NSPanel finish becoming
+        // key before SwiftUI processes the focus change, mirroring the same
+        // race we work around in `AskHalenPalette`.
+        .task {
+            try? await Task.sleep(for: .milliseconds(80))
+            focusedField = (onPrimaryAction != nil) ? .primary : .approve
+        }
     }
 }
 
@@ -169,6 +194,8 @@ private struct FindingsPopoverStreamingBody: View {
     let onCopy: (() -> Void)?
     let onDismiss: () -> Void
 
+    @FocusState private var focusedField: FindingsPopover.Field?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             FindingsPopoverHeader(icon: icon, headline: headline,
@@ -188,16 +215,27 @@ private struct FindingsPopoverStreamingBody: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(sentimentRuleColor(headlineColorName).opacity(0.25), lineWidth: 1)
         )
+        // Same focus-on-appear contract as the idle body. Once a stream is in
+        // flight the Copy button is the meaningful next stop, but it stays
+        // disabled until `.done`, so the initial focus target depends on the
+        // current phase.
+        .task {
+            try? await Task.sleep(for: .milliseconds(80))
+            focusedField = (streaming.phase == .idle && onPrimaryAction != nil)
+                ? .primary
+                : .approve
+        }
     }
 
     /// Default state — the findings list and the two original actions.
     @ViewBuilder private var idlePane: some View {
         if let contextPreview {
             Text(contextPreview)
-                .font(.system(size: 11))
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel("Flagged text: \(contextPreview)")
         }
 
         if findings.isEmpty {
@@ -217,16 +255,22 @@ private struct FindingsPopoverStreamingBody: View {
                 Button(approveLabel, action: onApprove)
                     .buttonStyle(.borderless)
                     .controlSize(.regular)
+                    .focused($focusedField, equals: .approve)
+                    .accessibilityLabel(approveLabel)
+                    .accessibilityHint("Dismiss this suggestion and remember the choice.")
             }
             Spacer()
             if let primaryActionLabel, let onPrimaryAction {
                 Button(action: onPrimaryAction) {
                     Label(primaryActionLabel, systemImage: "sparkles")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.callout.weight(.medium))
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
                 .tint(.accentColor)
+                .focused($focusedField, equals: .primary)
+                .accessibilityLabel(primaryActionLabel)
+                .accessibilityHint("Generate a rewritten version of the flagged text.")
             }
         }
     }
@@ -243,17 +287,17 @@ private struct FindingsPopoverStreamingBody: View {
                 Text("Suggested rewrite")
             case .failed:
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                Text("Couldn't rephrase")
+                Text("Rewrite failed. The model may be busy — try again.")
             case .idle:
                 EmptyView()
             }
         }
-        .font(.system(size: 11))
+        .font(.caption)
         .foregroundStyle(.secondary)
 
         ScrollView {
             Text(displayedRewrite)
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(streaming.phase == .failed ? .secondary : .primary)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -265,6 +309,9 @@ private struct FindingsPopoverStreamingBody: View {
             Button("Close", action: onDismiss)
                 .buttonStyle(.borderless)
                 .controlSize(.regular)
+                .focused($focusedField, equals: .approve)
+                .accessibilityLabel("Close")
+                .accessibilityHint("Dismiss the rewrite preview without copying it.")
             Spacer()
             if let onCopy {
                 // Hand-styled like the IndicatorPopover's Rephrase button.
@@ -274,9 +321,9 @@ private struct FindingsPopoverStreamingBody: View {
                 Button(action: onCopy) {
                     HStack(spacing: 4) {
                         Image(systemName: "doc.on.doc")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.caption.weight(.semibold))
                         Text("Copy")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.callout.weight(.semibold))
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
@@ -288,6 +335,9 @@ private struct FindingsPopoverStreamingBody: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(streaming.phase != .done)
+                .focused($focusedField, equals: .primary)
+                .accessibilityLabel("Copy rewrite")
+                .accessibilityHint("Copy the generated rewrite to the clipboard.")
             }
         }
     }
@@ -315,19 +365,23 @@ private struct FindingsPopoverHeader: View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .foregroundStyle(sentimentRuleColor(headlineColorName))
+                .accessibilityHidden(true)
             Text(headline)
                 .font(.system(.callout, weight: .semibold))
                 .foregroundColor(sentimentRuleColor(headlineColorName))
                 .lineLimit(2)
+                .accessibilityAddTraits(.isHeader)
             Spacer()
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.caption2.weight(.bold))
                     .foregroundStyle(.secondary)
                     .frame(width: 18, height: 18)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel("Close")
+            .accessibilityHint("Dismisses this suggestion popover.")
         }
     }
 }
@@ -342,12 +396,13 @@ private struct FindingRow: View {
                 .fill(sentimentRuleColor(finding.colorName))
                 .frame(width: 7, height: 7)
                 .padding(.top, 4)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(finding.title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                 if let detail = finding.detail {
                     Text(detail)
-                        .font(.system(size: 11))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -357,6 +412,8 @@ private struct FindingRow: View {
                 Button(fixLabel, action: onFix)
                     .buttonStyle(.bordered)
                     .controlSize(.small)
+                    .accessibilityLabel("\(fixLabel): \(finding.title)")
+                    .accessibilityHint("Apply this fix to the flagged text.")
             }
         }
     }

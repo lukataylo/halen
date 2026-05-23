@@ -69,6 +69,9 @@ final class PluginHost {
         // manifest. `HostBridge` gates sensitive methods (calendar/*) on it.
         let granted = Set(manifest.permissions ?? [])
         let pluginId = manifest.id   // captured by the per-instance handler
+        // Captured separately because the conflict registry surfaces a
+        // human label (manifest name), not the dotted reverse-DNS id.
+        let pluginName = manifest.name
         let instance = PluginInstance(manifest: manifest, pluginDir: dir,
                                       handler: { [bridge, weak self] method, params in
             // Per-plugin methods (hotkey/*) need plugin identity to route
@@ -83,7 +86,8 @@ final class PluginHost {
                                          message: "Plugin host shutting down", data: nil)
                 }
                 return try await self.handleHotkey(method: method, params: params,
-                                                   pluginId: pluginId)
+                                                   pluginId: pluginId,
+                                                   pluginName: pluginName)
             default:
                 return try await bridge.dispatch(method: method, params: params,
                                                  grantedPermissions: granted)
@@ -130,7 +134,8 @@ final class PluginHost {
     ///   - `modifiers`: bitmask of Carbon modifier flags (`controlKey`,
     ///                  `optionKey`, `cmdKey`, `shiftKey`).
     private func handleHotkey(method: String, params: RPCValue?,
-                              pluginId: String) async throws -> RPCValue {
+                              pluginId: String,
+                              pluginName: String) async throws -> RPCValue {
         let obj = params?.objectValue
         guard let hotkeyId = obj?["id"]?.stringValue else {
             throw RPCErrorObject(code: PluginRPC.ErrorCode.invalidParams.rawValue,
@@ -157,15 +162,21 @@ final class PluginHost {
             let ok = registrar.register(
                 keyCode: UInt32(keyCode),
                 modifiers: UInt32(modifiers),
-                id: carbonId
+                id: carbonId,
+                owner: pluginName
             ) { [weak self] in
                 Task { @MainActor in
                     self?.deliverHotkeyFired(pluginId: pluginId, hotkeyId: hotkeyId)
                 }
             }
             guard ok else {
+                // Could be a Halen-internal conflict (another plugin holds
+                // the chord — surfaced in Settings) or a Carbon-level
+                // refusal (another app owns it). The plugin sees the same
+                // RPC error either way; the user-facing distinction is in
+                // the Settings warning card.
                 throw RPCErrorObject(code: PluginRPC.ErrorCode.internalError.rawValue,
-                                     message: "Carbon refused the hotkey — probably already taken by another app",
+                                     message: "Hotkey refused — see Settings → Conflicting hotkeys, or another app may own this chord",
                                      data: nil)
             }
             hotkeys[pluginId, default: [:]][hotkeyId] = registrar

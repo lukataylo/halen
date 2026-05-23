@@ -85,8 +85,11 @@ final class EmailReply: HalenPlugin {
             keyCode: UInt32(kVK_ANSI_E),
             modifiers: UInt32(controlKey | optionKey),
             id: HotkeyID.emailReply.rawValue,
+            owner: name,
             onFire: { [weak self] in self?.draftReply() }
         )
+        // Failure path is recorded in the conflict registry; Settings
+        // shows the offending pair so the user can resolve it.
         Log.info("EmailReply: ⌃⌥E hotkey registered=\(ok)")
     }
 
@@ -98,6 +101,14 @@ final class EmailReply: HalenPlugin {
 
     func makeDetailView() -> AnyView {
         AnyView(EmailReplyDetailView())
+    }
+
+    /// Menu-equivalent entry point. Mirrors the ⌃⌥E hotkey path so users
+    /// who can't press chord combinations still reach the draft-reply flow
+    /// from the dropdown. Same guard rails as the hotkey path: if no mail
+    /// app is focused, the user gets the same "focus a mail app" toast.
+    func invokeFromMenu() {
+        draftReply()
     }
 
     // MARK: - Drafting

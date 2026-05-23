@@ -13,6 +13,9 @@ struct SettingsView: View {
     @Bindable var modelDownloader: ModelDownloader
     let webSocketBridge: WebSocketBridge?
     @Bindable var launchAtLogin: LaunchAtLoginController
+    /// Process-wide registry of hotkey conflicts. Observed so the warning
+    /// card appears/disappears live as plugins are toggled on or off.
+    @Bindable var hotkeyConflicts: HotkeyConflictRegistry
     let onBack: () -> Void
     /// Re-trigger the first-run walkthrough. Wired by `HalenCenterView`
     /// down to `AppCoordinator.onboardingWindow.presentAgain()`. Surfaced
@@ -57,6 +60,7 @@ struct SettingsView: View {
                     ollamaCard
                     builtInModelCard
                     if webSocketBridge != nil { webSocketCard }
+                    hotkeyConflictCard
                     aboutCard
                 }
                 .padding(12)
@@ -81,10 +85,14 @@ struct SettingsView: View {
         HStack(spacing: 10) {
             Button(action: onBack) {
                 HStack(spacing: 4) {
+                    // Semantic font + explicit weight so the back affordance scales
+                    // with Larger Accessibility Sizes; the old size: 12 was frozen.
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.callout)
+                        .fontWeight(.semibold)
                     Text("Plugins")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.callout)
+                        .fontWeight(.medium)
                 }
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 4)
@@ -92,12 +100,15 @@ struct SettingsView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Back to Plugins")
+            .accessibilityHint("Returns to the plugin marketplace list.")
             Spacer()
         }
         .overlay(
             HStack(spacing: 8) {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout)
+                    .fontWeight(.medium)
                     .foregroundStyle(.primary)
                 Text("Settings")
                     .font(.system(.callout, weight: .semibold))
@@ -114,15 +125,19 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 cardLabel("Startup")
                 HStack(alignment: .center, spacing: 12) {
+                    // Title3 fits a leading row icon at default text scale and
+                    // continues to grow with Larger Accessibility Sizes.
                     Image(systemName: "power.dotted")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.title3)
+                        .fontWeight(.medium)
                         .foregroundStyle(.secondary)
                         .frame(width: 22, height: 22)
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Launch at login")
                             .font(.system(.callout, weight: .medium))
                         Text(startupDetailText)
-                            .font(.system(size: 11))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -137,14 +152,19 @@ struct SettingsView: View {
                         // a confusing "toggle does nothing" experience — the
                         // deep-link button below carries the action.
                         .disabled(launchAtLogin.requiresApproval)
+                        // Switch has no visible Toggle label, so VoiceOver
+                        // needs an explicit one.
+                        .accessibilityLabel("Launch Halen at login")
+                        .accessibilityHint("Adds Halen to your Login Items so it opens automatically when you sign in.")
                 }
                 if launchAtLogin.requiresApproval {
                     HStack(spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 10))
+                            .font(.caption2)
                             .foregroundStyle(.orange)
+                            .accessibilityHidden(true)
                         Text("Disabled under System Settings → Login Items. Re-enable there.")
-                            .font(.system(size: 11))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
                         Button("Open Settings") {
@@ -152,15 +172,17 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        .accessibilityHint("Opens System Settings → General → Login Items so you can re-enable Halen.")
                     }
                 }
                 if let error = launchAtLogin.lastError {
                     HStack(spacing: 6) {
                         Image(systemName: "exclamationmark.octagon.fill")
-                            .font(.system(size: 10))
+                            .font(.caption2)
                             .foregroundStyle(.red)
+                            .accessibilityHidden(true)
                         Text(error)
-                            .font(.system(size: 11))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -199,7 +221,7 @@ struct SettingsView: View {
                     }
                 }
                 Text("Halen runs locally. Each permission controls one feature.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
@@ -211,31 +233,40 @@ struct SettingsView: View {
         let grant = permissions.grants[permission] ?? .checking
         return HStack(alignment: .center, spacing: 10) {
             Image(systemName: permission.iconName)
-                .font(.system(size: 13, weight: .medium))
+                .font(.body)
+                .fontWeight(.medium)
                 .foregroundStyle(.secondary)
                 .frame(width: 20, height: 20)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text(permission.displayName)
                         .font(.system(.callout, weight: .medium))
                     statusDot(statusKind(for: grant))
                     Text(label(for: grant))
-                        .font(.system(size: 11))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Text(permission.purpose)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 6)
-            Button("Open") {
-                permission.openSystemSettings()
+            // "Open" only makes sense when there's still something for the
+            // user to do — granted permissions don't need a deep-link.
+            if grant != .granted {
+                Button("Open") {
+                    permission.openSystemSettings()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityLabel("Open \(permission.displayName) settings")
+                .accessibilityHint("Opens the System Settings pane where you can grant this permission.")
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 
     private func statusKind(for grant: PermissionGrant) -> StatusKind {
@@ -252,8 +283,10 @@ struct SettingsView: View {
     private func label(for grant: PermissionGrant) -> String {
         switch grant {
         case .granted:      return "Granted"
-        case .denied:       return "Not granted"
-        case .notRequested: return "Not requested"
+        // Two distinct states with two distinct fixes — denial requires
+        // System Settings, "not requested" will prompt on first use.
+        case .denied:       return "Denied"
+        case .notRequested: return "Not requested yet"
         case .checking:     return "Checking…"
         }
     }
@@ -268,7 +301,7 @@ struct SettingsView: View {
                         Text("Show indicator")
                             .font(.system(.callout, weight: .medium))
                         Text("A small Halen mark next to your cursor.")
-                            .font(.system(size: 11))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -277,6 +310,8 @@ struct SettingsView: View {
                         .toggleStyle(.switch)
                         .controlSize(.regular)
                         .labelsHidden()
+                        .accessibilityLabel("Show caret indicator")
+                        .accessibilityHint("Draws a small Halen mark next to your text cursor while typing.")
                 }
 
                 // Style picker — only relevant when the indicator is on.
@@ -284,7 +319,8 @@ struct SettingsView: View {
                     Divider().opacity(0.4)
                     HStack(spacing: 10) {
                         Text("Style")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption)
+                            .fontWeight(.medium)
                             .foregroundStyle(.secondary)
                         Picker("", selection: $overlayDotStyle) {
                             Text("Solid").tag("solid")
@@ -293,6 +329,8 @@ struct SettingsView: View {
                         .pickerStyle(.segmented)
                         .labelsHidden()
                         .frame(maxWidth: 220)
+                        .accessibilityLabel("Indicator style")
+                        .accessibilityHint("Choose between a solid Halen dot or an outline-only version.")
                         Spacer()
                     }
 
@@ -306,9 +344,10 @@ struct SettingsView: View {
                     HStack(alignment: .top, spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Inline underlines")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.callout)
+                                .fontWeight(.medium)
                             Text("Beta. Underlines flagged text. Best in Notes and TextEdit.")
-                                .font(.system(size: 11))
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -316,6 +355,8 @@ struct SettingsView: View {
                         Toggle("", isOn: $inlineUnderlines)
                             .toggleStyle(.switch)
                             .labelsHidden()
+                            .accessibilityLabel("Inline underlines (beta)")
+                            .accessibilityHint("Underlines flagged text in apps that allow it, such as Notes and TextEdit.")
                     }
                 }
             }
@@ -354,10 +395,15 @@ struct SettingsView: View {
                         Task { await router.refreshAvailability() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.caption2)
+                            .fontWeight(.medium)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
+                    // Icon-only button — both label and hint required so
+                    // VoiceOver doesn't just say "Button."
+                    .accessibilityLabel("Re-check backend availability")
+                    .accessibilityHint("Re-probes every inference backend so the list reflects the current state.")
                 }
 
                 ForEach(Array(inferenceSettings.preferenceOrder.enumerated()), id: \.element) { index, kind in
@@ -365,7 +411,7 @@ struct SettingsView: View {
                 }
 
                 Text("Tried in order. First available handles the request.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -403,7 +449,7 @@ struct SettingsView: View {
                 Text(kind.displayName)
                     .font(.system(.callout, weight: .medium))
                 Text(detail)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if showAppleAISettingsButton {
@@ -417,27 +463,37 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.borderless)
                     .controlSize(.small)
-                    .font(.system(size: 11))
+                    .font(.caption)
+                    .accessibilityHint("Opens the Apple Intelligence pane in System Settings so you can turn it on.")
                 }
             }
+            // Combine the dot + status text so VoiceOver hears the status
+            // (e.g. "Apple Intelligence, Available") instead of "circle."
+            .accessibilityElement(children: .combine)
             Spacer(minLength: 6)
             VStack(spacing: 2) {
                 Button {
                     moveBackend(from: index, to: index - 1)
                 } label: {
                     Image(systemName: "chevron.up")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.caption2)
+                        .fontWeight(.semibold)
                 }
                 .buttonStyle(.plain)
                 .disabled(index == 0)
+                .accessibilityLabel("Move \(kind.displayName) up")
+                .accessibilityHint("Tries this backend earlier when routing requests.")
                 Button {
                     moveBackend(from: index, to: index + 1)
                 } label: {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.caption2)
+                        .fontWeight(.semibold)
                 }
                 .buttonStyle(.plain)
                 .disabled(index == inferenceSettings.preferenceOrder.count - 1)
+                .accessibilityLabel("Move \(kind.displayName) down")
+                .accessibilityHint("Tries this backend later when routing requests.")
             }
             .foregroundStyle(.secondary)
         }
@@ -460,7 +516,8 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Server URL")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.caption)
+                        .fontWeight(.medium)
                         .foregroundStyle(.secondary)
                     HStack(spacing: 6) {
                         TextField("http://localhost:11434", text: $ollamaURLDraft)
@@ -477,11 +534,19 @@ struct SettingsView: View {
                                 ollamaURLDraft = new
                                 ollamaURLInvalid = false
                             }
+                            // Validate on every keystroke so the red outline
+                            // and Save-disabled state track the draft in real
+                            // time, not just on Save-click.
+                            .onChange(of: ollamaURLDraft) { _, new in
+                                ollamaURLInvalid = OllamaSettings.validate(new) == nil
+                            }
                             .overlay(
                                 RoundedRectangle(cornerRadius: 5)
                                     .stroke(ollamaURLInvalid ? Color.red : Color.clear,
                                             lineWidth: 1)
                             )
+                            .accessibilityLabel("Ollama server URL")
+                            .accessibilityHint("Network address of your local Ollama daemon. Default is http://localhost:11434.")
                         Button {
                             commitOllamaURL()
                         } label: {
@@ -489,7 +554,8 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
-                        .disabled(ollamaURLDraft == ollamaURLStored)
+                        .disabled(ollamaURLInvalid || ollamaURLDraft == ollamaURLStored)
+                        .accessibilityHint("Saves the new Ollama server URL and re-checks availability.")
                         Button {
                             ollamaURLStored = OllamaSettings.defaultBaseURLString
                             ollamaURLDraft = OllamaSettings.defaultBaseURLString
@@ -497,18 +563,21 @@ struct SettingsView: View {
                             Task { await router.refreshAvailability() }
                         } label: {
                             Image(systemName: "arrow.counterclockwise")
-                                .font(.system(size: 11))
+                                .font(.caption)
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                         .help("Reset to \(OllamaSettings.defaultBaseURLString)")
+                        // Icon-only — VoiceOver needs an explicit label.
+                        .accessibilityLabel("Reset Ollama URL")
+                        .accessibilityHint("Restores the default Ollama address (\(OllamaSettings.defaultBaseURLString)).")
                     }
                 }
 
                 ollamaStatusLine
 
                 Text("Ollama endpoint. Change only if you moved the daemon to a different port.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
@@ -523,12 +592,14 @@ struct SettingsView: View {
         if ollamaURLInvalid {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.red)
+                    .accessibilityHidden(true)
                 Text("Not a valid http/https URL with a host.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            .accessibilityElement(children: .combine)
         } else if let url = OllamaSettings.validate(ollamaURLStored) {
             HStack(spacing: 6) {
                 let loopback = OllamaSettings.isLoopback(url)
@@ -536,10 +607,12 @@ struct SettingsView: View {
                 Text(loopback
                      ? "Local. Requests stay on this Mac."
                      : "Remote. Requests leave this Mac.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            // Dot is decorative; the accompanying text is what users hear.
+            .accessibilityElement(children: .combine)
         }
     }
 
@@ -573,10 +646,14 @@ struct SettingsView: View {
                         Text(modelStatusTitle)
                             .font(.system(.callout, weight: .medium))
                         Text(modelStatusDetail)
-                            .font(.system(size: 11))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    // Combine the dot + title + detail so VoiceOver reads
+                    // "Ready, Gemma 4 E4B IQ4_XS…" instead of stumbling on
+                    // the decorative circle.
+                    .accessibilityElement(children: .combine)
                     Spacer(minLength: 6)
                     modelActionButton
                 }
@@ -585,13 +662,19 @@ struct SettingsView: View {
                     ProgressView(value: fraction)
                         .progressViewStyle(.linear)
                         .controlSize(.small)
+                        .accessibilityLabel("Model download progress")
+                        .accessibilityValue("\(Int(fraction * 100)) percent")
+                    // .caption2 + monospacedDigit keeps the byte-counter
+                    // tabular so digits don't dance as they change, while
+                    // still scaling with Dynamic Type.
                     Text("\(formatBytes(bytes)) of \(formatBytes(total)) (\(Int(fraction * 100))%)")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.caption2)
+                        .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
 
                 Text("Runs on your Mac when Apple Intelligence is unavailable. Downloads on first use.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -605,17 +688,21 @@ struct SettingsView: View {
             Button("Download") { modelDownloader.start() }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+                .accessibilityHint("Downloads the bundled Gemma 4 E4B model (about 4.72 gigabytes).")
         case .downloading:
             Button("Cancel") { modelDownloader.cancel() }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .accessibilityHint("Stops the in-progress download.")
         case .verifying, .installing:
             ProgressView()
                 .controlSize(.small)
+                .accessibilityLabel("Preparing model")
         case .ready:
             Button("Remove") { confirmingModelRemove = true }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .accessibilityHint("Deletes the locally stored model. You can re-download it later.")
                 .confirmationDialog("Delete the downloaded Gemma 4 E4B model?",
                                     isPresented: $confirmingModelRemove,
                                     titleVisibility: .visible) {
@@ -631,6 +718,7 @@ struct SettingsView: View {
             Button("Retry") { modelDownloader.start() }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+                .accessibilityHint("Retries the failed model download.")
         }
     }
 
@@ -696,6 +784,8 @@ struct SettingsView: View {
                             .toggleStyle(.switch)
                             .controlSize(.regular)
                             .labelsHidden()
+                            .accessibilityLabel("Browser bridge")
+                            .accessibilityHint("Starts the local WebSocket so the Halen browser extension can connect.")
                             .onChange(of: webSocketEnabled) { _, newValue in
                                 // Live start/stop so the user doesn't have to
                                 // restart Halen for the toggle to take effect.
@@ -710,14 +800,17 @@ struct SettingsView: View {
                                  : "Off")
                                 .font(.system(.callout, design: .monospaced))
                             Text(bridgeStatusDetail(bridge))
-                                .font(.system(size: 11))
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer()
                     }
+                    // Combine: dot is decorative, the surrounding text is
+                    // what VoiceOver should read.
+                    .accessibilityElement(children: .combine)
                     Text("Lets the browser extension report text from apps the system can't reach.")
-                        .font(.system(size: 11))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -725,7 +818,8 @@ struct SettingsView: View {
 
                     HStack(spacing: 8) {
                         Text("Pairing token")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption)
+                            .fontWeight(.medium)
                             .foregroundStyle(.secondary)
                         Spacer()
                         Button(tokenCopied ? "Copied!" : "Copy") {
@@ -741,10 +835,13 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        .accessibilityLabel("Copy pairing token")
+                        .accessibilityHint("Copies the bridge token to the clipboard so you can paste it into the browser extension.")
                         Button("Regenerate") { confirmingTokenRotate = true }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                             .foregroundStyle(.red)
+                            .accessibilityHint("Issues a new pairing token and disconnects every currently paired client.")
                             .confirmationDialog("Regenerate the bridge token?",
                                                 isPresented: $confirmingTokenRotate,
                                                 titleVisibility: .visible) {
@@ -761,7 +858,7 @@ struct SettingsView: View {
                             }
                     }
                     Text("Browser extension: open its popup, paste this token, click Save.")
-                        .font(.system(size: 11))
+                        .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -776,6 +873,62 @@ struct SettingsView: View {
         case 0:  return "Listening — no clients connected."
         case 1:  return "1 client connected."
         default: return "\(bridge.clientCount) clients connected."
+        }
+    }
+
+    /// Warning card listing every hotkey collision detected since launch.
+    /// Hidden when there are none — most users never see it. Yellow accent
+    /// so it reads as "needs attention" without screaming "broken"; the
+    /// underlying chord is still owned by *one* plugin so nothing is
+    /// silently lost.
+    @ViewBuilder
+    private var hotkeyConflictCard: some View {
+        if !hotkeyConflicts.conflicts.isEmpty {
+            GlassCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.orange)
+                            .accessibilityHidden(true)
+                        cardLabel("Conflicting hotkeys")
+                    }
+                    ForEach(hotkeyConflicts.conflicts) { conflict in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(conflict.displayChord)
+                                    .font(.system(.callout, design: .monospaced, weight: .medium))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 1)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                            .fill(Color.orange.opacity(0.15))
+                                    )
+                                Text("held by")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(conflict.existingOwner)
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                Text("·")
+                                    .foregroundStyle(.secondary)
+                                Text(conflict.attemptedOwner)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .strikethrough()
+                            }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("\(conflict.displayChord) held by \(conflict.existingOwner); \(conflict.attemptedOwner) was rejected")
+                        }
+                    }
+                    Text("Disable one plugin or rebind its hotkey (rebinding coming in v0.4).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityHint("Turn off one of the conflicting plugins in the marketplace to clear this warning.")
+                }
+            }
         }
     }
 
@@ -796,16 +949,18 @@ struct SettingsView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "link")
-                            .font(.system(size: 10))
+                            .font(.caption2)
                         Text("github.com/lukataylo/halen")
-                            .font(.system(size: 11))
+                            .font(.caption)
                     }
                     .foregroundStyle(Color.accentColor)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Open Halen on GitHub")
+                .accessibilityHint("Opens github.com/lukataylo/halen in your browser.")
 
                 Text("Local-first writing for macOS. Tone, clarity, and rewrites run on your Mac.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
@@ -818,14 +973,15 @@ struct SettingsView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 10))
+                                .font(.caption2)
                             Text("Check for updates")
-                                .font(.system(size: 11))
+                                .font(.caption)
                         }
                     }
                     .buttonStyle(.borderless)
                     .foregroundStyle(Color.accentColor)
                     .disabled(!updater.canCheckForUpdates)
+                    .accessibilityHint("Asks Sparkle to check the appcast for a newer Halen release.")
                 }
 
                 Button {
@@ -833,26 +989,30 @@ struct SettingsView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "sparkles")
-                            .font(.system(size: 10))
-                        Text("Run setup again")
-                            .font(.system(size: 11))
+                            .font(.caption2)
+                        Text("Re-run first-time setup")
+                            .font(.caption)
                     }
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(Color.accentColor)
+                .accessibilityLabel("Re-run first-time setup")
+                .accessibilityHint("Walks you through permissions and plugin selection again.")
 
                 Button {
                     NSWorkspace.shared.open(URL(string: "https://halen.dev/changelog.html")!)
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "list.bullet.rectangle")
-                            .font(.system(size: 10))
+                            .font(.caption2)
                         Text("What's new")
-                            .font(.system(size: 11))
+                            .font(.caption)
                     }
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(Color.accentColor)
+                .accessibilityLabel("What's new")
+                .accessibilityHint("Opens the Halen changelog in your browser.")
             }
         }
     }
@@ -869,10 +1029,14 @@ struct SettingsView: View {
     private enum StatusKind { case ok, warning, error, neutral }
 
     private func statusDot(_ kind: StatusKind) -> some View {
+        // Saturation/luminance tuned so the dot clears WCAG AA contrast at
+        // 50% material blend in light mode. The previous greens/ambers were
+        // borderline against .regularMaterial; these darker values stay
+        // legible without looking muddy in dark mode.
         let color: Color = {
             switch kind {
-            case .ok:      return Color(red: 0.20, green: 0.78, blue: 0.35)
-            case .warning: return Color.orange
+            case .ok:      return Color(red: 0.12, green: 0.55, blue: 0.22)
+            case .warning: return Color(red: 0.78, green: 0.42, blue: 0.06)
             case .error:   return Color.red
             case .neutral: return Color.secondary
             }
@@ -885,6 +1049,11 @@ struct SettingsView: View {
                 .fill(color)
                 .frame(width: 7, height: 7)
         }
+        // The dot is decorative; the surrounding status text carries the
+        // semantic meaning. Hiding it stops VoiceOver from announcing
+        // "circle, circle" and lets the parent's `.accessibilityElement
+        // (children: .combine)` surface the real status string.
+        .accessibilityHidden(true)
     }
 
     // MARK: - Backend polling

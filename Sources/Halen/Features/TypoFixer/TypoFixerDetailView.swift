@@ -34,13 +34,16 @@ struct TypoFixerDetailView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline) {
+                    // Semantic .caption — Larger Accessibility Sizes scales the card label.
                     Text("Auto-fix sensitivity")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.caption)
+                        .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                         .tracking(0.4)
                     Spacer()
                     Text(thresholdLabel)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.caption)
+                        .monospaced()
                         .foregroundStyle(.secondary)
                 }
                 let lo = Double(TypoStore.activeThresholdRange.lowerBound)
@@ -53,8 +56,11 @@ struct TypoFixerDetailView: View {
                     in: lo...hi,
                     step: 1
                 )
+                .accessibilityLabel("Auto-fix sensitivity")
+                .accessibilityValue(thresholdLabel)
+                .accessibilityHint("Lower values auto-fix sooner; higher values wait for more confirmations.")
                 Text(thresholdHint)
-                    .font(.system(size: 10.5))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -86,7 +92,8 @@ struct TypoFixerDetailView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Add a correction")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.caption)
+                    .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
                     .tracking(0.4)
                 HStack(spacing: 8) {
@@ -99,10 +106,13 @@ struct TypoFixerDetailView: View {
                                 .fill(.background.opacity(0.6))
                         )
                         .focused($typoFieldFocused)
+                        .accessibilityLabel("Typo")
+                        .accessibilityHint("The misspelling Halen should learn.")
 
                     Image(systemName: "arrow.right")
-                        .font(.system(size: 11))
+                        .font(.caption)
                         .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
 
                     TextField("correction", text: $newCorrection)
                         .textFieldStyle(.plain)
@@ -112,18 +122,22 @@ struct TypoFixerDetailView: View {
                             RoundedRectangle(cornerRadius: 6)
                                 .fill(.background.opacity(0.6))
                         )
+                        .accessibilityLabel("Correction")
+                        .accessibilityHint("The word Halen should swap the typo for.")
 
                     Button {
                         addEntry()
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 16))
+                            .font(.title3)
                     }
                     .buttonStyle(.plain)
                     .disabled(newTypo.isEmpty || newCorrection.isEmpty)
                     .foregroundStyle(newTypo.isEmpty || newCorrection.isEmpty ? Color.secondary.opacity(0.4) : Color.accentColor)
+                    .accessibilityLabel("Add correction")
+                    .accessibilityHint("Saves the typo and correction pair to the dictionary.")
                 }
-                .font(.system(size: 12))
+                .font(.callout)
             }
         }
     }
@@ -140,11 +154,14 @@ struct TypoFixerDetailView: View {
     private var searchField: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 11))
+                .font(.caption)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             TextField("Filter \(store.entries.count) entries", text: $search)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12))
+                .font(.callout)
+                .accessibilityLabel("Filter typo entries")
+                .accessibilityHint("Search the dictionary by typo or correction.")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -205,7 +222,7 @@ struct TypoFixerDetailView: View {
     private var footer: some View {
         HStack {
             Text("\(filteredEntries.count) of \(store.entries.count)")
-                .font(.system(size: 10))
+                .font(.caption2)
                 .foregroundStyle(.tertiary)
             Spacer()
             Button("Open JSON") {
@@ -213,12 +230,14 @@ struct TypoFixerDetailView: View {
             }
             .buttonStyle(.borderless)
             .controlSize(.small)
+            .accessibilityHint("Reveals the typo dictionary as JSON in Finder.")
             Button("Reset all") {
                 confirmingReset = true
             }
             .buttonStyle(.borderless)
             .controlSize(.small)
             .foregroundStyle(.red)
+            .accessibilityHint("Asks for confirmation, then deletes every custom typo correction.")
             .confirmationDialog("Reset the typo dictionary?",
                                 isPresented: $confirmingReset,
                                 titleVisibility: .visible) {
@@ -256,8 +275,9 @@ private struct EntryRow: View {
                         .font(.system(.callout, design: .monospaced))
                         .foregroundStyle(.primary)
                     Image(systemName: "arrow.right")
-                        .font(.system(size: 9))
+                        .font(.caption2)
                         .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                     if isEditing {
                         TextField("", text: $draft)
                             .textFieldStyle(.roundedBorder)
@@ -267,6 +287,7 @@ private struct EntryRow: View {
                             .onSubmit(commit)
                             .frame(minWidth: 120)
                             .onExitCommand { cancelEdit() }
+                            .accessibilityLabel("Correction for \(key)")
                     } else {
                         Text(entry.correction)
                             .font(.system(.callout, design: .monospaced))
@@ -276,7 +297,7 @@ private struct EntryRow: View {
                 Text(isEditing
                      ? "⏎ save · ⎋ cancel"
                      : "\(entry.observations) observation\(entry.observations == 1 ? "" : "s")")
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
             Spacer()
@@ -284,18 +305,22 @@ private struct EntryRow: View {
                 Button("Save", action: commit)
                     .buttonStyle(.bordered)
                     .controlSize(.small)
+                    .accessibilityHint("Saves the edited correction.")
                 Button("Cancel", action: cancelEdit)
                     .buttonStyle(.borderless)
                     .controlSize(.small)
                     .foregroundStyle(.secondary)
+                    .accessibilityHint("Discards your edits.")
             } else {
                 Button(action: onDelete) {
                     Image(systemName: "trash")
-                        .font(.system(size: 11))
+                        .font(.caption)
                         .foregroundStyle(hovering ? Color.red : Color.secondary.opacity(0.5))
                 }
                 .buttonStyle(.plain)
                 .opacity(hovering ? 1 : 0.6)
+                .accessibilityLabel("Delete correction for \(key)")
+                .accessibilityHint("Removes this typo entry from the dictionary.")
             }
         }
         .padding(.horizontal, 12)

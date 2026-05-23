@@ -53,8 +53,11 @@ struct SentimentGuardDetailView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                .accessibilityLabel("Sentiment sensitivity")
+                .accessibilityHint("Strict catches more, lax stays quieter.")
+                // Semantic .caption — Larger Accessibility Sizes scales this hint.
                 Text(sensitivityHint)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -85,7 +88,7 @@ struct SentimentGuardDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 cardLabel("Ignored apps")
                 Text("Sentiment Guard stays silent in these apps. Type a bundle id (e.g. com.apple.iChat).")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -95,21 +98,27 @@ struct SentimentGuardDetailView: View {
                         .font(.system(.callout, design: .monospaced))
                         .padding(.horizontal, 8).padding(.vertical, 5)
                         .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
+                        .accessibilityLabel("New ignored bundle id")
+                        .accessibilityHint("Type a bundle id like com.apple.iChat to silence Sentiment Guard there.")
                     Button {
                         addIgnoredApp()
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 16))
+                            .font(.title3)
                     }
                     .buttonStyle(.plain)
                     .disabled(newIgnoredApp.trimmingCharacters(in: .whitespaces).isEmpty)
                     .foregroundStyle(newIgnoredApp.trimmingCharacters(in: .whitespaces).isEmpty
                                      ? Color.secondary.opacity(0.4) : Color.accentColor)
+                    .accessibilityLabel("Add bundle id to ignore list")
+                    .accessibilityHint("Adds the bundle id you just typed so Sentiment Guard stops firing there.")
                 }
 
                 if ignoredApps.isEmpty {
+                    // size: 10.5 ignored Dynamic Type; .caption2 is the smallest
+                    // semantic step and still keeps the row visually quiet.
                     Text("No apps ignored.")
-                        .font(.system(size: 10.5))
+                        .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .padding(.top, 2)
                 } else {
@@ -124,11 +133,13 @@ struct SentimentGuardDetailView: View {
                                     removeIgnoredApp(bundleId)
                                 } label: {
                                     Image(systemName: "minus.circle.fill")
-                                        .font(.system(size: 12))
+                                        .font(.callout)
                                         .foregroundStyle(.secondary)
                                 }
                                 .buttonStyle(.plain)
                                 .help("Remove from ignore list")
+                                .accessibilityLabel("Remove \(bundleId) from ignore list")
+                                .accessibilityHint("Sentiment Guard will fire in this app again.")
                             }
                             .padding(.horizontal, 6).padding(.vertical, 3)
                         }
@@ -171,9 +182,11 @@ struct SentimentGuardDetailView: View {
                         .toggleStyle(.switch)
                         .controlSize(.mini)
                         .labelsHidden()
+                        .accessibilityLabel("Conciseness check")
+                        .accessibilityHint("Turns the wordy-phrase scan on or off.")
                 }
                 Text("Flags wordy phrases like \"in order to\" and \"the fact that\". Instant.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -192,10 +205,14 @@ struct SentimentGuardDetailView: View {
                         withAnimation(.spring(duration: 0.2)) { showAddRule.toggle() }
                     } label: {
                         Image(systemName: showAddRule ? "minus.circle.fill" : "plus.circle.fill")
-                            .font(.system(size: 16))
+                            .font(.title3)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Color.accentColor)
+                    .accessibilityLabel(showAddRule ? "Cancel new detection rule" : "Add detection rule")
+                    .accessibilityHint(showAddRule
+                                       ? "Closes the add-rule form."
+                                       : "Opens a form to add a new sentiment detection rule.")
                 }
 
                 if showAddRule {
@@ -231,7 +248,9 @@ struct SentimentGuardDetailView: View {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(.background.opacity(0.6))
                     )
-                    .font(.system(size: 12))
+                    .font(.callout)
+                    .accessibilityLabel("Rule label")
+                    .accessibilityHint("Short name shown in the rules list.")
 
                 Menu {
                     ForEach(["red", "orange", "yellow", "blue", "purple", "gray"], id: \.self) { c in
@@ -239,13 +258,17 @@ struct SentimentGuardDetailView: View {
                     }
                 } label: {
                     HStack(spacing: 4) {
+                        // Decorative swatch — the colour name to its right is
+                        // the canonical label VoiceOver reads.
                         Circle()
                             .fill(sentimentRuleColor(newColor))
                             .frame(width: 10, height: 10)
+                            .accessibilityHidden(true)
                         Text(newColor)
-                            .font(.system(size: 11))
+                            .font(.caption)
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 8))
+                            .font(.caption2)
+                            .accessibilityHidden(true)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
@@ -256,6 +279,9 @@ struct SentimentGuardDetailView: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
+                .accessibilityLabel("Rule color")
+                .accessibilityValue(newColor)
+                .accessibilityHint("Pick the badge colour for this rule.")
             }
 
             TextField("Describe what this rule should detect (passed to Gemma)…", text: $newPrompt, axis: .vertical)
@@ -266,8 +292,10 @@ struct SentimentGuardDetailView: View {
                     RoundedRectangle(cornerRadius: 6)
                         .fill(.background.opacity(0.6))
                 )
-                .font(.system(size: 12))
+                .font(.callout)
                 .lineLimit(2...4)
+                .accessibilityLabel("Rule prompt")
+                .accessibilityHint("Describe what Gemma should detect to trigger this rule.")
 
             HStack {
                 Spacer()
@@ -284,6 +312,7 @@ struct SentimentGuardDetailView: View {
                 .controlSize(.small)
                 .disabled(newLabel.trimmingCharacters(in: .whitespaces).isEmpty
                           || newPrompt.trimmingCharacters(in: .whitespaces).isEmpty)
+                .accessibilityHint("Saves the new detection rule and closes the form.")
             }
         }
         .padding(8)
@@ -328,7 +357,8 @@ struct SentimentGuardDetailView: View {
                 } label: {
                     HStack {
                         Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 10))
+                            .font(.caption2)
+                            .accessibilityHidden(true)
                         Text("Clear approvals")
                     }
                     .frame(maxWidth: .infinity)
@@ -338,6 +368,7 @@ struct SentimentGuardDetailView: View {
                 .controlSize(.small)
                 .foregroundStyle(approvedCount == 0 ? Color.secondary.opacity(0.5) : Color.red)
                 .disabled(approvedCount == 0)
+                .accessibilityHint("Clears the list of paragraphs you've previously marked as fine.")
                 .confirmationDialog("Clear approved texts?",
                                     isPresented: $confirmingClear,
                                     titleVisibility: .visible) {
@@ -363,15 +394,16 @@ struct SentimentGuardDetailView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "cpu")
                         .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                     Text("Routed by your inference preference")
                         .font(.system(.callout))
                     Spacer()
                     Text("See Settings")
-                        .font(.system(size: 10))
+                        .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
                 Text("Rules run when you pause typing. First match shows a popover.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -390,16 +422,20 @@ private struct StatPillar: View {
 
     var body: some View {
         VStack(spacing: 3) {
+            // .title2 keeps the prominent display look while scaling with Dynamic Type.
             Text("\(value)")
-                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                .font(.system(.title2, design: .rounded, weight: .semibold))
                 .foregroundStyle(tint)
                 .contentTransition(.numericText())
             Text(label.uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(.caption2)
+                .fontWeight(.semibold)
                 .tracking(0.5)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
     }
 }
 
@@ -423,10 +459,14 @@ private struct RuleRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            // The colour swatch is decorative — the rule's label right after
+            // it carries the meaning. VoiceOver picks up the colour through
+            // the toggle's accessibility label below.
             Circle()
                 .fill(sentimentRuleColor(rule.colorName))
                 .frame(width: 8, height: 8)
                 .padding(.leading, 2)
+                .accessibilityLabel("\(rule.colorName.capitalized) severity")
 
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
@@ -434,7 +474,8 @@ private struct RuleRow: View {
                         .font(.system(.callout, weight: .medium))
                     if rule.builtin {
                         Text("BUILT-IN")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.caption2)
+                            .fontWeight(.semibold)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
@@ -444,7 +485,7 @@ private struct RuleRow: View {
                     }
                 }
                 Text(rule.prompt)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -455,11 +496,13 @@ private struct RuleRow: View {
             if !rule.builtin {
                 Button(action: onDelete) {
                     Image(systemName: "trash")
-                        .font(.system(size: 10))
+                        .font(.caption2)
                         .foregroundStyle(hovering ? Color.red : Color.secondary.opacity(0.5))
                 }
                 .buttonStyle(.plain)
                 .opacity(hovering ? 1 : 0.7)
+                .accessibilityLabel("Delete rule \(rule.label)")
+                .accessibilityHint("Removes this custom detection rule.")
             }
 
             Toggle("", isOn: Binding(
@@ -469,6 +512,8 @@ private struct RuleRow: View {
             .toggleStyle(.switch)
             .controlSize(.mini)
             .labelsHidden()
+            .accessibilityLabel("Enable rule \(rule.label)")
+            .accessibilityHint("Turns this sentiment detection rule on or off.")
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 2)

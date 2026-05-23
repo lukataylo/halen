@@ -143,6 +143,16 @@ final class SnippetExpander: HalenPlugin {
         AnyView(SnippetExpanderDetailView(store: store))
     }
 
+    /// Menu-equivalent entry point for the ⌃⌥R rephrase-selection hotkey.
+    /// The user has to have something selected in another app first — the
+    /// menubar dropdown's open by definition means Halen is frontmost when
+    /// the click happens, so the menu path relies on the selection
+    /// surviving the dropdown losing focus (it does: AX selection state is
+    /// per-element, not per-key-window).
+    func invokeRephraseSelectionFromMenu() {
+        rephraseSelection()
+    }
+
     // MARK: - Trigger detection
 
     private func handle(text: String, caretOffset: Int) {
@@ -175,11 +185,16 @@ final class SnippetExpander: HalenPlugin {
     private func expand(_ snippet: Snippet, at tokenRange: NSRange, fullText ns: NSString) {
         switch snippet.kind {
         case .staticText:
-            applyReplacement(snippet.value, at: tokenRange, trigger: snippet.trigger)
+            // VoiceOver users hear nothing from a silent AX write — surface
+            // the expansion through the announcement bridge. Static/dynamic
+            // snippets are one-shot writes; safe to announce the result.
+            applyReplacement(snippet.value, at: tokenRange, trigger: snippet.trigger,
+                             announce: "Expanded \(snippet.trigger)")
 
         case .dynamic:
             let value = dynamicValue(for: snippet.value)
-            applyReplacement(value, at: tokenRange, trigger: snippet.trigger)
+            applyReplacement(value, at: tokenRange, trigger: snippet.trigger,
+                             announce: "Expanded \(snippet.trigger)")
 
         case .ai:
             expandAI(snippet: snippet, at: tokenRange, fullText: ns)
@@ -355,7 +370,16 @@ final class SnippetExpander: HalenPlugin {
                 }
                 let elapsed = Int(Date().timeIntervalSince(start) * 1000)
                 Log.info("SnippetExpander: \(label) completed streamed (\(elapsed)ms) responseLen=\(cleaned.count)")
-                if !self.applyReplacement(cleaned, at: writeRange, trigger: label, in: element) {
+                // VoiceOver bridge: announce the final result of the AI
+                // expansion. Intermediate token writes pass `announce: nil`
+                // (would otherwise spam VO with every snapshot); only this
+                // authoritative replacement speaks. The rephrase hotkey gets
+                // a distinct phrasing from a `;` snippet.
+                let announcement = label == Self.rephraseHotkeyTrigger
+                    ? "Rephrased selection"
+                    : "Expanded \(label)"
+                if !self.applyReplacement(cleaned, at: writeRange, trigger: label,
+                                          in: element, announce: announcement) {
                     Log.warn("SnippetExpander: \(label) final AX write failed at \(writeRange.location),\(writeRange.length) — target element stale or unsupported")
                 }
             } catch {
@@ -411,13 +435,21 @@ final class SnippetExpander: HalenPlugin {
     /// When `element` is supplied the write targets that specific field even if
     /// focus has since moved (used for async AI responses). When nil it falls
     /// back to whatever is currently focused (instant static/dynamic snippets).
+    ///
+    /// `announce` is the VoiceOver string posted after a successful write.
+    /// Default nil means "don't announce" — intermediate streaming writes
+    /// pass nil so VoiceOver doesn't speak every token; only the final
+    /// cleaned write (or the static/dynamic one-shot) announces.
     @discardableResult
     private func applyReplacement(_ replacement: String, at range: NSRange, trigger: String,
-                                  in element: AXUIElement? = nil) -> Bool {
+                                  in element: AXUIElement? = nil,
+                                  announce: String? = nil) -> Bool {
         recentWrites.append(PendingWrite(trigger: trigger, timestamp: Date()))
         if let element {
-            return caretObserver?.replaceRange(range, with: replacement, in: element) ?? false
+            return caretObserver?.replaceRange(range, with: replacement, in: element,
+                                               describedAs: announce) ?? false
         }
-        return caretObserver?.replaceRange(range, with: replacement) ?? false
+        return caretObserver?.replaceRange(range, with: replacement,
+                                           describedAs: announce) ?? false
     }
 }

@@ -22,10 +22,15 @@ struct PluginDetailContainer<Content: View>: View {
         HStack(spacing: 10) {
             Button(action: onBack) {
                 HStack(spacing: 4) {
+                    // Semantic fonts so Larger Accessibility Sizes scales the back
+                    // affordance; size: 12 ignored that and stayed pixel-fixed.
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.callout)
+                        .fontWeight(.semibold)
+                        .accessibilityHidden(true)
                     Text("Plugins")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.callout)
+                        .fontWeight(.medium)
                 }
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 4)
@@ -33,6 +38,8 @@ struct PluginDetailContainer<Content: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Back to plugins")
+            .accessibilityHint("Returns to the plugin list.")
 
             Spacer()
 
@@ -40,9 +47,13 @@ struct PluginDetailContainer<Content: View>: View {
         }
         .overlay(
             HStack(spacing: 8) {
+                // The plugin icon is paired with the plugin name right next to
+                // it, so the symbol itself is decorative for VoiceOver.
                 Image(systemName: plugin.icon)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout)
+                    .fontWeight(.medium)
                     .foregroundStyle(.primary)
+                    .accessibilityHidden(true)
                 Text(plugin.name)
                     .font(.system(.callout, weight: .semibold))
             }
@@ -57,8 +68,11 @@ struct PluginCategoryBadge: View {
     let plugin: any HalenPlugin
 
     var body: some View {
+        // Semantic .caption2 so the badge respects Larger Accessibility Sizes;
+        // the visual weight is still small but it scales with the user's setting.
         Text(plugin.category.label)
-            .font(.system(size: 10, weight: .semibold))
+            .font(.caption2)
+            .fontWeight(.semibold)
             .tracking(0.5)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)

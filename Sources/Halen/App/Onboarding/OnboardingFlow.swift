@@ -21,6 +21,10 @@ struct OnboardingFlow: View {
 
     @State private var step: Step = .welcome
     @State private var permissions = SystemPermissionsModel()
+    /// Honors macOS "Reduce transparency": when on we swap the four
+    /// `.regularMaterial` surfaces in this flow (window chrome + three
+    /// content cards) for opaque colours.
+    @State private var prefs = AccessibilityPreferences.shared
 
     private enum Step: Int, CaseIterable {
         case welcome, choose, permissions
@@ -31,8 +35,10 @@ struct OnboardingFlow: View {
             // Glassmorphic chrome — `.regularMaterial` gives the standard
             // macOS frosted-panel look (less see-through than the previous
             // `.ultraThinMaterial`, which was reading more like a tinted
-            // sheet of plastic than glass).
-            Color.clear.background(.regularMaterial)
+            // sheet of plastic than glass). Under "Reduce transparency"
+            // we drop to the opaque window background so onboarding text
+            // sits on a high-contrast surface.
+            Color.clear.adaptiveMaterial(.regularMaterial)
             VStack(spacing: 0) {
                 header
                 content
@@ -99,9 +105,10 @@ struct OnboardingFlow: View {
 
             VStack(spacing: 4) {
                 Text("Writing help, on your Mac.")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.title2.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
                 Text("Quietly checks what you type. Stays local.")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
@@ -125,7 +132,7 @@ struct OnboardingFlow: View {
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.regularMaterial)
+                    .fill(cardFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -134,21 +141,32 @@ struct OnboardingFlow: View {
         }
     }
 
+    /// Card fill: translucent material by default, opaque control colour
+    /// when "Reduce transparency" is on. Returns `AnyShapeStyle` so it can
+    /// feed `RoundedRectangle.fill(_:)` for either branch.
+    private var cardFill: AnyShapeStyle {
+        if prefs.reduceTransparency {
+            return AnyShapeStyle(Color(nsColor: .controlBackgroundColor))
+        }
+        return AnyShapeStyle(Material.regularMaterial)
+    }
+
     private func featureRow(icon: String, tint: Color, title: String, body: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(tint.opacity(0.18))
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.headline)
                     .foregroundStyle(tint)
             }
             .frame(width: 30, height: 30)
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.body.weight(.medium))
                 Text(body)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -157,14 +175,16 @@ struct OnboardingFlow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
     }
 
     private var chooseStep: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Choose what's on.")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.title3.weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
             Text("Toggle any of these in Settings later.")
-                .font(.system(size: 11))
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 4)
 
@@ -179,7 +199,7 @@ struct OnboardingFlow: View {
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(.regularMaterial)
+                        .fill(cardFill)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -193,14 +213,15 @@ struct OnboardingFlow: View {
     private func pluginRow(_ plugin: any HalenPlugin) -> some View {
         HStack(spacing: 12) {
             Image(systemName: plugin.icon)
-                .font(.system(size: 13))
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .frame(width: 22)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(plugin.name)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                 Text(plugin.summary)
-                    .font(.system(size: 10.5))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -213,6 +234,8 @@ struct OnboardingFlow: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .labelsHidden()
+            .accessibilityLabel("Enable \(plugin.name)")
+            .accessibilityHint(plugin.summary)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
@@ -235,9 +258,10 @@ struct OnboardingFlow: View {
 
             VStack(spacing: 3) {
                 Text("Allow Halen to help.")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.title3.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
                 Text("Two permissions to read text and run shortcuts.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
@@ -253,7 +277,7 @@ struct OnboardingFlow: View {
             .padding(.vertical, 2)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.regularMaterial)
+                    .fill(cardFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -270,15 +294,16 @@ struct OnboardingFlow: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill((granted ? Color.green : Color.orange).opacity(0.18))
                 Image(systemName: granted ? "checkmark" : kind.iconName)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(granted ? Color.green : Color.orange)
             }
             .frame(width: 26, height: 26)
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(.callout.weight(.medium))
                 Text(granted ? "Granted." : body)
-                    .font(.system(size: 10.5))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -288,6 +313,8 @@ struct OnboardingFlow: View {
                     kind.openSystemSettings()
                 }
                 .controlSize(.small)
+                .accessibilityLabel("Open \(title) settings")
+                .accessibilityHint("Opens the System Settings pane where you can grant this permission.")
             }
         }
         .padding(.horizontal, 12)
@@ -306,6 +333,11 @@ struct OnboardingFlow: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
+                // Explicit label/hint because the auto-label is just "Back"
+                // with no context — VoiceOver users hearing only the word
+                // mid-flow can't tell what they're going back to.
+                .accessibilityLabel("Back")
+                .accessibilityHint("Return to the previous setup step.")
             }
             Spacer()
             if step == .permissions {
@@ -313,6 +345,8 @@ struct OnboardingFlow: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.regular)
                     .keyboardShortcut(.defaultAction)
+                    .accessibilityLabel("Done")
+                    .accessibilityHint("Finish setup and close this window.")
             } else {
                 Button("Continue") {
                     if let next = Step(rawValue: step.rawValue + 1) {
@@ -322,6 +356,8 @@ struct OnboardingFlow: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
                 .keyboardShortcut(.defaultAction)
+                .accessibilityLabel("Continue")
+                .accessibilityHint("Advance to the next setup step.")
             }
         }
         .padding(.horizontal, 18)

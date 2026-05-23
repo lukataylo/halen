@@ -6,6 +6,26 @@ versioning is [semver](https://semver.org/).
 
 ## [Unreleased]
 
+### Accessibility
+- **VoiceOver announcements for inline edits.** When Halen fixes a typo, expands a snippet, or applies a rewrite, VoiceOver speaks the change at the user's cursor instead of leaving the edit silent.
+- **Reduce Motion and Reduce Transparency support.** Overlay animations (busy loader, voice pulse, nav transitions) and translucent surfaces (dropdown, GlassCard, onboarding) honor the macOS accessibility preferences and update live.
+- **Menu equivalents for global hotkeys.** Ask Halen, Rephrase selection, Reply to email, and Start dictation are now keyboard-reachable from a Quick Actions section in the menubar dropdown — no chord required.
+
+### Usability
+- **Hotkey conflict detection.** Two plugins claiming the same chord now surface in Settings instead of silently clobbering each other.
+- **Permission states disambiguated.** "Denied" and "Not requested yet" are distinct labels, each pointing at the right remediation.
+- **Ollama URL validates as you type.** The Save button stays disabled until the URL is well-formed; the red outline appears on the first invalid keystroke instead of after Save.
+- **`Open` button hidden on granted permissions.** Cleaner permission rows; the deep-link only shows when there's something left to grant.
+- **Streaming-rewrite failure copy clarified.** "Couldn't rephrase" → "Rewrite failed. The model may be busy — try again."
+
+### Performance
+- **SHA-256 paragraph hash allocates one buffer instead of 65 strings.** Polish-grade win on the per-paragraph settle path.
+- **Latency assertions in CI.** ParagraphClassifier P50 < 5 ms and sha256Hex P50 < 100 µs are now regression-gated.
+
+### Code health
+- **TypoFixer files moved into `Features/TypoFixer/`** to match the per-plugin folder convention.
+- **`PluginStoreModel.registryURL` no longer force-unwraps;** a malformed literal surfaces in the UI's failure card instead of crashing on launch.
+
 ## [0.2.0] — 2026-05-23
 
 The first signed, notarized release. Drag-to-Install with no Gatekeeper

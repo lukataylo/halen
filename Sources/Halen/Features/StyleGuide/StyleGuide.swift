@@ -156,7 +156,12 @@ final class StyleGuide: HalenPlugin {
             Log.info("StyleGuide: \"\(rule.banned)\" no longer in field — skipping replace")
             return
         }
-        let wrote = caretObserver?.replaceRange(range, with: rule.preferred, in: element) ?? false
+        // VoiceOver bridge — describe the substitution so VO users hear
+        // the style-guide fix happen at their caret. Brief clause only.
+        let announcement = "Replaced '\(rule.banned)' with '\(rule.preferred)'"
+        let wrote = caretObserver?.replaceRange(range, with: rule.preferred,
+                                                in: element,
+                                                describedAs: announcement) ?? false
         Log.info("StyleGuide: replaced \"\(rule.banned)\" → \"\(rule.preferred)\" wrote=\(wrote)")
     }
 }

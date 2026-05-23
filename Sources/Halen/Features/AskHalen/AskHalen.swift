@@ -107,6 +107,13 @@ final class AskHalen: HalenPlugin {
         AnyView(AskHalenDetailView())
     }
 
+    /// Menu-equivalent entry point. Mirrors the ⌃H hotkey path so users who
+    /// can't press chord combinations (Switch Control, RSI, non-US layouts
+    /// where ⌃H collides) still reach the palette from the dropdown.
+    func invokeFromMenu() {
+        togglePalette()
+    }
+
     // MARK: - Palette
 
     private func togglePalette() {
@@ -257,6 +264,12 @@ final class AskHalen: HalenPlugin {
         state.response = ""
         state.errorMessage = nil
 
+        // VoiceOver bridge — sighted users see the "Thinking…" pane and
+        // spinner appear; VO users would otherwise sit in silence while
+        // the local model takes 1–4 s. `.medium` waits for the user's
+        // current utterance to finish so we don't interrupt them mid-word.
+        AnnounceCenter.say("Thinking")
+
         // Snapshot user settings at submit time — changing the tier or
         // privacy toggles mid-stream shouldn't retroactively alter a
         // request already in flight.
@@ -365,8 +378,20 @@ final class AskHalen: HalenPlugin {
             // OS-tracked caret anyway.
             let cf = axReadSelectedRange(element) ?? CFRange(location: 0, length: 0)
             let range = NSRange(location: cf.location, length: cf.length)
-            caretObserver?.replaceRange(range, with: response, in: element)
+            // describedAs:nil — we post our own higher-priority announcement
+            // right below; letting replaceRange announce too would speak the
+            // change twice.
+            let wrote = caretObserver?.replaceRange(range, with: response,
+                                                    in: element,
+                                                    describedAs: nil) ?? false
             Log.info("AskHalen: inserted \(response.count) chars at caret")
+            // VoiceOver bridge — the answer just landed in the user's
+            // original field, possibly seconds after they triggered ⌃H.
+            // `.high` priority so it cuts through any VO speech the user
+            // started listening to during the wait.
+            if wrote {
+                AnnounceCenter.say("Answer inserted at cursor", priority: .high)
+            }
         }
     }
 

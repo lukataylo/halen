@@ -24,6 +24,9 @@ struct HalenCenterView: View {
     /// Owned by AppCoordinator so its observable status survives the menubar
     /// popup closing — passed through to SettingsView's startup card.
     @Bindable var launchAtLogin: LaunchAtLoginController
+    /// Process-wide hotkey conflict tracker. Observed by SettingsView so a
+    /// collision detected at plugin startup renders a warning card.
+    @Bindable var hotkeyConflicts: HotkeyConflictRegistry
     /// Opens the Plugin Store. It's a standalone window (not a sheet on this
     /// dropdown) so it survives the menubar popover closing — see
     /// `PluginStoreWindowController`.
@@ -35,20 +38,28 @@ struct HalenCenterView: View {
     /// Sparkle-backed auto-updater. Passed through to SettingsView for
     /// the "Check for Updates" action.
     let updater: UpdaterController
+    /// Menu-equivalent invokers for the four hotkey-only features. Each
+    /// returns false when its plugin is disabled (or accessibility isn't
+    /// granted, so it never started) so the menu can render the row
+    /// disabled. Lives at AppCoordinator scope because the plugins do.
+    let quickActions: QuickActionsBridge
     @State private var nav: CenterNav = .marketplace
+    /// Tracks macOS "Reduce motion" / "Reduce transparency" prefs so the
+    /// nav transition + dropdown background can adapt without restart.
+    @State private var prefs = AccessibilityPreferences.shared
 
     var body: some View {
         ZStack {
             switch nav {
             case .marketplace:
                 listScreen
-                    .transition(.move(edge: .leading).combined(with: .opacity))
+                    .transition(navTransition(from: .leading))
             case .plugin(let id):
                 if let plugin = registry.plugins.first(where: { $0.id == id }) {
                     PluginDetailContainer(plugin: plugin, onBack: { back() }) {
                         plugin.makeDetailView()
                     }
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .transition(navTransition(from: .trailing))
                 }
             case .settings:
                 SettingsView(
@@ -58,11 +69,12 @@ struct HalenCenterView: View {
                     modelDownloader: modelDownloader,
                     webSocketBridge: webSocketBridge,
                     launchAtLogin: launchAtLogin,
+                    hotkeyConflicts: hotkeyConflicts,
                     onBack: { back() },
                     onRunSetupAgain: onRunSetupAgain,
                     updater: updater
                 )
-                .transition(.move(edge: .trailing).combined(with: .opacity))
+                .transition(navTransition(from: .trailing))
             }
         }
         .frame(width: 380)
@@ -71,15 +83,35 @@ struct HalenCenterView: View {
         // scrolling; new ceiling gives custom rules + external plugins room
         // before the list scrolls on a 13" display.
         .frame(minHeight: 360, maxHeight: 680)
-        .background(.regularMaterial)
+        .adaptiveMaterial(.regularMaterial)
+    }
+
+    /// Honors macOS "Reduce motion": swaps the slide+fade navigation
+    /// transition for a plain crossfade so the dropdown doesn't slide
+    /// content in from a screen edge.
+    private func navTransition(from edge: Edge) -> AnyTransition {
+        if prefs.reduceMotion {
+            return .opacity
+        }
+        return .move(edge: edge).combined(with: .opacity)
     }
 
     private func push(_ target: CenterNav) {
-        withAnimation(.spring(duration: 0.25)) { nav = target }
+        // Under Reduce Motion the spring is replaced with a tight linear
+        // fade — no overshoot/bounce, no edge slide (see `navTransition`).
+        if prefs.reduceMotion {
+            withAnimation(.linear(duration: 0.12)) { nav = target }
+        } else {
+            withAnimation(.spring(duration: 0.25)) { nav = target }
+        }
     }
 
     private func back() {
-        withAnimation(.spring(duration: 0.25)) { nav = .marketplace }
+        if prefs.reduceMotion {
+            withAnimation(.linear(duration: 0.12)) { nav = .marketplace }
+        } else {
+            withAnimation(.spring(duration: 0.25)) { nav = .marketplace }
+        }
     }
 
     private var listScreen: some View {
@@ -231,9 +263,17 @@ struct HalenCenterView: View {
     /// in registration order. The per-category grouping/headers were removed:
     /// `PluginCategory` survives on the model (other code reads it, and it
     /// still drives the row tint) but no longer sections the dropdown.
+    ///
+    /// Quick Actions sit above the plugin list (same ScrollView so the whole
+    /// dropdown remains a single Tab cycle for keyboard users): menu-
+    /// equivalents for the four hotkey-only features so users who can't
+    /// press chord combinations still reach Ask Halen / Rephrase / Reply /
+    /// Dictation without learning a chord.
     private var pluginList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
+                quickActionsSection
+                pluginsSectionHeader
                 ForEach(registry.plugins, id: \.id) { plugin in
                     PluginRow(
                         plugin: plugin,
@@ -249,6 +289,81 @@ struct HalenCenterView: View {
             }
             .padding(.vertical, 6)
         }
+    }
+
+    // MARK: - Quick actions
+
+    /// Section header style shared between Quick Actions and Plugins.
+    /// Uses `.caption` (semantic) so Dynamic Type scales it; the previous
+    /// hard-coded `.system(size: 11)` ignored the user's text-size setting.
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.caption)
+            .fontWeight(.semibold)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 20)
+            .padding(.top, 6)
+            .padding(.bottom, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var pluginsSectionHeader: some View {
+        sectionHeader("Plugins")
+    }
+
+    /// Four buttons mirroring the global-hotkey paths. Each button is
+    /// disabled (with an explanatory tooltip) when its underlying plugin
+    /// is off — the user's seen "off" everywhere else in the dropdown, so
+    /// the row stays visible rather than disappearing.
+    @ViewBuilder
+    private var quickActionsSection: some View {
+        sectionHeader("Quick actions")
+        VStack(spacing: 0) {
+            QuickActionRow(
+                icon: "sparkles.rectangle.stack",
+                title: "Ask Halen",
+                subtitle: "Open the contextual AI palette",
+                hotkeyHint: "\u{2303}H",
+                accessibilityHint: "Opens the Ask Halen palette.",
+                isAvailable: quickActions.isAvailable("com.halen.ask-halen"),
+                disabledReason: "Enable the Ask Halen plugin to use this action.",
+                action: { _ = quickActions.askHalen() }
+            )
+            QuickActionRow(
+                icon: "text.append",
+                title: "Rephrase selection",
+                subtitle: "Rewrite the highlighted text in place",
+                hotkeyHint: "\u{2303}\u{2325}R",
+                accessibilityHint: "Rewrites the currently selected text in the focused app.",
+                isAvailable: quickActions.isAvailable("com.halen.snippet-expander"),
+                disabledReason: "Enable Snippet Expander to use Rephrase Selection.",
+                action: { _ = quickActions.rephraseSelection() }
+            )
+            QuickActionRow(
+                icon: "arrowshape.turn.up.left",
+                title: "Reply to email",
+                subtitle: "Draft a reply in your mail app",
+                hotkeyHint: "\u{2303}\u{2325}E",
+                accessibilityHint: "Drafts an email reply using the focused mail app's selected message.",
+                isAvailable: quickActions.isAvailable("com.halen.email-reply"),
+                disabledReason: "Enable Email Reply to draft replies from the menu.",
+                action: { _ = quickActions.emailReply() }
+            )
+            QuickActionRow(
+                icon: "mic.fill",
+                title: "Start dictation",
+                subtitle: "Toggle voice dictation on or off",
+                hotkeyHint: "\u{2325}\u{2318}H",
+                accessibilityHint: "Starts or stops voice dictation.",
+                isAvailable: quickActions.isAvailable("com.halen.voice-dictation"),
+                disabledReason: "Enable Voice Dictation to start dictation from the menu.",
+                action: { _ = quickActions.startDictation() }
+            )
+        }
+        .padding(.bottom, 6)
+        Divider()
+            .padding(.horizontal, 14)
+            .padding(.bottom, 4)
     }
 
     // MARK: - Footer
@@ -340,4 +455,104 @@ struct PluginRow: View {
     }
 
     private var tint: Color { pluginCategoryTint(plugin.category) }
+}
+// MARK: - Quick Actions
+
+/// Plain-struct bridge between `HalenCenterView` and `AppCoordinator`'s
+/// menu-equivalent invokers. Captured as closures so the view doesn't
+/// take a direct dependency on the coordinator type — keeps the view
+/// previewable in isolation and matches how `onOpenStore` / `onRunSetupAgain`
+/// already flow through.
+@MainActor
+struct QuickActionsBridge {
+    /// Whether the plugin backing the quick action is enabled. The row
+    /// disables itself (with a tooltip) when this returns false.
+    let isAvailable: (_ pluginId: String) -> Bool
+    /// Fires Ask Halen's ⌃H code path. Returns false if the plugin is
+    /// disabled or missing — caller discards.
+    let askHalen: () -> Bool
+    /// Fires SnippetExpander's ⌃⌥R rephrase-selection code path.
+    let rephraseSelection: () -> Bool
+    /// Fires EmailReply's ⌃⌥E draft-reply code path.
+    let emailReply: () -> Bool
+    /// Fires VoiceDictation's ⌥⌘H toggle-recording code path.
+    let startDictation: () -> Bool
+}
+
+/// One row in the Quick Actions section. Native SwiftUI `Button` so it
+/// receives focus in the dropdown's Tab cycle, and the hotkey hint is a
+/// trailing `Text` (informational only — the button works regardless of
+/// whether the user can press the chord). When the underlying plugin is
+/// disabled the button is `.disabled(true)` with a `.help(...)` tooltip
+/// explaining what to enable, so the row stays discoverable rather than
+/// vanishing.
+@MainActor
+struct QuickActionRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let hotkeyHint: String
+    let accessibilityHint: String
+    let isAvailable: Bool
+    let disabledReason: String
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: 11) {
+                iconBadge
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.body)
+                        .fontWeight(.medium)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Text(hotkeyHint)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(Color.primary.opacity(0.06))
+                    )
+                    // The hint is decorative — VoiceOver already reads
+                    // the title + accessibilityHint, repeating the chord
+                    // would be noise for the audience this whole section
+                    // exists for.
+                    .accessibilityHidden(true)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isAvailable)
+        .opacity(isAvailable ? 1.0 : 0.55)
+        .help(isAvailable ? title : disabledReason)
+        .accessibilityLabel(title)
+        .accessibilityHint(isAvailable ? accessibilityHint : disabledReason)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isHovering && isAvailable ? Color.primary.opacity(0.06) : Color.clear)
+                .padding(.horizontal, 6)
+        )
+        .onHover { isHovering = $0 }
+    }
+
+    private var iconBadge: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color.accentColor.opacity(0.18))
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.accentColor)
+        }
+        .frame(width: 32, height: 32)
+    }
 }

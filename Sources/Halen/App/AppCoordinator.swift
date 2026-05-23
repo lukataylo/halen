@@ -65,6 +65,11 @@ final class AppCoordinator {
     /// About hosts the manual "Check for Updates…" button.
     let updater = UpdaterController()
 
+    /// Process-wide hotkey-conflict tracker. Held here (rather than left
+    /// as a private singleton) so the Settings UI can take a `@Bindable`
+    /// reference and re-render when two plugins claim the same chord.
+    let hotkeyConflicts = HotkeyConflictRegistry.shared
+
     /// Kept around so we can prewarm Apple FM at launch and re-probe
     /// availability from the Settings UI without going through the router.
     let backends: [InferenceBackend]
@@ -251,6 +256,77 @@ final class AppCoordinator {
                 self?.onboardingWindow.present()
             }
         }
+    }
+
+    // MARK: - Quick actions (menu-equivalents for global hotkeys)
+    //
+    // Four first-party features are reachable only via global hotkey
+    // (⌃H, ⌃⌥R, ⌃⌥E, ⌥⌘H). Users who can't press chord combinations
+    // (Switch Control, RSI, non-US keyboard layouts where the modifiers
+    // collide) need a keyboard-navigable menu path. These thin wrappers
+    // look up the plugin in the registry and invoke the same code path
+    // the hotkey triggers — disabled plugins return `false` so the menu
+    // can render a disabled state with an explanatory tooltip.
+
+    /// True if the plugin with `id` is registered and currently enabled —
+    /// i.e. its hotkey handler is live. The Quick Actions menu reads this
+    /// to gate each row.
+    func isPluginEnabled(_ id: String) -> Bool {
+        guard registry.contains(id) else { return false }
+        return registry.isEnabled(id)
+    }
+
+    /// Trigger Ask Halen's palette. No-op (and logs) when the plugin is
+    /// disabled — the menu should never offer the row in that case, but
+    /// guarding here keeps the contract honest if the call races a toggle.
+    @discardableResult
+    func invokeAskHalen() -> Bool {
+        guard let plugin = registry.plugins.first(where: { $0.id == "com.halen.ask-halen" }) as? AskHalen,
+              registry.isEnabled(plugin.id) else {
+            Log.warn("AppCoordinator: Ask Halen menu action invoked but plugin is unavailable/disabled")
+            return false
+        }
+        plugin.invokeFromMenu()
+        return true
+    }
+
+    /// Trigger Snippet Expander's "rephrase selection" flow. The user must
+    /// have text selected in another app — same precondition as ⌃⌥R.
+    @discardableResult
+    func invokeRephraseSelection() -> Bool {
+        guard let plugin = registry.plugins.first(where: { $0.id == "com.halen.snippet-expander" }) as? SnippetExpander,
+              registry.isEnabled(plugin.id) else {
+            Log.warn("AppCoordinator: Rephrase Selection menu action invoked but plugin is unavailable/disabled")
+            return false
+        }
+        plugin.invokeRephraseSelectionFromMenu()
+        return true
+    }
+
+    /// Trigger Email Reply's draft flow. The user must be focused in a
+    /// supported mail app — same precondition as ⌃⌥E.
+    @discardableResult
+    func invokeEmailReply() -> Bool {
+        guard let plugin = registry.plugins.first(where: { $0.id == "com.halen.email-reply" }) as? EmailReply,
+              registry.isEnabled(plugin.id) else {
+            Log.warn("AppCoordinator: Email Reply menu action invoked but plugin is unavailable/disabled")
+            return false
+        }
+        plugin.invokeFromMenu()
+        return true
+    }
+
+    /// Toggle Voice Dictation start/stop. Same path as ⌥⌘H, including the
+    /// mic/speech permission denial fallback.
+    @discardableResult
+    func invokeStartDictation() -> Bool {
+        guard let plugin = registry.plugins.first(where: { $0.id == "com.halen.voice-dictation" }) as? VoiceDictation,
+              registry.isEnabled(plugin.id) else {
+            Log.warn("AppCoordinator: Start Dictation menu action invoked but plugin is unavailable/disabled")
+            return false
+        }
+        plugin.invokeFromMenu()
+        return true
     }
 
     /// Register a freshly-installed external plugin live, without an app

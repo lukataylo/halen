@@ -83,17 +83,22 @@ struct AskHalenPalette: View {
     private var inputRow: some View {
         HStack(spacing: 10) {
             Image(systemName: "sparkles")
-                .font(.system(size: 14, weight: .medium))
+                .font(.headline)
                 .foregroundStyle(Color.halenCobalt)
+                .accessibilityHidden(true)
             TextField("Ask Halen…", text: $state.question, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 16))
+                .font(.title3)
                 .focused($inputFocused)
                 .lineLimit(1...4)
                 .onSubmit(onSubmit)
+                .accessibilityLabel("Ask Halen")
+                .accessibilityHint("Type your question, then press Return to send.")
 
             if state.isStreaming {
-                ProgressView().controlSize(.small)
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel("Generating response")
             } else {
                 Button(action: onSubmit) {
                     Image(systemName: "arrow.up.circle.fill")
@@ -103,6 +108,8 @@ struct AskHalenPalette: View {
                 .buttonStyle(.plain)
                 .disabled(state.question.isEmpty)
                 .keyboardShortcut(.return, modifiers: [])
+                .accessibilityLabel("Send")
+                .accessibilityHint("Sends your question to Halen.")
             }
 
             // Always-visible click escape. Esc is the primary path, but if
@@ -110,12 +117,14 @@ struct AskHalenPalette: View {
             // a way out without having to kill the app.
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
+                    .font(.title3)
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.cancelAction)
             .help("Close (⎋)")
+            .accessibilityLabel("Close")
+            .accessibilityHint("Dismisses the Ask Halen palette.")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -134,14 +143,14 @@ struct AskHalenPalette: View {
             VStack(alignment: .leading, spacing: 8) {
                 if let error = errorMessage {
                     Text(error)
-                        .font(.system(size: 12))
+                        .font(.callout)
                         .foregroundStyle(.red)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else if isStreaming && response.isEmpty {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
                         Text("Thinking…")
-                            .font(.system(size: 13))
+                            .font(.body)
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -149,14 +158,14 @@ struct AskHalenPalette: View {
                     // `Text(verbatim:)` to ensure no markdown / format string
                     // interpretation eats unusual content.
                     Text(verbatim: response)
-                        .font(.system(size: 13))
+                        .font(.body)
                         .foregroundStyle(.primary)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else if hasSubmitted && !isStreaming {
                     Text("No response. Try rephrasing.")
-                        .font(.system(size: 12))
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
@@ -179,6 +188,8 @@ struct AskHalenPalette: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .disabled(response.isEmpty)
+            .accessibilityLabel("Copy response")
+            .accessibilityHint("Copies Halen's response to the clipboard.")
 
             Button(action: onInsert) {
                 Label(insertButtonLabel, systemImage: insertButtonIcon)
@@ -190,6 +201,10 @@ struct AskHalenPalette: View {
             .help(state.context.focusedElement == nil
                   ? "No text field focused — ⌘⏎ copies to clipboard."
                   : "Insert at your caret.")
+            .accessibilityLabel(insertButtonLabel)
+            .accessibilityHint(state.context.focusedElement == nil
+                               ? "Copies the response to the clipboard."
+                               : "Inserts the response at your caret in the focused text field.")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -201,9 +216,9 @@ struct AskHalenPalette: View {
             if let chip = contextSummary {
                 HStack(spacing: 4) {
                     Image(systemName: "rectangle.dashed.badge.record")
-                        .font(.system(size: 9))
+                        .font(.caption2)
                     Text(chip)
-                        .font(.system(size: 10))
+                        .font(.caption2)
                 }
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
@@ -212,6 +227,8 @@ struct AskHalenPalette: View {
                     Capsule().fill(.thinMaterial)
                         .overlay(Capsule().strokeBorder(.separator.opacity(0.4), lineWidth: 0.5))
                 )
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Context: \(chip)")
             }
         }
     }
@@ -233,18 +250,18 @@ struct AskHalenPalette: View {
             if let chip = contextSummary {
                 HStack(spacing: 4) {
                     Image(systemName: "scope")
-                        .font(.system(size: 10))
+                        .font(.caption2)
                     Text(chip)
-                        .font(.system(size: 11))
+                        .font(.caption)
                 }
                 .foregroundStyle(.secondary)
             } else {
                 Text("Halen will answer based on your question.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Text("Return to send · Esc to close")
-                .font(.system(size: 10, design: .monospaced))
+                .font(.system(.caption2, design: .monospaced))
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

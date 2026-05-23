@@ -561,6 +561,13 @@ struct HalenCaretIndicator: View {
 private struct IndicatorPopoverContent: View {
     @Bindable var state: OverlayIndicatorState
 
+    /// Focus targets inside the popover. `.rephrase` is the primary action;
+    /// `.approve` is the muted secondary. We move focus to one of these on
+    /// appear so VoiceOver / keyboard-only users land on a button instead of
+    /// the popover container.
+    private enum Field: Hashable { case rephrase, approve }
+    @FocusState private var focusedField: Field?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let top = state.findings.first {
@@ -568,8 +575,10 @@ private struct IndicatorPopoverContent: View {
                     Circle()
                         .fill(HalenCaretIndicator.color(for: top.severity))
                         .frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
                     Text(top.summary)
                         .font(.system(.callout, weight: .semibold))
+                        .accessibilityAddTraits(.isHeader)
                     Spacer()
                 }
             }
@@ -579,8 +588,9 @@ private struct IndicatorPopoverContent: View {
                         Circle()
                             .fill(HalenCaretIndicator.color(for: f.severity))
                             .frame(width: 6, height: 6)
+                            .accessibilityHidden(true)
                         Text(f.summary)
-                            .font(.system(size: 11))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
                     }
@@ -593,6 +603,9 @@ private struct IndicatorPopoverContent: View {
                 }
                 .buttonStyle(.borderless)
                 .controlSize(.regular)
+                .focused($focusedField, equals: .approve)
+                .accessibilityLabel("Looks fine")
+                .accessibilityHint("Dismiss this finding and remember the choice.")
                 Spacer()
                 // Custom-styled button — `.borderedProminent` over the
                 // popover's `.regularMaterial` chrome renders as a faint
@@ -604,9 +617,9 @@ private struct IndicatorPopoverContent: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "sparkles")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.caption.weight(.semibold))
                         Text("Rephrase")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.callout.weight(.semibold))
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
@@ -615,9 +628,20 @@ private struct IndicatorPopoverContent: View {
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .focused($focusedField, equals: .rephrase)
+                .accessibilityLabel("Rephrase")
+                .accessibilityHint("Generate a rewritten version of the flagged text.")
             }
         }
         .padding(12)
+        // Focus the primary action on appear — VoiceOver users otherwise land
+        // on the popover container with no obvious next move. The brief hop
+        // gives SwiftUI's NSHostingView time to finish becoming the focused
+        // element before we redirect focus inward.
+        .task {
+            try? await Task.sleep(for: .milliseconds(80))
+            focusedField = .rephrase
+        }
     }
 
     /// Fire the chosen action against the strongest-severity finding (the

@@ -107,6 +107,118 @@ final class ParagraphClassifierTests: XCTestCase {
                        "frequently-touched paragraph should classify exactly once across all re-touches")
     }
 
+    // MARK: - Latency budgets
+    //
+    // These budgets are picked to catch *regressions*, not to specify a fixed
+    // contract — the absolute numbers depend on the runner. They're sized
+    // generously enough to be stable on the macOS-14 GitHub runner (which is
+    // noticeably slower than local Apple silicon) while still tight enough to
+    // flag a real perf cliff (e.g. someone reintroducing per-call
+    // `String(format:)` in `sha256Hex`, or adding a synchronous I/O hop into
+    // `ParagraphClassifier.run`).
+    //
+    //   ParagraphClassifier.classify P50 < 5 ms / P99 < 50 ms
+    //     — measures the classifier's own overhead (hashing + LRU touch +
+    //       async hop), with the user-supplied `classify` closure returning
+    //       instantly. A regression here means we've added work on the
+    //       paragraph-settle hot path.
+    //
+    //   sha256Hex P50 < 100 µs on a 100-char input
+    //     — guards the inline-hex encode. The pre-optimization version
+    //       (`%02x` + `.joined()`) measured roughly an order of magnitude
+    //       worse on the same hardware.
+
+    /// Compute the value at percentile `p` (0…1) from an unsorted array.
+    /// Uses nearest-rank: index = ceil(p * n) - 1, clamped to [0, n-1].
+    private func percentile<T: Comparable>(_ samples: [T], _ p: Double) -> T {
+        precondition(!samples.isEmpty)
+        let sorted = samples.sorted()
+        let idx = max(0, min(sorted.count - 1, Int((p * Double(sorted.count)).rounded(.up)) - 1))
+        return sorted[idx]
+    }
+
+    /// Classifier overhead per `schedule` call, end-to-end from `schedule`
+    /// returning through the settle hop until the no-op `classify` closure
+    /// runs. `settleDelay: 0` keeps the timer out of the measurement; what
+    /// remains is hashing + LRU lookup + the task hop itself.
+    func testClassifyP50UnderBudget() async {
+        let classifier = ParagraphClassifier(
+            minLength: 20, settleDelay: 0.0, maxCacheSize: 256)
+
+        // Warm the cache machinery once so the first sample doesn't carry
+        // one-time allocator costs (Task spawn, first hash buffer alloc).
+        let (warmText, warmCaret) = paragraphInput("Warmup paragraph for the classifier path.")
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            classifier.schedule(text: warmText, caretOffset: warmCaret,
+                                 classify: { _ in cont.resume() })
+        }
+
+        var durationsNs: [Int64] = []
+        durationsNs.reserveCapacity(100)
+        let clock = ContinuousClock()
+
+        for i in 0..<100 {
+            // Distinct content per iteration so the LRU treats each as a miss
+            // (we want to measure the full path including the append +
+            // potential eviction, not just the dedup short-circuit).
+            let (text, caret) =
+                paragraphInput("Test paragraph \(i) with some words for the classifier.")
+            let start = clock.now
+            await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                classifier.schedule(text: text, caretOffset: caret,
+                                     classify: { _ in cont.resume() })
+            }
+            let elapsed = clock.now - start
+            let c = elapsed.components
+            let ns = c.seconds * 1_000_000_000 + c.attoseconds / 1_000_000_000
+            durationsNs.append(ns)
+        }
+
+        let p50 = percentile(durationsNs, 0.50)
+        let p99 = percentile(durationsNs, 0.99)
+        let p50Ms = Double(p50) / 1_000_000
+        let p99Ms = Double(p99) / 1_000_000
+        print("ParagraphClassifier.schedule overhead — P50: \(p50Ms) ms, P99: \(p99Ms) ms")
+
+        XCTAssertLessThan(p50Ms, 5.0, "classifier P50 exceeded 5 ms budget")
+        XCTAssertLessThan(p99Ms, 50.0, "classifier P99 exceeded 50 ms tail budget")
+    }
+
+    /// `sha256Hex` is on the per-paragraph hot path; this guards the
+    /// inline-hex encoding from regressing back to `String(format:)`.
+    func testHashingP50UnderBudget() {
+        // 100-char input matches the lower end of a typical paragraph; the
+        // hash cost is dominated by the encode, not the SHA core, so input
+        // size barely moves the number — but we keep it realistic.
+        let input = String(repeating: "abcde12345", count: 10)
+        XCTAssertEqual(input.count, 100)
+
+        // Warm: one call to amortize first-touch allocator costs.
+        _ = sha256Hex(input)
+
+        var durationsNs: [Int64] = []
+        durationsNs.reserveCapacity(10_000)
+        let clock = ContinuousClock()
+
+        for _ in 0..<10_000 {
+            let start = clock.now
+            let hex = sha256Hex(input)
+            let elapsed = clock.now - start
+            // Prevent the optimizer from eliding the call.
+            XCTAssertEqual(hex.count, 64)
+            let c = elapsed.components
+            durationsNs.append(c.seconds * 1_000_000_000 + c.attoseconds / 1_000_000_000)
+        }
+
+        let p50 = percentile(durationsNs, 0.50)
+        let p99 = percentile(durationsNs, 0.99)
+        let p50Us = Double(p50) / 1_000
+        let p99Us = Double(p99) / 1_000
+        print("sha256Hex(100 chars) — P50: \(p50Us) µs, P99: \(p99Us) µs")
+
+        XCTAssertLessThan(p50Us, 100.0, "sha256Hex P50 exceeded 100 µs budget")
+    }
+
     /// Below `minLength`, a paragraph is short noise — should never reach
     /// the dedup cache or the classify closure.
     func testShortParagraphSkipped() async {

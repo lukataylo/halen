@@ -230,9 +230,14 @@ final class Autocomplete: HalenPlugin {
 
         // Tab accepts — registered only for the lifetime of this ghost so
         // normal Tab behaviour is untouched the rest of the time.
+        // Tab with no modifiers — conflict-checking is moot here since
+        // it's only live while a ghost is on screen, but we still claim
+        // through the registry so the symmetry holds and a future
+        // plugin registering bare-Tab globally would surface.
         _ = acceptHotkey.register(
             keyCode: UInt32(kVK_Tab), modifiers: 0,
             id: HotkeyID.autocomplete.rawValue,
+            owner: name,
             onFire: { [weak self] in self?.accept() })
 
         // Don't hold the Tab key captured indefinitely if the user wanders off.
@@ -252,7 +257,14 @@ final class Autocomplete: HalenPlugin {
         // Any keystroke would have dismissed the ghost, so the caret hasn't
         // moved since the suggestion was made — `pendingCaretOffset` is valid.
         let range = NSRange(location: pendingCaretOffset, length: 0)
-        let wrote = caretObserver?.replaceRange(range, with: suggestion, in: element) ?? false
+        // VoiceOver bridge — ghost text disappears and real text takes its
+        // place; sighted users see the swap, VO users hear silence without
+        // the announcement. Trim long suggestions so VO stays snappy.
+        let announcement = suggestion.count > 40
+            ? "Inserted autocomplete suggestion"
+            : "Inserted '\(suggestion)'"
+        let wrote = caretObserver?.replaceRange(range, with: suggestion, in: element,
+                                                describedAs: announcement) ?? false
         Log.info("Autocomplete: accepted suggestion (\(suggestion.count) chars) wrote=\(wrote)")
         dismiss()
     }

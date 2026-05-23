@@ -528,6 +528,10 @@ final class SentimentGuard: HalenPlugin {
         state.rewrite = ""
         state.phase = .streaming
         resizePopup(to: Self.popupRephraseSize)
+        // Tell VoiceOver the local model has started — sighted users see the
+        // streaming spinner; VO users would otherwise wait in silence not
+        // knowing whether the click took.
+        AnnounceCenter.say("Rewriting")
 
         let prompt = """
         Rewrite the following message in a calmer, more constructive tone while keeping the original intent and length. Output only the rewritten text — no quotes, no preamble.
@@ -565,6 +569,11 @@ final class SentimentGuard: HalenPlugin {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(rewrite, forType: .string)
         Log.info("SentimentGuard: rephrase copied to clipboard")
+        // VoiceOver bridge — the popup just vanished and the rewrite landed
+        // on the clipboard; sighted users see the action complete, VO users
+        // would otherwise hear nothing. `.high` priority so it cuts through
+        // any in-flight VO speech the user was listening to.
+        AnnounceCenter.say("Rewrite copied to clipboard", priority: .high)
         closePanel()
     }
 

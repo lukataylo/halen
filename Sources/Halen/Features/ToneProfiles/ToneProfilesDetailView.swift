@@ -32,10 +32,12 @@ struct ToneProfilesDetailView: View {
                 cardLabel("What each tone means")
                 ForEach(ToneProfile.allCases) { profile in
                     VStack(alignment: .leading, spacing: 2) {
+                        // Semantic .callout — Larger Accessibility Sizes scales the label.
                         Text(profile.label)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.callout)
+                            .fontWeight(.semibold)
                         Text(profile.promptClause)
-                            .font(.system(size: 11))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -56,7 +58,7 @@ struct ToneProfilesDetailView: View {
                 cardLabel("App tone profiles")
                 if store.sortedEntries.isEmpty {
                     Text("Choose a tone for each app below.")
-                        .font(.system(size: 11))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
                     VStack(spacing: 0) {
@@ -84,14 +86,15 @@ struct ToneProfilesDetailView: View {
                     Spacer()
                     if !multiSelection.isEmpty {
                         Text("\(multiSelection.count) selected")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.caption2)
+                            .monospaced()
                             .foregroundStyle(.secondary)
                     }
                 }
                 let unassigned = recentApps.apps.filter { store.profiles[$0.bundleId] == nil }
                 if unassigned.isEmpty {
                     Text("Apps you use will appear here.")
-                        .font(.system(size: 11))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
                     VStack(spacing: 0) {
@@ -118,7 +121,7 @@ struct ToneProfilesDetailView: View {
                     if !multiSelection.isEmpty {
                         HStack(spacing: 6) {
                             Text("Apply to selected:")
-                                .font(.system(size: 11))
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
                             ForEach(ToneProfile.allCases) { tone in
                                 Button(tone.label) {
@@ -129,6 +132,7 @@ struct ToneProfilesDetailView: View {
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.small)
+                                .accessibilityHint("Applies the \(tone.label) tone to the selected apps.")
                             }
                             Spacer()
                             Button("Clear") {
@@ -137,6 +141,7 @@ struct ToneProfilesDetailView: View {
                             .buttonStyle(.borderless)
                             .controlSize(.small)
                             .foregroundStyle(.secondary)
+                            .accessibilityHint("Deselects every app in the selection.")
                         }
                         .padding(.top, 6)
                     }
@@ -150,7 +155,7 @@ struct ToneProfilesDetailView: View {
             VStack(alignment: .leading, spacing: 6) {
                 cardLabel("How it's used")
                 Text("Rules adjust to the app you're in. Slack gets different rules than Mail.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -176,7 +181,7 @@ private struct ToneRow: View {
                     .font(.system(.callout, weight: .medium))
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -187,6 +192,8 @@ private struct ToneRow: View {
             .pickerStyle(.menu)
             .labelsHidden()
             .fixedSize()
+            .accessibilityLabel("Tone profile for \(title)")
+            .accessibilityHint("Choose which tone Halen uses when you're in this app.")
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 2)
@@ -207,18 +214,21 @@ private struct SelectableToneRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Button(action: onToggleSelection) {
+                // .body keeps the 14pt visual weight while scaling with Dynamic Type.
                 Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 14))
+                    .font(.body)
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
             }
             .buttonStyle(.plain)
             .help(isSelected ? "Remove from selection" : "Add to selection")
+            .accessibilityLabel(isSelected ? "Deselect \(title)" : "Select \(title)")
+            .accessibilityHint("Toggles \(title) in the bulk-assign selection.")
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
                     .font(.system(.callout, weight: .medium))
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -229,6 +239,8 @@ private struct SelectableToneRow: View {
             .pickerStyle(.menu)
             .labelsHidden()
             .fixedSize()
+            .accessibilityLabel("Assign tone to \(title)")
+            .accessibilityHint("Picks a tone profile for this app.")
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 2)

@@ -80,17 +80,29 @@ final class VoiceDictation: HalenPlugin {
         AnyView(VoiceDictationDetailView(state: state))
     }
 
+    /// Menu-equivalent entry point. Mirrors the ⌥⌘H hotkey path so users
+    /// who can't press chord combinations still reach the dictation
+    /// start/stop toggle from the dropdown.
+    func invokeFromMenu() {
+        toggleRecording()
+    }
+
     // MARK: - Hotkey
 
     private func registerHotkey() {
         let cmdOpt = UInt32(cmdKey | optionKey)
         let h = UInt32(kVK_ANSI_H)
         let ok = hotkey.register(keyCode: h, modifiers: cmdOpt,
-                                 id: HotkeyID.voiceDictation.rawValue) { [weak self] in
+                                 id: HotkeyID.voiceDictation.rawValue,
+                                 owner: name) { [weak self] in
             self?.toggleRecording()
         }
         if !ok {
-            Log.warn("VoiceDictation: failed to register ⌥⌘H — another app may own it")
+            // Either Carbon refused the chord (another app owns it) or a
+            // Halen plugin loaded earlier already claimed it — the
+            // conflict registry handles the latter and the warning card
+            // in Settings surfaces both owners.
+            Log.warn("VoiceDictation: failed to register ⌥⌘H — see Settings → Conflicting hotkeys")
         }
     }
 
@@ -187,11 +199,19 @@ final class VoiceDictation: HalenPlugin {
         }
         let range = NSRange(location: capturedOffset, length: 0)
         let payload = trimmed + " "
+        // VoiceOver bridge — the dictation panel closes and text appears in
+        // the field; VO users would otherwise hear nothing. `replaceRange`
+        // posts at `.medium` (polite — doesn't interrupt VO mid-word); the
+        // user explicitly stopped recording so they're already paying
+        // attention, no need for `.high` here.
+        let announcement = "Dictation inserted"
         let wrote: Bool
         if let element = capturedElement {
-            wrote = services.caretObserver.replaceRange(range, with: payload, in: element)
+            wrote = services.caretObserver.replaceRange(range, with: payload, in: element,
+                                                        describedAs: announcement)
         } else {
-            wrote = services.caretObserver.replaceRange(range, with: payload)
+            wrote = services.caretObserver.replaceRange(range, with: payload,
+                                                        describedAs: announcement)
         }
         state.lastTranscript = trimmed
         Log.info("VoiceDictation inserted \(trimmed.count) chars at offset \(capturedOffset) wrote=\(wrote)")

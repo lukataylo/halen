@@ -30,8 +30,11 @@ struct EmailReplyDetailView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                .accessibilityLabel("Default reply tone")
+                .accessibilityHint("Picks the default register Halen uses when drafting an email reply.")
+                // Semantic .caption — Larger Accessibility Sizes scales hint rows.
                 Text(toneHint)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -55,11 +58,12 @@ struct EmailReplyDetailView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "arrowshape.turn.up.left")
                         .foregroundStyle(Color.accentColor)
+                        .accessibilityHidden(true)
                     Text("Press ⌃⌥E in a mail app")
                         .font(.system(.callout, weight: .medium))
                 }
                 Text("Halen drafts a reply to the message at your cursor. Inserts it in the reply box, or copies to the clipboard.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -71,10 +75,10 @@ struct EmailReplyDetailView: View {
             VStack(alignment: .leading, spacing: 6) {
                 cardLabel("Supported apps")
                 Text("Mail · Outlook · Spark · Airmail · Canary · Mimestream")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                 Text("For Gmail or Outlook on the web, select the message text first.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

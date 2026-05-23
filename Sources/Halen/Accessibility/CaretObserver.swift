@@ -82,10 +82,20 @@ final class CaretObserver {
     var currentElement: AXUIElement? { focusedElement }
 
     /// Replace `range` (UTF-16 units) in the currently focused element with `replacement`.
+    ///
+    /// `describedAs` is a short, human-readable summary of *what changed*
+    /// that, on a successful write, gets posted to VoiceOver via
+    /// `AnnounceCenter`. Pass nil when the caller is going to post its own
+    /// announcement (e.g. AskHalen's "Answer inserted at cursor") to avoid
+    /// double-speak; pass a brief clause like "Fixed 'teh' to 'the'" or
+    /// "Expanded ;sig" otherwise. See `AnnounceCenter` for the rationale —
+    /// VoiceOver users get no signal from a silent AX mutation otherwise.
     @discardableResult
-    func replaceRange(_ range: NSRange, with replacement: String) -> Bool {
+    func replaceRange(_ range: NSRange,
+                      with replacement: String,
+                      describedAs description: String? = nil) -> Bool {
         guard let element = focusedElement else { return false }
-        return replaceRange(range, with: replacement, in: element)
+        return replaceRange(range, with: replacement, in: element, describedAs: description)
     }
 
     /// Replace `range` (UTF-16 units) in a specific `element` with `replacement`.
@@ -94,8 +104,16 @@ final class CaretObserver {
     /// (the common case in Electron, web text fields, terminals) falls back to
     /// a clipboard-and-⌘V paste so the feature still works there — same
     /// observable result, less ideal mechanism.
+    ///
+    /// `describedAs` mirrors the focused-element overload: on success, post
+    /// a VoiceOver announcement summarising the edit so assistive-tech users
+    /// hear that something changed at their cursor. nil = don't announce
+    /// (the caller will post its own).
     @discardableResult
-    func replaceRange(_ range: NSRange, with replacement: String, in element: AXUIElement) -> Bool {
+    func replaceRange(_ range: NSRange,
+                      with replacement: String,
+                      in element: AXUIElement,
+                      describedAs description: String? = nil) -> Bool {
         var cfRange = CFRange(location: range.location, length: range.length)
         guard let rangeValue: AXValue = withUnsafePointer(to: &cfRange, { ptr in
             AXValueCreate(.cfRange, UnsafeRawPointer(ptr))
@@ -117,9 +135,18 @@ final class CaretObserver {
                 kAXSelectedTextAttribute as CFString,
                 replacement as CFString
             )
-            if setText == .success { return true }
+            if setText == .success {
+                if let description, !description.isEmpty {
+                    AnnounceCenter.say(description)
+                }
+                return true
+            }
             Log.info("replaceRange: AX write failed (status=\(setText.rawValue)) — pasting over AX-set selection")
-            return Self.pasteFallback(text: replacement, deleteCount: 0)
+            let ok = Self.pasteFallback(text: replacement, deleteCount: 0)
+            if ok, let description, !description.isEmpty {
+                AnnounceCenter.say(description)
+            }
+            return ok
         }
 
         // Path B — AX can't even set the selection (some web text fields).
@@ -127,7 +154,11 @@ final class CaretObserver {
         // trigger token, then paste. Imperfect for grapheme-cluster boundaries
         // but right for ASCII trigger/correction text, which is the common case.
         Log.info("replaceRange: AX setRange failed (status=\(setRange.rawValue)) — backspace+paste fallback")
-        return Self.pasteFallback(text: replacement, deleteCount: range.length)
+        let ok = Self.pasteFallback(text: replacement, deleteCount: range.length)
+        if ok, let description, !description.isEmpty {
+            AnnounceCenter.say(description)
+        }
+        return ok
     }
 
     /// Clipboard-and-⌘V fallback for apps that refuse AX writes. Saves and

@@ -58,8 +58,10 @@ struct SnippetExpanderDetailView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         HStack(alignment: .top, spacing: 8) {
+            // Semantic .caption — Larger Accessibility Sizes scales the field label.
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption)
+                .fontWeight(.medium)
                 .foregroundStyle(.secondary)
                 .frame(width: 52, alignment: .leading)
                 .padding(.top, 6)
@@ -89,10 +91,14 @@ struct SnippetExpanderDetailView: View {
                         withAnimation(.spring(duration: 0.2)) { showAdd.toggle() }
                     } label: {
                         Image(systemName: showAdd ? "minus.circle.fill" : "plus.circle.fill")
-                            .font(.system(size: 16))
+                            .font(.title3)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Color.accentColor)
+                    .accessibilityLabel(showAdd ? "Cancel new snippet" : "Add a new snippet")
+                    .accessibilityHint(showAdd
+                                       ? "Closes the add-snippet form."
+                                       : "Opens a form to add a new snippet.")
                 }
 
                 if showAdd {
@@ -141,6 +147,8 @@ struct SnippetExpanderDetailView: View {
                     .padding(.horizontal, 8).padding(.vertical, 6)
                     .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
                     .font(.system(.callout, design: .monospaced))
+                    .accessibilityLabel("Trigger")
+                    .accessibilityHint("Short string Halen will match and replace.")
             }
 
             fieldRow(label: "Name") {
@@ -148,7 +156,9 @@ struct SnippetExpanderDetailView: View {
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 8).padding(.vertical, 6)
                     .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
-                    .font(.system(size: 12))
+                    .font(.callout)
+                    .accessibilityLabel("Snippet name")
+                    .accessibilityHint("Display name shown in the snippets list.")
             }
 
             fieldRow(label: "Type") {
@@ -158,6 +168,8 @@ struct SnippetExpanderDetailView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                .accessibilityLabel("Snippet type")
+                .accessibilityHint("Static text inserts literally; AI prompt asks the model to generate text.")
             }
 
             fieldRow(label: newKind == .staticText ? "Text" : "Prompt") {
@@ -171,8 +183,12 @@ struct SnippetExpanderDetailView: View {
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 8).padding(.vertical, 6)
                 .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
-                .font(.system(size: 12))
+                .font(.callout)
                 .lineLimit(3...6)
+                .accessibilityLabel(newKind == .staticText ? "Snippet text" : "AI prompt")
+                .accessibilityHint(newKind == .staticText
+                                   ? "Text that gets inserted when the trigger fires."
+                                   : "Prompt the model uses to generate the replacement.")
             }
 
             // Validation hint when the trigger is suspiciously short/long
@@ -181,10 +197,11 @@ struct SnippetExpanderDetailView: View {
             if let warning = triggerValidationMessage {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 10))
+                        .font(.caption2)
                         .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
                     Text(warning)
-                        .font(.system(size: 11))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.leading, 60)   // align with field column
@@ -201,6 +218,7 @@ struct SnippetExpanderDetailView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .accessibilityHint("Discards what you typed and closes the form.")
 
                 Button {
                     store.addCustom(trigger: newTrigger, kind: newKind, value: newValue, displayName: newName)
@@ -215,6 +233,7 @@ struct SnippetExpanderDetailView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(!isFormValid)
+                .accessibilityHint("Saves the new snippet and closes the form.")
             }
         }
         .padding(12)
@@ -235,16 +254,16 @@ struct SnippetExpanderDetailView: View {
             VStack(alignment: .leading, spacing: 6) {
                 cardLabel("How it works")
                 Text("Type the trigger like ;sig or ;today followed by a space or punctuation. Halen swaps it for the snippet's content.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("AI snippets use nearby text as context. A placeholder shows while generating.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Divider().opacity(0.4).padding(.vertical, 2)
                 Text("Highlight text and press ⌃⌥R to rewrite just the selection.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -294,7 +313,8 @@ private struct SnippetRow: View {
                         .font(.system(.callout, design: .monospaced, weight: .medium))
                     if snippet.builtin {
                         Text("BUILT-IN")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.caption2)
+                            .fontWeight(.semibold)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
@@ -302,10 +322,10 @@ private struct SnippetRow: View {
                     }
                 }
                 Text(snippet.displayName)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(preview)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
@@ -317,21 +337,25 @@ private struct SnippetRow: View {
             if hovering {
                 Button(action: beginEdit) {
                     Image(systemName: "pencil")
-                        .font(.system(size: 10))
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
                 .help("Edit snippet (or double-click row)")
+                .accessibilityLabel("Edit snippet \(snippet.trigger)")
+                .accessibilityHint("Opens the inline editor for this snippet.")
             }
 
             if !snippet.builtin {
                 Button(action: onDelete) {
                     Image(systemName: "trash")
-                        .font(.system(size: 10))
+                        .font(.caption2)
                         .foregroundStyle(hovering ? Color.red : Color.secondary.opacity(0.5))
                 }
                 .buttonStyle(.plain)
                 .opacity(hovering ? 1 : 0.7)
+                .accessibilityLabel("Delete snippet \(snippet.trigger)")
+                .accessibilityHint("Removes this custom snippet.")
             }
         }
         .padding(.vertical, 6)
@@ -352,7 +376,8 @@ private struct SnippetRow: View {
                     .font(.system(.callout, design: .monospaced, weight: .medium))
                 if snippet.builtin {
                     Text("BUILT-IN · edits create a custom copy")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.caption2)
+                        .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
@@ -365,7 +390,9 @@ private struct SnippetRow: View {
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 8).padding(.vertical, 5)
                 .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
-                .font(.system(size: 12))
+                .font(.callout)
+                .accessibilityLabel("Display name")
+                .accessibilityHint("Name shown in the snippets list.")
 
             // Dynamic builtins (`;today`, `;time`) don't expose a useful
             // value to edit — the value is a sentinel string consumed by the
@@ -378,6 +405,7 @@ private struct SnippetRow: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                .accessibilityLabel("Snippet type")
 
                 TextField(
                     draftKind == .staticText
@@ -389,13 +417,14 @@ private struct SnippetRow: View {
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 8).padding(.vertical, 5)
                 .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
-                .font(.system(size: 12))
+                .font(.callout)
                 .lineLimit(2...6)
                 .focused($editorFocused)
                 .onSubmit(commit)
+                .accessibilityLabel(draftKind == .staticText ? "Snippet text" : "AI prompt")
             } else {
                 Text("Built-in dynamic snippet. Only the name is editable.")
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
 
@@ -403,6 +432,7 @@ private struct SnippetRow: View {
                 Button("Cancel", action: cancelEdit)
                     .buttonStyle(.borderless)
                     .controlSize(.small)
+                    .accessibilityHint("Discards your edits and closes the editor.")
                 Spacer()
                 Button(action: commit) {
                     Label("Save", systemImage: "checkmark")
@@ -411,10 +441,13 @@ private struct SnippetRow: View {
                 .controlSize(.small)
                 .keyboardShortcut(.return, modifiers: [.command])
                 .disabled(draftName.trimmingCharacters(in: .whitespaces).isEmpty)
+                .accessibilityHint("Saves your edits to this snippet.")
             }
             Text("⌘⏎ save · ⎋ cancel")
-                .font(.system(size: 10, design: .monospaced))
+                .font(.caption2)
+                .monospaced()
                 .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
         }
         .padding(8)
         .background(
@@ -486,12 +519,21 @@ private struct SnippetRow: View {
             case .ai:         return (Color.purple, "sparkles")
             }
         }()
+        let kindLabel: String = {
+            switch snippet.kind {
+            case .staticText: return "Static text snippet"
+            case .dynamic:    return "Dynamic snippet"
+            case .ai:         return "AI snippet"
+            }
+        }()
         return ZStack {
             RoundedRectangle(cornerRadius: 6).fill(color.opacity(0.18))
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption)
+                .fontWeight(.medium)
                 .foregroundStyle(color)
         }
         .frame(width: 26, height: 26)
+        .accessibilityLabel(kindLabel)
     }
 }

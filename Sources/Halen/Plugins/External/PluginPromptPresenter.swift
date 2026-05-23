@@ -80,28 +80,39 @@ private struct PluginPromptView: View {
     let actions: [String]
     let onChoose: (String?) -> Void
 
+    /// Targets for focus-on-appear. We always have at least one action button
+    /// (`PluginPromptPresenter` injects "OK" when the plugin sends an empty
+    /// action list), so the primary case is reachable in every prompt.
+    private enum Field: Hashable { case primary, close }
+    @FocusState private var focusedField: Field?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(Color.halenCobalt)
+                    .accessibilityHidden(true)
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.callout.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 6)
                 Button { onChoose(nil) } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(.headline)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .focused($focusedField, equals: .close)
+                .accessibilityLabel("Dismiss prompt")
+                .accessibilityHint("Close this prompt without choosing an action.")
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
             .padding(.bottom, 10)
 
             Text(message)
-                .font(.system(size: 13))
+                .font(.body)
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -118,6 +129,8 @@ private struct PluginPromptView: View {
                         Button(action) { onChoose(action) }
                             .buttonStyle(.borderedProminent)
                             .controlSize(.regular)
+                            .focused($focusedField, equals: .primary)
+                            .accessibilityHint("Primary action for this prompt.")
                     } else {
                         Button(action) { onChoose(action) }
                             .buttonStyle(.bordered)
@@ -137,5 +150,13 @@ private struct PluginPromptView: View {
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        // Focus the primary action on appear — VoiceOver and keyboard-only
+        // users otherwise land on the host panel itself, with no obvious way
+        // to know which buttons are available. Short hop matches the pattern
+        // we use in the other floating popovers.
+        .task {
+            try? await Task.sleep(for: .milliseconds(80))
+            focusedField = .primary
+        }
     }
 }

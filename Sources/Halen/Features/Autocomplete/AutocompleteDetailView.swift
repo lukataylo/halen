@@ -29,11 +29,13 @@ struct AutocompleteDetailView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "text.append")
                         .foregroundStyle(Color.accentColor)
+                        .accessibilityHidden(true)
                     Text("Pause while typing")
                         .font(.system(.callout, weight: .medium))
                 }
+                // Semantic .caption — Larger Accessibility Sizes scales this row.
                 Text("Pause typing to see suggestions in gray. Press Tab to accept.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -47,7 +49,8 @@ struct AutocompleteDetailView: View {
                     cardLabel("Suggestion delay")
                     Spacer()
                     Text(extraSettleMs == 0 ? "Off" : "\(extraSettleMs) ms")
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.caption)
+                        .monospaced()
                         .foregroundStyle(.secondary)
                 }
                 Slider(
@@ -57,8 +60,13 @@ struct AutocompleteDetailView: View {
                     ),
                     in: 0...500, step: 25
                 )
+                .accessibilityLabel("Suggestion delay")
+                .accessibilityValue(extraSettleMs == 0 ? "Off" : "\(extraSettleMs) milliseconds")
+                .accessibilityHint("Adjusts how long Halen waits after you stop typing before showing a suggestion.")
+                // size: 10.5 was a pixel-fixed half-step that ignored Dynamic
+                // Type; .caption2 keeps the visual hierarchy and scales properly.
                 Text("Extra delay after you stop typing before a suggestion appears. 0 ms keeps the default immediate behaviour; higher values feel less eager.")
-                    .font(.system(size: 10.5))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -77,7 +85,7 @@ struct AutocompleteDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 cardLabel("App whitelist")
                 Text("Leave empty to suggest in every app. Add bundle ids (e.g. com.apple.TextEdit) to restrict suggestions to just those apps.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -87,21 +95,27 @@ struct AutocompleteDetailView: View {
                         .font(.system(.callout, design: .monospaced))
                         .padding(.horizontal, 8).padding(.vertical, 5)
                         .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
+                        .accessibilityLabel("New whitelist bundle id")
+                        .accessibilityHint("Type a bundle id like com.apple.TextEdit to restrict suggestions to that app.")
                     Button {
                         addWhitelistApp()
                     } label: {
+                        // Icon-only button — semantic .title3 scales with Dynamic
+                        // Type while keeping the visual heft of a 16pt glyph.
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 16))
+                            .font(.title3)
                     }
                     .buttonStyle(.plain)
                     .disabled(newWhitelistApp.trimmingCharacters(in: .whitespaces).isEmpty)
                     .foregroundStyle(newWhitelistApp.trimmingCharacters(in: .whitespaces).isEmpty
                                      ? Color.secondary.opacity(0.4) : Color.accentColor)
+                    .accessibilityLabel("Add bundle id to whitelist")
+                    .accessibilityHint("Adds the bundle id you just typed to the whitelist.")
                 }
 
                 if whitelist.isEmpty {
                     Text("Suggesting in every app.")
-                        .font(.system(size: 10.5))
+                        .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .padding(.top, 2)
                 } else {
@@ -115,10 +129,12 @@ struct AutocompleteDetailView: View {
                                     removeWhitelistApp(bundleId)
                                 } label: {
                                     Image(systemName: "minus.circle.fill")
-                                        .font(.system(size: 12))
+                                        .font(.callout)
                                         .foregroundStyle(.secondary)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel("Remove \(bundleId) from whitelist")
+                                .accessibilityHint("Removes this bundle id so Autocomplete no longer suggests there.")
                             }
                             .padding(.horizontal, 6).padding(.vertical, 3)
                         }
@@ -150,7 +166,7 @@ struct AutocompleteDetailView: View {
             VStack(alignment: .leading, spacing: 6) {
                 cardLabel("Known limits")
                 Text("Suggestions appear as a floating overlay. Alignment is best in Mail, Notes, and TextEdit.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

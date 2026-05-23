@@ -9,6 +9,11 @@ struct VoiceListeningIndicator: View {
     let onStop: () -> Void
     let onCancel: () -> Void
     @State private var pulse = false
+    /// Honors macOS "Reduce motion": when on, the expanding outer ring is
+    /// pinned to a steady 0.4-alpha halo instead of scaling out and fading
+    /// repeatedly. The solid 9pt centre dot is unchanged either way so
+    /// "we're recording" still reads at a glance.
+    @State private var prefs = AccessibilityPreferences.shared
 
     var body: some View {
         HStack(spacing: 12) {
@@ -16,8 +21,8 @@ struct VoiceListeningIndicator: View {
             ZStack {
                 Circle()
                     .fill(Color.halenCobalt.opacity(0.4))
-                    .scaleEffect(pulse ? 1.7 : 1.0)
-                    .opacity(pulse ? 0 : 1)
+                    .scaleEffect(prefs.reduceMotion ? 1.0 : (pulse ? 1.7 : 1.0))
+                    .opacity(prefs.reduceMotion ? 1 : (pulse ? 0 : 1))
                 Circle()
                     .fill(Color.halenCobalt)
                     .frame(width: 9, height: 9)
@@ -50,11 +55,20 @@ struct VoiceListeningIndicator: View {
                 .fill(Color(white: 0.08))
                 .overlay(
                     Capsule(style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                        // Border was 0.08 — fails contrast on most monitors. 0.25
+                        // stays subtle but readable in well-lit rooms, where the
+                        // near-black pill body would otherwise dissolve into a
+                        // bright background (e.g. white IDE / browser) without a
+                        // visible edge. Still well under WCAG AA for text, which
+                        // is fine — this border is decorative chrome, not a glyph.
+                        .strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5)
                 )
                 .shadow(color: .black.opacity(0.4), radius: 10, x: 0, y: 4)
         )
         .onAppear {
+            // Skip the repeating pulse under Reduce Motion. The halo stays
+            // at its rest size/opacity so the indicator is fully static.
+            guard !prefs.reduceMotion else { return }
             withAnimation(.easeOut(duration: 1.1).repeatForever(autoreverses: false)) {
                 pulse = true
             }
