@@ -89,4 +89,4 @@ rm -f "$DIST_ZIP" "$ZIP_FOR_NOTARY"
 ditto -c -k --keepParent "$APP_DIR" "$DIST_ZIP"
 
 echo "✓ notarized, stapled, and packaged: $DIST_ZIP"
-echo "  (a DMG is a nicer delivery format later — hdiutil create over the stapled app)"
+echo "  next: scripts/package-dmg.sh   (creates a drag-to-Install, notarized DMG)"
