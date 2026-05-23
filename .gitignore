@@ -10,3 +10,15 @@ dist/
 assets/Models/*.gguf
 Vendor/llama.xcframework/
 .claude/worktrees/
+
+# iCloud Drive conflict-copy duplicates. Whenever the same file syncs on
+# two Macs, iCloud writes a sibling like "Package 2.resolved" or
+# "Foo 3.swift". They look like real files to git and have leaked into
+# commits before — ignore the whole pattern.
+* [0-9].swift
+* [0-9].resolved
+* [0-9].plist
+* [0-9].yaml
+* [0-9].db
+* [0-9].app
+* [0-9].sh
