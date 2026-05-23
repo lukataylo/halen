@@ -28,11 +28,7 @@ final class PluginHost {
     /// (manifest + executable + plugin-local data files). Visible to the user
     /// via Finder so they can install / inspect plugins by hand.
     static var installRoot: URL {
-        let appSupport = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return appSupport
-            .appending(path: "Halen", directoryHint: .isDirectory)
-            .appending(path: "Plugins", directoryHint: .isDirectory)
+        HalenSupportDirectory.subdirectory("Plugins")
     }
 
     /// Discover the manifests under `installRoot` without spawning anything.

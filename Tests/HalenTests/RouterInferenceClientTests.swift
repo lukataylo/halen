@@ -383,7 +383,7 @@ final class AsyncSemaphoreTests: XCTestCase {
         let sem = AsyncSemaphore(value: 1)
         let counter = ConcurrencyCounter()
 
-        func critical() async throws {
+        @Sendable func critical() async throws {
             try await sem.wait()
             await counter.enter()
             // Yield a few times so a broken semaphore would interleave here.

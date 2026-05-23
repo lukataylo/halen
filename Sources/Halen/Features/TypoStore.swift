@@ -21,8 +21,7 @@ final class TypoStore {
     private let activeThreshold = 2
 
     static var fileURL: URL {
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return support.appending(path: "Halen/typos.json")
+        HalenSupportDirectory.root.appending(path: "typos.json")
     }
 
     init() {

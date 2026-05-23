@@ -28,10 +28,11 @@ struct HalenServices {
         return dir
     }
 
+    /// Single resolver for `~/Library/Application Support/Halen/`. See
+    /// `HalenSupportDirectory` — it falls back to a deterministic temp path
+    /// instead of force-unwrapping (which would crash the entire app if the
+    /// OS ever returned an empty Application Support list).
     static func defaultAppSupportDir() -> URL {
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = support.appending(path: "Halen")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
+        HalenSupportDirectory.root
     }
 }

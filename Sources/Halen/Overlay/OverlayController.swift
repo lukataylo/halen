@@ -566,9 +566,16 @@ struct HalenCaretIndicator: View {
     /// template rendering produces a clean coloured mark instead of an
     /// outline asset's filled blob.
     private func tintedMark(color: Color) -> some View {
+        // Cast `.copy()` safely: `NSImage` conforms to `NSCopying`, so the
+        // return is *contractually* an `NSImage`, but the underlying API
+        // hands back `Any` — a force-cast here would trap if anything ever
+        // returned a proxy. `as?` falls through to the coloured-circle
+        // backup if that ever happens, which is the same fallback the asset-
+        // missing branch uses below. The circle still draws at 16×16 in the
+        // chosen severity colour so the user still sees the finding signal.
         Group {
-            if let img = NSImage(named: "HalenIndicator") {
-                let templated = img.copy() as! NSImage
+            if let img = NSImage(named: "HalenIndicator"),
+               let templated = img.copy() as? NSImage {
                 templated.isTemplate = true
                 return AnyView(
                     Image(nsImage: templated)

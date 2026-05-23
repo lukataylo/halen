@@ -43,29 +43,56 @@ func axReadString(_ element: AXUIElement, _ name: String) -> String? {
     return v
 }
 
+// MARK: - Typed CF downcast helpers
+//
+// The Accessibility API hands back values as `CFTypeRef`, and the only way to
+// type-check them is `CFGetTypeID(value) == <expected>GetTypeID()`. Throughout
+// the rest of this file the pattern was:
+//
+//     guard …, CFGetTypeID(v) == AXValueGetTypeID() else { return nil }
+//     let typed = v as! AXValue   // safe: CFGetTypeID above confirms the type
+//
+// That's correct, but the `as!` and the guard are textually separated — a
+// future refactor that drops the guard would leave the cast silently
+// trapping at runtime. These helpers bundle the check and the cast into a
+// single, atomic call so it's impossible to use the cast without the guard.
+
+/// Returns `value` as an `AXUIElement` iff its dynamic CF type matches.
+/// Used wherever AX hands back an element reference; the explicit guard is
+/// the only thing standing between a third-party AX tree and a runtime trap.
+@inline(__always)
+private func axAsAXUIElement(_ value: CFTypeRef) -> AXUIElement? {
+    guard CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+    // Safe: the guard above just confirmed the dynamic type. CF-to-Swift
+    // `as!` here is an unconditional reinterpretation, not a runtime check.
+    return (value as! AXUIElement)
+}
+
+/// Returns `value` as an `AXValue` iff its dynamic CF type matches. AXValue
+/// wraps primitive structs (CFRange, CGRect, CGPoint, CGSize); unbox the
+/// concrete type via `AXValueGetValue` after this returns.
+@inline(__always)
+private func axAsAXValue(_ value: CFTypeRef) -> AXValue? {
+    guard CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
+    // Safe: the guard above confirmed the dynamic type.
+    return (value as! AXValue)
+}
+
 /// Read the focused UI element from an application element.
 func axReadFocusedElement(_ appElement: AXUIElement) -> AXUIElement? {
     var value: CFTypeRef?
     let result = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &value)
-    // `value` comes from arbitrary third-party AX trees, so the `CFGetTypeID`
-    // check IS the type guard. The `as!` that follows cannot trap: for a CF
-    // type the compiler treats the downcast as unconditional ("always
-    // succeeds"), and `CFGetTypeID` has already confirmed the dynamic type.
-    guard result == .success, let v = value,
-          CFGetTypeID(v) == AXUIElementGetTypeID() else { return nil }
-    let element: AXUIElement = v as! AXUIElement
-    return element
+    guard result == .success, let v = value else { return nil }
+    return axAsAXUIElement(v)
 }
 
 /// Read `kAXSelectedTextRangeAttribute` as a `CFRange` (location is the caret offset when length == 0).
 func axReadSelectedRange(_ element: AXUIElement) -> CFRange? {
     var value: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &value) == .success,
-          let v = value, CFGetTypeID(v) == AXValueGetTypeID() else { return nil }
+          let v = value, let axValue = axAsAXValue(v) else { return nil }
     var range = CFRange(location: 0, length: 0)
-    // Safe: `CFGetTypeID` above confirmed the AXValue type; the CF `as!` is
-    // an unconditional, non-trapping reinterpretation.
-    AXValueGetValue(v as! AXValue, .cfRange, &range)
+    AXValueGetValue(axValue, .cfRange, &range)
     return range
 }
 
@@ -93,10 +120,9 @@ func axReadBounds(_ element: AXUIElement, range: CFRange) -> CGRect? {
         axRange,
         &boundsRef
     )
-    guard r == .success, let v = boundsRef, CFGetTypeID(v) == AXValueGetTypeID() else { return nil }
+    guard r == .success, let v = boundsRef, let axValue = axAsAXValue(v) else { return nil }
     var rect = CGRect.zero
-    // Safe: see `axReadSelectedRange` — `CFGetTypeID` is the guard.
-    AXValueGetValue(v as! AXValue, .cgRect, &rect)
+    AXValueGetValue(axValue, .cgRect, &rect)
     return rect
 }
 
@@ -115,10 +141,9 @@ func axReadCaretBounds(_ element: AXUIElement) -> CGRect? {
 func axReadFrame(_ element: AXUIElement) -> CGRect? {
     var value: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, "AXFrame" as CFString, &value) == .success,
-          let v = value, CFGetTypeID(v) == AXValueGetTypeID() else { return nil }
+          let v = value, let axValue = axAsAXValue(v) else { return nil }
     var rect = CGRect.zero
-    // Safe: see `axReadSelectedRange` — `CFGetTypeID` is the guard.
-    AXValueGetValue(v as! AXValue, .cgRect, &rect)
+    AXValueGetValue(axValue, .cgRect, &rect)
     return rect
 }
 
@@ -129,8 +154,7 @@ func axReadFrame(_ element: AXUIElement) -> CGRect? {
 func axReadContainingWindowFrame(_ element: AXUIElement) -> CGRect? {
     var windowRef: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, kAXWindowAttribute as CFString, &windowRef) == .success,
-          let win = windowRef, CFGetTypeID(win) == AXUIElementGetTypeID() else { return nil }
-    let windowElement: AXUIElement = win as! AXUIElement
+          let win = windowRef, let windowElement = axAsAXUIElement(win) else { return nil }
     return axReadFrame(windowElement)
 }
 

@@ -51,11 +51,8 @@ final class AppToneProfileStore {
     }
 
     private static func defaultFileURL() -> URL {
-        let support = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return support
-            .appending(path: "Halen", directoryHint: .isDirectory)
-            .appending(path: "com.halen.tone-profiles", directoryHint: .isDirectory)
+        HalenSupportDirectory
+            .subdirectory("com.halen.tone-profiles")
             .appending(path: "profiles.json")
     }
 
