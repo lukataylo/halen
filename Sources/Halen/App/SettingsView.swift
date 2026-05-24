@@ -939,9 +939,12 @@ struct SettingsView: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Halen")
                         .font(.system(.body, weight: .semibold))
-                    Text("v\(appVersion)")
+                    Text(versionDisplay)
                         .font(.system(.callout, design: .monospaced))
                         .foregroundStyle(.secondary)
+                        // VoiceOver should hear "version 0 point 2 point 0,
+                        // build 2" not "v0.2.0 build 2" character-by-character.
+                        .accessibilityLabel("Version \(appVersion), build \(buildNumber)")
                     Spacer()
                 }
                 Button {
@@ -1019,10 +1022,23 @@ struct SettingsView: View {
 
     /// Resolved at runtime from CFBundleShortVersionString. Keeps the
     /// About card in sync with Info.plist without anyone hand-syncing the
-    /// version string in two places.
+    /// version string in two places. The fallback string is deliberately
+    /// loud ("unknown") rather than "0.0.0" — a silent zero would hide the
+    /// real failure mode (Info.plist not bundled, usually because the
+    /// binary is being launched outside the .app wrapper).
     private var appVersion: String {
-        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0.0.0"
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
     }
+
+    /// Monotonic build number from CFBundleVersion. Shown alongside the
+    /// semver string so two builds of the same release are tellable apart
+    /// in bug reports.
+    private var buildNumber: String {
+        (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "?"
+    }
+
+    /// `v0.2.0 (2)` — the version line every bug report needs to lead with.
+    private var versionDisplay: String { "v\(appVersion) (\(buildNumber))" }
 
     // MARK: - Helpers
 

@@ -135,7 +135,7 @@ struct HalenCenterView: View {
                 Text("Halen")
                     .font(.system(.headline, weight: .semibold))
                 Text(statusText)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -231,7 +231,7 @@ struct HalenCenterView: View {
                 Text("Accessibility access required")
                     .font(.system(.callout, weight: .semibold))
                 Text("Halen needs to read text near your cursor and apply corrections. All processing happens locally.")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -252,7 +252,7 @@ struct HalenCenterView: View {
                 .font(.system(size: 28))
                 .foregroundStyle(.tertiary)
             Text("No plugins registered yet")
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -389,7 +389,7 @@ struct HalenCenterView: View {
             .buttonStyle(.borderless)
             .keyboardShortcut("q")
         }
-        .font(.system(size: 11))
+        .font(.caption)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
     }
@@ -414,7 +414,7 @@ struct PluginRow: View {
                         Text(plugin.name)
                             .font(.system(.body, weight: .medium))
                         Text(plugin.summary)
-                            .font(.system(size: 11))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -452,6 +452,10 @@ struct PluginRow: View {
                 .foregroundStyle(tint)
         }
         .frame(width: 32, height: 32)
+        // Decorative — VoiceOver already reads the plugin's name on the
+        // row's primary button; announcing "icon" before that would be
+        // noise. The badge tint encodes category visually, not semantically.
+        .accessibilityHidden(true)
     }
 
     private var tint: Color { pluginCategoryTint(plugin.category) }

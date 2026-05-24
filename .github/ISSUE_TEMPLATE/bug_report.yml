@@ -26,8 +26,8 @@ body:
     id: halen-version
     attributes:
       label: Halen version
-      description: Settings → About → Version, or `mdls -name kMDItemVersion /Applications/Halen.app`.
-      placeholder: 0.2.0 (build 142)
+      description: Settings → About — copy the whole `v0.2.0 (2)` line.
+      placeholder: v0.2.0 (2)
     validations:
       required: true
 

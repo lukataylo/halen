@@ -43,13 +43,19 @@ final class AccessibilityPreferences {
     /// addObserver(forName:…) returns an opaque token that's the only way
     /// to unregister a block-based observer.
     ///
+    /// `@ObservationIgnored` keeps the `@Observable` macro from wrapping
+    /// this in tracking storage — the token is internal lifecycle
+    /// bookkeeping that SwiftUI doesn't need to observe, and the macro's
+    /// generated wrapper can't accept `nonisolated`.
+    ///
     /// `nonisolated(unsafe)` because `deinit` runs on whatever thread
-    /// releases the last reference — not necessarily MainActor — and needs
-    /// to read this to unregister. The token is written exactly once (in
-    /// `init`, before any reference can escape) and read once (in
-    /// `deinit`, after every other reference has dropped), so there's no
-    /// concurrent access. This singleton in practice never deallocates
-    /// while the app is running.
+    /// releases the last reference — not necessarily MainActor — and
+    /// needs to read this to unregister. Written exactly once (in `init`,
+    /// before any reference can escape) and read once (in `deinit`,
+    /// after every other reference has dropped), so there's no concurrent
+    /// access. The singleton in practice never deallocates while the app
+    /// is running.
+    @ObservationIgnored
     nonisolated(unsafe) private var observerToken: NSObjectProtocol?
 
     private init() {

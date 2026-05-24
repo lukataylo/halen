@@ -30,7 +30,7 @@ The text never leaves your Mac. Not as a feature. As a default.
 
 ## Install
 
-[**Download Halen.dmg**](https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/Halen.dmg) — signed, notarized, drag-to-Install. Apple Silicon Mac, macOS 14 or later.
+[**Download Halen.dmg**](https://github.com/lukataylo/halen/releases/latest) — signed, notarized, drag-to-Install. Apple Silicon Mac, macOS 14 or later.
 
 1. Double-click the DMG to mount it.
 2. Drag `Halen.app` to **Applications**.

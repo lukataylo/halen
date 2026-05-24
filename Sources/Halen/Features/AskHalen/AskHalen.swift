@@ -242,10 +242,15 @@ final class AskHalen: HalenPlugin {
         }
     }
 
-    static let tierKey        = "halen.askhalen.tier"
-    static let temperatureKey = "halen.askhalen.temperature"
-    static let clipboardKey   = "halen.askhalen.includeClipboard"
-    static let paragraphKey   = "halen.askhalen.includeParagraph"
+    // `nonisolated` because these are constant identifier strings, not
+    // actor state — the `@MainActor` class wrap inherits down to nested
+    // statics by default, which made `UserSettings.current` (called from
+    // a nonisolated nested context) trip Swift 6's actor checker on every
+    // read. The keys are pure values; nothing to isolate.
+    nonisolated static let tierKey        = "halen.askhalen.tier"
+    nonisolated static let temperatureKey = "halen.askhalen.temperature"
+    nonisolated static let clipboardKey   = "halen.askhalen.includeClipboard"
+    nonisolated static let paragraphKey   = "halen.askhalen.includeParagraph"
 
     private func submit() {
         var question = state.question.trimmingCharacters(in: .whitespacesAndNewlines)

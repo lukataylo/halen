@@ -450,6 +450,10 @@ private struct PluginIconBadge: View {
                 .foregroundStyle(tint)
         }
         .frame(width: 32, height: 32)
+        // Decorative — the store row's name and description carry the
+        // semantic load. Announcing "icon" first would clutter the
+        // VoiceOver rotor for no information gain.
+        .accessibilityHidden(true)
     }
 }
 
