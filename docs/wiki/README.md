@@ -1,82 +1,86 @@
 # Halen Wiki
 
-Halen is a **local-first, cursor-following writing agent for macOS** that lives
-in your menu bar. It watches the focused text field via Accessibility (AX),
-listens for `text.pause` / `caret.moved` / `app.focused` events, and runs a
-small fleet of plugins that act on what you're typing — fixing typos, flagging
-hostile drafts, expanding snippets, dictating speech, briefing you before
-meetings, and nudging you to take a break when you've been at it too long.
+Writing tools moved to the cloud while you weren't looking.
 
-All inference is local. `RouterInferenceClient` routes each request across
-whatever backends are available — **Apple Foundation Models** (macOS 26+), a
-**bundled Gemma 4 E4B model on llama.cpp**, and a local **Ollama** daemon —
-falling through to the next on failure. Speech recognition is Apple's
-on-device `SFSpeechRecognizer`. Nothing about your text, voice, or calendar
-leaves the machine.
+Halen is the move back. A menubar app that watches the text near your
+cursor and runs small, focused plugins against it — fixing typos,
+catching hostile drafts, expanding snippets, briefing you before a
+meeting, nudging you to take a break.
 
-## What's clever about it
+Every plugin runs locally. Apple Silicon is fast enough for that now.
 
-- **One AX pipeline, many plugins.** A single `CaretObserver` translates AX
-  notifications into a typed event stream. Plugins subscribe to that stream
-  through a tiny `HalenPlugin` protocol — they never touch AX themselves.
-- **Same contract, in-process or out.** Event names (`text.pause`,
-  `caret.moved`, `app.focused`) are JSON-RPC method names. In-process plugins
-  call them via Swift; external plugins read NDJSON over stdio. Burnout
-  Copilot and Meeting Prep already run out-of-process; the rest live inside
-  the menubar app for now.
-- **Tier-based, multi-backend inference.** Plugins ask for `classifier`,
-  `small`, `medium`, or `large` (and a task kind). `RouterInferenceClient`
-  picks a concrete backend + model and falls through on failure. Adding or
-  reordering backends never touches plugin code. The `.classifier` tier
-  routes to a dedicated Qwen 2.5 0.5B backend so tone scans stay sub-second
-  warm.
-- **AX write-back, not synthetic keystrokes.** Corrections, snippet expansions,
-  and dictation inserts use `kAXSelectedTextRangeAttribute` +
-  `kAXSelectedTextAttribute`. Quieter, faster, more accurate than synthesizing
-  keypresses.
-- **Marketplace UI.** The menubar popover is a category-grouped list of
-  plugins with per-plugin toggle + detail panel — the same shape you'd expect
-  from a real plugin store. First-run onboarding walks the user through what
-  to enable; defaults are tuned for "useful without surprises."
+No cloud round-trips. No drafts uploaded. No accounts.
 
-## Table of contents
+Your words stay yours. Not as a feature. As a default.
 
-- [Architecture](architecture.md) — host vs plugins, event bus, AX pipeline, inference layer, storage.
-- [Getting started](getting-started.md) — prerequisites, build, TCC permissions, mic/speech/calendar prompts.
-- [Privacy](privacy.md) — what Halen sees, what stays local, network traffic, telemetry.
+---
 
-### Bundled plugins (in-process)
+## How it's put together
 
-These ten plugins live inside the menubar binary; the marketplace dropdown
-toggles them on/off and opens their per-plugin detail panel.
+- **One AX pipeline.** A single `CaretObserver` translates macOS
+  Accessibility notifications into a typed event stream
+  (`text.pause`, `caret.moved`, `app.focused`). Plugins subscribe;
+  they never touch AX themselves.
+- **Same contract, in-process or out.** Event names are JSON-RPC
+  method names. In-process plugins call them via Swift. External
+  plugins read NDJSON over stdio. Burnout Copilot and Meeting Prep
+  already run out-of-process; the rest live inside the menubar app
+  for now.
+- **Tier-based, multi-backend inference.** Plugins ask for
+  `classifier`, `small`, `medium`, or `large`. `RouterInferenceClient`
+  picks a backend and falls through on failure. The `.classifier`
+  tier routes to a dedicated Qwen 2.5 0.5B model so tone scans stay
+  sub-second warm.
+- **AX write-back, not synthetic keystrokes.** Corrections and snippet
+  expansions use `kAXSelectedTextRangeAttribute` +
+  `kAXSelectedTextAttribute`. Quieter, faster, more accurate.
+- **A marketplace UI in the menubar.** Category-grouped plugin list,
+  per-plugin toggle, per-plugin detail panel. Onboarding walks you
+  through what to enable. Defaults are tuned for *useful without
+  surprises*.
+
+## Read the deep dives
+
+- [Architecture](architecture.md) — host vs plugins, event bus, AX
+  pipeline, inference layer, storage.
+- [Getting started](getting-started.md) — prerequisites, build, TCC
+  permissions, mic / speech / calendar prompts.
+- [Privacy](privacy.md) — what Halen sees, what stays local, every
+  byte of network traffic, telemetry stance.
+- [Accessibility](accessibility.md) — the bar Halen holds itself to,
+  the smoke test we run before every release.
+
+## Bundled plugins (in-process)
+
+Ten plugins ship inside the menubar binary. The marketplace dropdown
+toggles them on or off and opens their detail panel.
 
 | Plugin | Category | Default | What it does |
 |---|---|---|---|
-| Ask Halen | Productivity | On | ⌃H → a floating palette that answers a one-shot question with your focused app, selection, and clipboard in context. |
-| [Typo Fixer](plugins/typo-fixer.md) | Writing | On | Auto-replaces known typos at word boundaries; learns new corrections by watching how you edit. |
-| [Sentiment Guard](plugins/sentiment-guard.md) | Writing | On | Classifies your drafts with a local classifier and surfaces a popover when the tone trips a rule. |
-| [Snippet Expander](plugins/snippet-expander.md) | Productivity | On | `;tag` expands to static, dynamic, or AI-generated text; ⌃⌥R rephrases a selection in place. |
-| [Clarity Checker](plugins/clarity-checker.md) | Writing | On | Flags passive voice, run-ons, and vague phrasing; one-tap Gemma rewrite. |
-| [Voice Dictation](plugins/voice-dictation.md) | Voice | Off | ⌥⌘H → on-device speech recognition → inserts at the caret. |
-| [Inline Autocomplete](plugins/autocomplete.md) | Writing | Off | Suggests the next few words as ghost text; Tab to accept. |
+| Ask Halen | Productivity | On | ⌃H opens a floating palette. Asks one question with your focused app, selection, and clipboard already in context. |
+| [Typo Fixer](plugins/typo-fixer.md) | Writing | On | Replaces known typos at word boundaries. Learns new ones from how you edit. |
+| [Sentiment Guard](plugins/sentiment-guard.md) | Writing | On | Classifies your drafts on-device. Pops a warning when the tone trips a rule you set. |
+| [Snippet Expander](plugins/snippet-expander.md) | Productivity | On | `;tag` expands to static, dynamic, or AI-generated text. ⌃⌥R rephrases the selection in place. |
+| [Clarity Checker](plugins/clarity-checker.md) | Writing | On | Flags passive voice, run-ons, vague phrasing. One-tap Gemma rewrite. |
+| [Voice Dictation](plugins/voice-dictation.md) | Voice | Off | ⌥⌘H opens a listening pill. Apple's on-device speech recognizer transcribes; the text lands at your caret. |
+| [Inline Autocomplete](plugins/autocomplete.md) | Writing | Off | Suggests the next few words as ghost text. Tab to accept. |
 | [Personal Style Guide](plugins/style-guide.md) | Writing | Off | Your banned-words → preferred-words list, scanned per paragraph. |
 | [Email Reply](plugins/email-reply.md) | Productivity | Off | ⌃⌥E drafts a reply to the email you're reading, in the tone you pick. |
-| [Tone Profiles](plugins/tone-profiles.md) | Writing | Off | Per-app tone hints (formal vs casual) shared with the other writing plugins. |
+| [Tone Profiles](plugins/tone-profiles.md) | Writing | Off | Per-app tone hints (formal vs casual), shared with the other writing plugins. |
 
-### External plugins (out-of-process, JSON-RPC over stdio)
+## External plugins (out-of-process, JSON-RPC over stdio)
 
-Ship in this repo under [`plugins/`](../../plugins/) and install into
-`~/Library/Application Support/Halen/Plugins/`. Same `HalenPlugin` contract,
-just over a stdio socket instead of a Swift call.
+Same `HalenPlugin` contract, just over a stdio socket instead of a
+Swift call. Ship in this repo under [`plugins/`](../../plugins/) and
+install into `~/Library/Application Support/Halen/Plugins/`.
 
 | Plugin | Category | What it does |
 |---|---|---|
-| [Burnout Copilot](plugins/burnout-copilot.md) | Focus | Three signals → 2-of-3 trip → "Take 10?" popup with calendar + Shortcuts integration. |
+| [Burnout Copilot](plugins/burnout-copilot.md) | Focus | Three signals. Two of three trip. "Take 10?" with a calendar block + Shortcuts integration. |
 | [Meeting Prep](plugins/meeting-prep.md) | Scheduling | 15 minutes before each event, drops a 5-bullet Gemma briefing on your clipboard. |
 
-## Quick links
+## Source pointers
 
-- Top-level repo: [`/Users/lukadadiani/Documents/halen`](../../)
 - Plugin protocol: [`Sources/Halen/Plugins/HalenPlugin.swift`](../../Sources/Halen/Plugins/HalenPlugin.swift)
 - Registry: [`Sources/Halen/Plugins/PluginRegistry.swift`](../../Sources/Halen/Plugins/PluginRegistry.swift)
 - AX pipeline: [`Sources/Halen/Accessibility/CaretObserver.swift`](../../Sources/Halen/Accessibility/CaretObserver.swift)

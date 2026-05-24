@@ -1,9 +1,13 @@
 # Architecture
 
-Halen is a single Swift Package menubar app (`LSUIElement = true`) that hosts
-its first-party plugins in-process and can also run third-party plugins as
-out-of-process JSON-RPC subprocesses. The whole codebase is roughly 13k lines
-of Swift, with another ~50 KB of unit tests under `Tests/HalenTests/`.
+One AX pipeline. One event bus. One inference router. Many plugins.
+
+That's the whole shape. A single Swift Package menubar app
+(`LSUIElement = true`) hosts the first-party plugins in-process and
+spawns third-party plugins as JSON-RPC subprocesses over stdio. ~13k
+lines of Swift, 168 unit tests under `Tests/HalenTests/`. Everything
+flows through three seams: AX → events → inference. Plugins plug into
+the middle one.
 
 ## Top-level layout
 

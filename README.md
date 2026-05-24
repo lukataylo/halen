@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <strong>Local-first writing companion for macOS.</strong><br>
-  No cloud. No upload. Just you, your data, your rules.<br>
+  <strong>Writing AI that never leaves your Mac.</strong><br>
+  No cloud. No drafts uploaded. No accounts.<br>
   <a href="https://halen.dev">halen.dev</a> · <a href="https://halen.dev/changelog.html">Changelog</a> · <a href="https://halen.dev/privacy.html">Privacy</a>
 </p>
 
@@ -20,7 +20,13 @@
 
 ---
 
-Halen is a menubar app that watches the text near your cursor and runs a set of small, focused **plugins** against it. Every plugin runs locally. Typo correction is a personal dictionary; tone classification is Qwen 2.5 0.5B; rewrites go through Gemma 4 E4B on llama.cpp. Inference routes across whatever's available on your Mac — Apple Intelligence, the bundled local models, or your own [Ollama](https://ollama.com) daemon. The text never leaves your Mac.
+Writing tools moved to the cloud while you weren't looking.
+
+Halen is the move back. A menubar app that watches the text near your cursor and runs a set of small, focused **plugins** against it. Fix typos as you type. Rewrite a paragraph in a friendlier tone. Catch a sentence before you send it in anger.
+
+Every plugin runs locally. Typo correction is a personal dictionary; tone classification is Qwen 2.5 0.5B; rewrites go through Gemma 4 E4B on llama.cpp. Inference routes across whatever's available on your Mac — Apple Intelligence, the bundled models, or your own [Ollama](https://ollama.com) daemon.
+
+The text never leaves your Mac. Not as a feature. As a default.
 
 ## Install
 

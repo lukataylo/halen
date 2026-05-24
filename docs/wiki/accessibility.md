@@ -1,18 +1,22 @@
 # Accessibility
 
-Halen lives inside the macOS Accessibility surface — it watches the caret
-via AX, writes text back via AX, runs hotkeys via Carbon, and renders its
-UI through SwiftUI on top of NSHostingView panels. That puts us in an odd
-position: the API we depend on is the same one assistive tech uses to
-help users with disabilities, so the app *itself* has to be a polite
-citizen of that surface. A typo silently fixed via `kAXSelectedTextAttribute`
-is invisible to VoiceOver unless we announce it. A glass popover that
-ignores Reduce Transparency is a wall of muddy text to someone with low
-vision. Hotkey-only entry points are a closed door to anyone who can't
-press chord combinations.
+Halen lives inside the macOS Accessibility surface. The same surface
+VoiceOver lives in. Switch Control. Zoom.
 
-This page documents what we ship, the bar every contributor PR has to
-clear, and the manual smoke test we run before each release.
+That's the whole reason this page exists.
+
+A typo silently swapped via `kAXSelectedTextAttribute` is invisible
+to VoiceOver unless Halen announces it. A glass popover that ignores
+Reduce Transparency is a wall of mud to someone with low vision. A
+hotkey-only feature is a closed door to anyone who can't press a
+three-finger chord.
+
+So Halen announces. Halen honors Reduce Motion and Reduce
+Transparency. Halen ships menu equivalents for every hotkey. Not as
+an extra. As the bar.
+
+This page is what we ship, what every UI PR has to clear, and the
+smoke test we run before every release.
 
 ## What we ship
 

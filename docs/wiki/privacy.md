@@ -1,8 +1,15 @@
 # Privacy
 
-Halen is built around one constraint: **nothing leaves the machine.** This
-page documents what data the app sees, where it's processed, and the few
-egress points that do exist (all to localhost).
+One constraint. Nothing leaves the machine.
+
+Not the text near your cursor. Not your drafts. Not your voice.
+Not a hashed fingerprint of any of it. Not an anonymous telemetry
+ping. Nothing.
+
+The few egress points that do exist all hit localhost — the local
+inference backend you chose, or your local Ollama daemon if you
+opted in. This page documents every one of them, the per-plugin
+boundaries, and the on-disk files Halen writes.
 
 ## What Halen sees
 

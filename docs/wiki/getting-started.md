@@ -1,5 +1,18 @@
 # Getting started
 
+Halen is a menubar app. You install it, grant Accessibility, and it
+gets out of your way.
+
+You'll need a Mac with Apple Silicon and macOS 14 or newer. You'll
+need an inference backend — Apple Intelligence if you're on macOS 26,
+the bundled Gemma 4 model otherwise, or your own Ollama daemon if you
+prefer. Halen picks whatever's available and falls through on
+failure.
+
+This page is the long form: every prerequisite, every permission,
+every place data lands. If you just want to run the dev loop, the
+[two-line build](#build) is at the bottom.
+
 ## Prerequisites
 
 - **macOS 14 Sonoma or newer.** Set via `LSMinimumSystemVersion` in

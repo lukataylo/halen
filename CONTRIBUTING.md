@@ -40,9 +40,10 @@ macOS 14 GitHub-hosted runner. See [`.github/workflows/ci.yml`](.github/workflow
 
 ## Accessibility
 
-Halen runs inside macOS's Accessibility surface — the same one assistive
-tech uses. The app itself has to be accessible too; that bar isn't
-optional. Five rules every PR that adds or changes UI must clear:
+Halen runs inside macOS's Accessibility surface. So does VoiceOver.
+So does Switch Control. The app itself has to be accessible too —
+that bar isn't optional. Five rules every PR that adds or changes UI
+must clear:
 
 1. **Every interactive control gets `.accessibilityLabel` and
    `.accessibilityHint`.** Buttons, toggles, text fields, pickers,
