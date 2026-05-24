@@ -94,8 +94,15 @@ final class OverlayController {
         UserDefaults.standard.object(forKey: underlineEnabledKey) as? Bool ?? false
     }
 
-    init(eventBus: EventBus) {
+    /// Weak ref — owned by AppCoordinator. Read-only access; used to query
+    /// the focused text element's bounding rect when sizing the inline
+    /// underline (the finding's caret-shaped anchor is the wrong width for
+    /// a strip-under-the-paragraph affordance — see `composeUnderlineRect`).
+    private weak var caretObserver: CaretObserver?
+
+    init(eventBus: EventBus, caretObserver: CaretObserver? = nil) {
         self.eventBus = eventBus
+        self.caretObserver = caretObserver
     }
 
     func start() {
@@ -398,13 +405,36 @@ final class OverlayController {
 
         // Inline underline preview — gated on the Settings toggle so we
         // don't surprise users who haven't opted in. When ON, draw a strip
-        // under the highest-severity finding's anchor; when OFF or no
-        // finding, hide the strip.
+        // under the highest-severity finding; when OFF or no finding,
+        // hide the strip.
         if Self.underlinesEnabled, let highest, Self.indicatorEnabled {
-            underline.show(at: highest.anchor, severity: highest.severity)
+            underline.show(at: composeUnderlineRect(from: highest.anchor),
+                           severity: highest.severity)
         } else {
             underline.hide()
         }
+    }
+
+    /// The finding's anchor is the *caret bounds* (a 1-2 pt vertical sliver
+    /// where the cursor blinks) — perfect for popover positioning, wrong for
+    /// a paragraph-width underline strip. When we can read the focused text
+    /// element's frame, swap in its X-range while keeping the caret's
+    /// vertical line so the strip spans the field at the caret's row. When
+    /// we can't, return the caret rect unchanged — the underline will look
+    /// like a stub (clamped to 20 pt minimum in InlineUnderlinePanel) but
+    /// that's a graceful degradation, not a crash.
+    private func composeUnderlineRect(from caretAnchor: Event.CaretRect) -> Event.CaretRect {
+        guard let element = caretObserver?.currentElement,
+              let axFrame = axReadFrame(element) else {
+            return caretAnchor
+        }
+        let fieldCocoa = axRectToCocoa(axFrame)
+        return Event.CaretRect(
+            x: fieldCocoa.minX,
+            y: caretAnchor.y,
+            width: fieldCocoa.width,
+            height: caretAnchor.height
+        )
     }
 }
 

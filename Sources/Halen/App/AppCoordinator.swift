@@ -193,7 +193,7 @@ final class AppCoordinator {
         observer.start()
         caretObserver = observer
 
-        let overlayCtrl = OverlayController(eventBus: eventBus)
+        let overlayCtrl = OverlayController(eventBus: eventBus, caretObserver: observer)
         overlayCtrl.start()
         overlay = overlayCtrl
 
