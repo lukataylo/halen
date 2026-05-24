@@ -238,4 +238,76 @@ final class ParagraphClassifierTests: XCTestCase {
         let n = await counter.n
         XCTAssertEqual(n, 0, "paragraph below minLength must not classify")
     }
+
+    /// Regression: a classify call that is cancelled mid-flight must NOT
+    /// mark the paragraph hash as "seen" — otherwise a retry on the same
+    /// paragraph (user comes back to the textbox, paragraph regains focus,
+    /// app comes back from background) is silently dedup'd as already-judged
+    /// and the user wonders why the classifier never fires.
+    ///
+    /// Real-world repro: typing a paragraph causes back-to-back text.pause
+    /// events as the chars-counter ticks; each new pause cancels the in-flight
+    /// classify for the older content; the FINAL paragraph would (under the
+    /// pre-fix code) get added to the LRU before its classify completed, but
+    /// since the schedule task got cancelled by the next text.pause, the
+    /// classify never ran — yet the LRU still recorded the hash, so any
+    /// subsequent attempt on the exact same paragraph silently dedup'd.
+    func testCancelledClassifyDoesNotPoisonDedup() async {
+        let classifier = ParagraphClassifier(
+            minLength: 20, settleDelay: 0.0, maxCacheSize: 16)
+        let (text, caret) = paragraphInput(
+            "Stop wasting my time. I asked three times already.")
+
+        actor Counter {
+            var attempted = 0
+            var completed = 0
+            func attempt() { attempted += 1 }
+            func complete() { completed += 1 }
+        }
+        let counter = Counter()
+
+        // First schedule: classify "starts" but we deliberately cancel
+        // by scheduling a second call that supersedes it. To simulate
+        // a slow inference that gets cancelled, the closure awaits a
+        // task it expects to be cancelled.
+        classifier.schedule(text: text, caretOffset: caret,
+                             classify: { _ in
+            await counter.attempt()
+            // Long sleep — the second schedule below will cancel us.
+            try? await Task.sleep(for: .milliseconds(500))
+            // If we got here without cancellation, mark complete.
+            guard !Task.isCancelled else { return }
+            await counter.complete()
+        })
+        // Pre-empt with a fresh schedule call before the first one finishes
+        // — schedule cancels its prior task, mirroring text.pause behavior.
+        try? await Task.sleep(for: .milliseconds(50))
+        classifier.schedule(text: text, caretOffset: caret,
+                             classify: { _ in
+            await counter.attempt()
+            guard !Task.isCancelled else { return }
+            await counter.complete()
+        })
+        // Drain — the second schedule should actually run because the
+        // first was cancelled before it could mark the hash as seen.
+        try? await Task.sleep(for: .milliseconds(800))
+
+        let attempted = await counter.attempted
+        let completed = await counter.completed
+        // Both schedules entered classify (otherwise the dedup poisoned).
+        // First was cancelled → did NOT complete; second ran cleanly.
+        XCTAssertEqual(attempted, 2,
+                       "second schedule must reach classify; got \(attempted) attempts")
+        XCTAssertEqual(completed, 1,
+                       "exactly one classify should complete (the un-cancelled one); got \(completed)")
+
+        // After the successful completion, dedup IS in force — a third
+        // schedule of the same paragraph is correctly skipped.
+        classifier.schedule(text: text, caretOffset: caret,
+                             classify: { _ in await counter.attempt() })
+        await drain()
+        let finalAttempted = await counter.attempted
+        XCTAssertEqual(finalAttempted, 2,
+                       "third schedule of same hash must be dedup'd after successful completion")
+    }
 }

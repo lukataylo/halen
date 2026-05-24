@@ -33,10 +33,14 @@ final class ParagraphClassifier {
     private let maxCacheSize: Int
 
     private var task: Task<Void, Never>?
-    /// LRU of seen paragraph hashes. Most-recently-touched at the END;
-    /// eviction trims from the FRONT when the count exceeds `maxCacheSize`.
-    /// An ordered array (not a linked list) is fine because the cap is
-    /// small enough (256 default) that O(n) removals are sub-microsecond.
+    /// LRU of *successfully completed* paragraph hashes. Most-recently-
+    /// touched at the END; eviction trims from the FRONT when the count
+    /// exceeds `maxCacheSize`. An ordered array (not a linked list) is fine
+    /// because the cap is small enough (256 default) that O(n) removals
+    /// are sub-microsecond. A hash only lands here AFTER classify returns
+    /// without throwing — a cancelled classify must not poison the dedup,
+    /// otherwise a paragraph the user is still typing in can be silently
+    /// skipped forever after one cancellation.
     private var seenLRU: [String] = []
 
     init(minLength: Int = 60,
@@ -89,19 +93,32 @@ final class ParagraphClassifier {
         }
 
         let hash = sha256Hex(paragraph)
-        // LRU touch: if we've seen this hash, move it to the most-recent
-        // slot AND skip re-classifying (the user is mid-edit on a paragraph
-        // we already judged). If unseen, append + evict if over cap.
+        // Already-completed: move to most-recent slot and skip — same
+        // paragraph, we know the answer.
         if let existing = seenLRU.firstIndex(of: hash) {
             seenLRU.remove(at: existing)
             seenLRU.append(hash)
             return
         }
+
+        // Run the classifier. No in-flight set guarding this — `schedule()`
+        // cancels the prior task on every new call, so at most one classify
+        // is ever active for a given (text, caret) trajectory. A duplicate
+        // hash arriving mid-flight just means the user paused on the same
+        // paragraph again; the prior task is already cancelled, the new one
+        // takes over.
+        await classify(paragraph)
+
+        // Only record completion if our surrounding task survived. A
+        // cancellation mid-inference means the plugin never produced a
+        // finding (or a clear) for this paragraph — recording the hash
+        // anyway would silently dedup the user's next attempt to
+        // re-trigger it (paragraph regains focus, app comes back from
+        // background, etc.). That's the bug this guard fixes.
+        guard !Task.isCancelled else { return }
         seenLRU.append(hash)
         if seenLRU.count > maxCacheSize {
             seenLRU.removeFirst()
         }
-
-        await classify(paragraph)
     }
 }
