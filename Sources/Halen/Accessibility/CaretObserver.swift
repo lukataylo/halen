@@ -28,6 +28,15 @@ final class CaretObserver {
     /// Separate, much shorter debounce for `caret.moved`. See `scheduleCaretMoved`.
     private var caretMovedTask: Task<Void, Never>?
 
+    /// Short-lived retry loop for the "app focused, no text element yet" case.
+    /// macOS doesn't reliably fire `kAXFocusedUIElementChangedNotification`
+    /// for WebKit-hosted text editors (Notes' main editor, Messages compose,
+    /// some Electron apps), so the initial attach finds the app shell and
+    /// then misses the user clicking into the textbox. We retry a few times
+    /// at increasing intervals; any successful attach cancels the remainder.
+    /// Cancelled on app-switch or teardown so we never leak the closure.
+    private var focusRetryTask: Task<Void, Never>?
+
     init(eventBus: EventBus) {
         self.eventBus = eventBus
     }
@@ -306,6 +315,8 @@ final class CaretObserver {
     private func tearDownObserver() {
         debounceTask?.cancel()
         debounceTask = nil
+        focusRetryTask?.cancel()
+        focusRetryTask = nil
 
         if let observer {
             CFRunLoopRemoveSource(
@@ -336,9 +347,15 @@ final class CaretObserver {
             // Now we log the gap, which is almost always "user has the app window
             // up but their text cursor isn't in any editable field" (notes list,
             // toolbar focused, no document open, etc.).
-            Log.info("attachToFocusedElement: no focused element on \(observedApp?.localizedName ?? "?") — caret tracking idle until cursor lands in a text field")
+            Log.info("attachToFocusedElement: no focused element on \(observedApp?.localizedName ?? "?") — scheduling retries")
+            scheduleFocusRetries()
             return
         }
+
+        // We have a focused element — cancel any retry burst from a prior
+        // empty attach so we don't keep polling against a working subscription.
+        focusRetryTask?.cancel()
+        focusRetryTask = nil
 
         _ = AXObserverAddNotification(observer, element, kAXSelectedTextChangedNotification as CFString, refcon)
         _ = AXObserverAddNotification(observer, element, kAXValueChangedNotification as CFString, refcon)
@@ -354,6 +371,41 @@ final class CaretObserver {
         // plugins (SentimentGuard, BurnoutCopilot) see the real content without
         // waiting for the user's first keystroke.
         scheduleDebouncedEmit(reason: "focus-settle")
+    }
+
+    /// Backup loop for apps that don't fire `kAXFocusedUIElementChangedNotification`
+    /// when the user clicks into a WebKit-hosted text editor (Notes, Messages
+    /// compose, some Electron). Re-probes the focused element at 300 ms,
+    /// 800 ms, and 1600 ms — covers the common "click into the textbox right
+    /// after the app activates" window without busy-looping.
+    ///
+    /// We do the probe inline (not via `attachToFocusedElement`) so the
+    /// retry loop never re-enters the `scheduleFocusRetries` call site and
+    /// can't fan out into overlapping tasks. The real attach work is
+    /// duplicated as a single hop at the end; the retry loop's job is
+    /// purely to discover the element.
+    private func scheduleFocusRetries() {
+        focusRetryTask?.cancel()
+        focusRetryTask = Task { @MainActor [weak self] in
+            for delayMs in [300, 800, 1600] {
+                try? await Task.sleep(nanoseconds: UInt64(delayMs) * 1_000_000)
+                guard let self, !Task.isCancelled else { return }
+                // A real `kAXFocusedUIElementChangedNotification` may have
+                // landed and run attach already — stop polling in that case.
+                if self.focusedElement != nil { return }
+                guard let appElement = self.appElement,
+                      let element = axReadFocusedElement(appElement) else {
+                    continue
+                }
+                // Found it. Wire the notifications and let attach do its
+                // emit / snapshot bookkeeping. No reschedule risk: we have
+                // a focused element, so attach's guard takes the success path.
+                Log.info("attachToFocusedElement: retry succeeded after \(delayMs) ms on \(self.observedApp?.localizedName ?? "?")")
+                _ = element  // silence unused if attach changes
+                self.attachToFocusedElement()
+                return
+            }
+        }
     }
 
     // MARK: - Notification handling

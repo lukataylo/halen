@@ -142,6 +142,36 @@ fi
 # Each codesign call is preceded by its own `xattr -cr` to defeat iCloud's
 # FinderInfo re-stamping (see the staging block at the top of this script).
 echo "→ signing with: $SIGN_IDENTITY"
+
+# Pre-flight: codesign prompts for keychain access on every signed binary
+# unless the signing key's partition list authorises `codesign:`. This
+# script signs 8 things per build (llama, 4 Sparkle sub-bundles, Sparkle,
+# the app); without the partition list, that's 8 password dialogs every
+# build. With it, 0.
+#
+# setup-signing-keychain.sh does the one-time fix and drops a marker file
+# scoped to the identity hash. We refuse to start the codesign loop until
+# that marker exists so the user never eats 8 dialogs without realising
+# the setup script would have prevented it.
+SETUP_MARKER_DIR="$HOME/.cache/halen"
+# Hash the identity string into a stable suffix — different identities
+# (dev vs DIST) need separate setup, so they get separate markers.
+SETUP_MARKER="$SETUP_MARKER_DIR/.signing-keychain-configured-$(printf '%s' "$SIGN_IDENTITY" | shasum -a 256 | cut -c1-16)"
+if [[ "$SIGN_IDENTITY" != "-" ]] && [[ ! -f "$SETUP_MARKER" ]]; then
+    echo "" >&2
+    echo "error: codesign keychain setup hasn't run for this identity." >&2
+    echo "  Without it, every signed binary triggers a keychain prompt." >&2
+    echo "  This build signs 8 things — you'd see the dialog 8 times." >&2
+    echo "" >&2
+    echo "  Fix (one time, ~10 seconds — one password prompt total):" >&2
+    echo "    SIGN_IDENTITY=\"$SIGN_IDENTITY\" ./scripts/setup-signing-keychain.sh" >&2
+    echo "" >&2
+    echo "  After that, build-app.sh runs without any prompts." >&2
+    echo "" >&2
+    echo "  Already ran it? Re-run to refresh the marker:" >&2
+    echo "    SIGN_IDENTITY=\"$SIGN_IDENTITY\" ./scripts/setup-signing-keychain.sh" >&2
+    exit 1
+fi
 if [[ "$DIST" == "1" ]]; then
     # Every Mach-O in a notarized bundle must opt into the Hardened Runtime and
     # carry a secure timestamp. The framework gets runtime + timestamp; the app
