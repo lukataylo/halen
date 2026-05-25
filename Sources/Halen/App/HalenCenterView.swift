@@ -38,6 +38,10 @@ struct HalenCenterView: View {
     /// Sparkle-backed auto-updater. Passed through to SettingsView for
     /// the "Check for Updates" action.
     let updater: UpdaterController
+    /// Per-app tone profile editor data. Passed through to SettingsView's
+    /// "App tone profiles" card. Both owned at AppCoordinator scope.
+    @Bindable var toneProfileStore: AppToneProfileStore
+    @Bindable var recentApps: RecentAppsModel
     @State private var nav: CenterNav = .marketplace
     /// Tracks macOS "Reduce motion" / "Reduce transparency" prefs so the
     /// nav transition + dropdown background can adapt without restart.
@@ -64,6 +68,8 @@ struct HalenCenterView: View {
                     modelDownloader: modelDownloader,
                     webSocketBridge: webSocketBridge,
                     launchAtLogin: launchAtLogin,
+                    toneProfileStore: toneProfileStore,
+                    recentApps: recentApps,
                     hotkeyConflicts: hotkeyConflicts,
                     onBack: { back() },
                     onRunSetupAgain: onRunSetupAgain,

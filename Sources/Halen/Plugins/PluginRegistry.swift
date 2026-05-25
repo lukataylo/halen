@@ -88,14 +88,14 @@ final class PluginRegistry {
     /// step of onboarding flips them on if the user opts in. Everything not
     /// in this set defaults to on. Picked to match the immediate-value
     /// threshold: a brand-new user should get tone/clarity/typo/ask/snippets
-    /// without surprises; the rest are niche (Voice), interrupt-heavy
-    /// (Autocomplete), need setup (StyleGuide), or apply to a narrow workflow
-    /// (EmailReply, ToneProfiles).
+    /// without surprises; the rest are niche (Voice) or interrupt-heavy
+    /// (Autocomplete). StyleGuide and EmailReply behaviour now lives inside
+    /// the merged Writing Coach + Snippet Expander, so they don't appear
+    /// here as their own plugin entries.
     static let defaultDisabledPluginIds: Set<String> = [
         "com.halen.voice-dictation",
         "com.halen.autocomplete",
         "com.halen.style-guide",
         "com.halen.email-reply",
-        "com.halen.tone-profiles",
     ]
 }

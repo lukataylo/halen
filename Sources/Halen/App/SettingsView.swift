@@ -13,6 +13,13 @@ struct SettingsView: View {
     @Bindable var modelDownloader: ModelDownloader
     let webSocketBridge: WebSocketBridge?
     @Bindable var launchAtLogin: LaunchAtLoginController
+    /// Per-app tone profile store + the in-memory recently-focused-apps
+    /// list. Both owned by AppCoordinator (the store persists per-app
+    /// tones, the recents drive the editor's "apps you've used" picker).
+    /// Surfaced here as a Settings → App tone profiles card with a sheet
+    /// for the actual editor.
+    @Bindable var toneProfileStore: AppToneProfileStore
+    @Bindable var recentApps: RecentAppsModel
     /// Process-wide registry of hotkey conflicts. Observed so the warning
     /// card appears/disappears live as plugins are toggled on or off.
     @Bindable var hotkeyConflicts: HotkeyConflictRegistry
@@ -45,6 +52,7 @@ struct SettingsView: View {
     @AppStorage(OllamaSettings.baseURLKey) private var ollamaURLStored: String = OllamaSettings.defaultBaseURLString
     @State private var ollamaURLDraft: String = OllamaSettings.defaultBaseURLString
     @State private var ollamaURLInvalid: Bool = false
+    @State private var presentingAppTonesEditor = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,6 +63,7 @@ struct SettingsView: View {
                     startupCard
                     permissionsCard
                     overlayCard
+                    appTonesCard
                     aiCard
                     ollamaCard
                     builtInModelCard
@@ -64,6 +73,26 @@ struct SettingsView: View {
                 }
                 .padding(12)
             }
+        }
+        .sheet(isPresented: $presentingAppTonesEditor) {
+            // Wrap the existing per-app tone editor in a sheet so it
+            // gets its own scroll context (the editor's body uses a
+            // ScrollView; nesting that inside SettingsView's ScrollView
+            // would be a UX regression).
+            VStack(spacing: 0) {
+                HStack {
+                    Text("App tone profiles")
+                        .font(.system(.headline))
+                    Spacer()
+                    Button("Done") { presentingAppTonesEditor = false }
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                Divider()
+                ToneProfilesDetailView(store: toneProfileStore, recentApps: recentApps)
+            }
+            .frame(minWidth: 480, minHeight: 420)
         }
         .onAppear {
             startPolling()
@@ -336,6 +365,41 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    /// Apps and tone — short summary card plus a "Manage" button that
+    /// opens the full per-app editor in a sheet. Used by Writing Coach
+    /// (and previously Sentiment Guard / Clarity Checker) to adjust
+    /// classification thresholds based on the focused app's formality.
+    private var appTonesCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                cardLabel("App tone profiles")
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(toneProfilesSummary)
+                            .font(.callout)
+                        Text("Tell Halen which apps are formal (Mail, Outlook) and which are casual (Slack, iMessage). Writing rules adjust automatically.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    Button("Manage…") {
+                        presentingAppTonesEditor = true
+                    }
+                    .controlSize(.small)
+                    .accessibilityHint("Opens the per-app tone profile editor.")
+                }
+            }
+        }
+    }
+
+    private var toneProfilesSummary: String {
+        let count = toneProfileStore.sortedEntries.count
+        if count == 0 { return "No apps assigned yet." }
+        if count == 1 { return "1 app has a tone assigned." }
+        return "\(count) apps have a tone assigned."
     }
 
     private var overlayPreview: some View {

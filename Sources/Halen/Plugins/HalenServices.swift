@@ -16,7 +16,8 @@ struct HalenServices {
     /// the `calendar/*` JSON-RPC methods (gated on the `calendar` permission).
     let calendar: CalendarService
     /// Per-app tone profiles. A shared read for the writing plugins (Sentiment
-    /// Guard, Clarity Checker); the Tone Profiles plugin owns the editor.
+    /// Guard, Clarity Checker). The editor UI lives in Settings → App tone
+    /// profiles; the store is owned by AppCoordinator.
     let toneProfiles: AppToneProfileStore
     let appSupportDir: URL
 

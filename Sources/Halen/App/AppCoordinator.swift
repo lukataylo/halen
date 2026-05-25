@@ -29,6 +29,12 @@ final class AppCoordinator {
     /// Per-app tone profiles — a host service (passed into `HalenServices`),
     /// not a plugin-owned store, so every writing plugin reads the same data.
     let toneProfileStore = AppToneProfileStore()
+    /// In-memory list of apps focused this session. Powers the "recently
+    /// used apps" picker in Settings → App tone profiles. App-coordinator
+    /// scope so it accumulates across the Settings sheet's open/close
+    /// cycle and survives the user navigating away from Settings.
+    let recentApps = RecentAppsModel()
+    private var recentAppsTask: Task<Void, Never>?
     let registry = PluginRegistry()
     /// Surfaced to Settings via HalenApp → HalenCenterView. Lives at app
     /// scope (not view scope) so its observable status survives the
@@ -216,7 +222,6 @@ final class AppCoordinator {
         registry.register(SentimentGuard(services: services))
         registry.register(VoiceDictation(services: services))
         registry.register(SnippetExpander(services: services))
-        registry.register(ToneProfiles(services: services))
         registry.register(ClarityChecker(services: services))
         registry.register(StyleGuide(services: services))
         registry.register(EmailReply(services: services))
@@ -275,11 +280,18 @@ final class AppCoordinator {
     }
 
     private func startEventLogger() {
-        eventLogTask = Task { @MainActor [eventBus] in
+        eventLogTask = Task { @MainActor [eventBus, weak self] in
             for await event in eventBus.subscribe() {
                 switch event {
                 case .appFocused(let payload):
                     Log.info("evt app.focused \(payload.appName)")
+                    // Feed the recently-focused-apps list used by the
+                    // Settings → App tone profiles editor. Lives on the
+                    // coordinator (previously inside the ToneProfiles
+                    // plugin) so it accumulates whether or not the
+                    // editor is open.
+                    self?.recentApps.note(bundleId: payload.appBundleId,
+                                          name: payload.appName)
                 case .textPaused(let payload):
                     // Never write the user's text (or any prefix of it) to the
                     // system log. `Log.redact` emits an unforgeable fingerprint
