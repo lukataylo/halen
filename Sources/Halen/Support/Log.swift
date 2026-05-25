@@ -4,15 +4,32 @@ import OSLog
 enum Log {
     static let logger = Logger(subsystem: "com.dadiani.halen", category: "halen")
 
-    /// Mirror every log line to a flat file at `/tmp/halen-trace.log` *in
-    /// addition* to os_log. The unified log routinely drops or hides info-
-    /// and debug-level messages from custom subsystems unless you `sudo log
-    /// config --mode level:debug,persist:info`, which makes ad-hoc debugging
-    /// painful. A file mirror is unconditional and easy to `tail -f`.
-    /// Truncated to 1 MB-ish at startup so the file doesn't grow forever.
+    /// Mirror every log line to a flat file *in addition* to os_log. The
+    /// unified log routinely drops or hides info- and debug-level messages
+    /// from custom subsystems unless you `sudo log config --mode
+    /// level:debug,persist:info`, which makes ad-hoc debugging painful. A
+    /// file mirror is unconditional and easy to `tail -f`.
+    ///
+    /// Path: `~/Library/Application Support/Halen/halen-trace.log` —
+    /// per-user, persists across reboots, no permission collision on
+    /// multi-user Macs. Falls back to `/tmp/halen-trace.log` only if
+    /// Application Support is somehow unreachable.
+    ///
+    /// Path resolution is inlined here (not via `HalenSupportDirectory`)
+    /// to avoid a static-init cycle: `HalenSupportDirectory.root` calls
+    /// `Log.error` on failure, and that would re-enter this initializer
+    /// on first failed access.
     private static let traceHandle: FileHandle? = {
-        let path = "/tmp/halen-trace.log"
         let fm = FileManager.default
+        let dir: URL
+        if let support = fm.urls(for: .applicationSupportDirectory,
+                                 in: .userDomainMask).first {
+            dir = support.appending(path: "Halen")
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        } else {
+            dir = URL(fileURLWithPath: "/tmp", isDirectory: true)
+        }
+        let path = dir.appending(path: "halen-trace.log").path
         // Soft-rotate: if the existing file is over 4 MB, roll it.
         if let attrs = try? fm.attributesOfItem(atPath: path),
            let size = attrs[.size] as? Int64, size > 4 * 1024 * 1024 {

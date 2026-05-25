@@ -71,6 +71,54 @@ final class AppleFMBackend: InferenceBackend {
         return InferenceResponse(text: text, modelId: "apple-fm/system", latencyMs: latency)
     }
 
+    /// Token-streaming variant of `complete`. The default protocol
+    /// implementation runs `complete` once and yields the whole string;
+    /// this overrides it so Snippet Expander's `;reply` / rephrase / AI
+    /// snippets stream their rewrite live under Apple Intelligence, the
+    /// same way they do under bundled Gemma. Stop-sequence handling
+    /// mirrors `complete` — Foundation Models has no native stop param,
+    /// so we truncate each snapshot at the earliest match.
+    func stream(_ request: InferenceRequest) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                let session = LanguageModelSession()
+                let options = GenerationOptions(
+                    temperature: request.temperature,
+                    maximumResponseTokens: request.maxTokens
+                )
+                let stops = request.stop.filter { !$0.isEmpty }
+                do {
+                    let stream = session.streamResponse(to: request.prompt, options: options)
+                    for try await snapshot in stream {
+                        if Task.isCancelled { return }
+                        // `Snapshot.content` is the cumulative text so
+                        // far. Apply the same stop-sequence truncation
+                        // `complete` does so a downstream consumer never
+                        // sees text past the first stop.
+                        var text = snapshot.content
+                        if let earliest = stops
+                            .compactMap({ text.range(of: $0)?.lowerBound })
+                            .min() {
+                            text = String(text[..<earliest])
+                        }
+                        continuation.yield(text)
+                    }
+                    continuation.finish()
+                } catch let err as LanguageModelSession.GenerationError {
+                    switch err {
+                    case .exceededContextWindowSize:
+                        continuation.finish(throwing: AppleFMError.contextOverflow)
+                    default:
+                        continuation.finish(throwing: err)
+                    }
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
     /// Best-effort weight prewarm. Foundation Models lazy-loads on the first
     /// `respond(...)`, which adds a few hundred ms of first-token latency.
     /// Calling `prewarm()` at app launch — when `availability == .available` —

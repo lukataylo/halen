@@ -159,8 +159,14 @@ actor LlamaCppBackend: InferenceBackend {
     private func ensureContext() throws -> LlamaContext {
         if let loadedContext { return loadedContext }
         if loadFailed { throw LlamaBackendError.modelUnavailable }
+        // Missing-model is a *transient* state — the user finishes the
+        // first-run download via ModelDownloader and the GGUF appears on
+        // disk a moment later. Throwing `.modelUnavailable` without
+        // latching `loadFailed` lets the next request re-check
+        // `modelURL` and pick up the newly-downloaded file. (The old
+        // code latched here, so a backend queried before the download
+        // finished stayed unavailable until app restart.)
         guard let url = modelURL else {
-            loadFailed = true
             throw LlamaBackendError.modelUnavailable
         }
         do {
@@ -169,6 +175,9 @@ actor LlamaCppBackend: InferenceBackend {
             Log.info("LlamaCppBackend[\(spec.id)]: loaded \(url.lastPathComponent)")
             return context
         } catch {
+            // Real load failure — bad GGUF, OOM, llama.cpp init returned
+            // non-success. Latch so the router stops routing here until
+            // restart (a corrupt file isn't going to fix itself).
             loadFailed = true
             Log.warn("LlamaCppBackend[\(spec.id)]: model load failed: \(error)")
             throw error
