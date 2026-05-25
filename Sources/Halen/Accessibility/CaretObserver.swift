@@ -352,6 +352,21 @@ final class CaretObserver {
             return
         }
 
+        // Secure text fields (login forms, 1Password prompts, the macOS lock
+        // dialog) must never see Halen: no caret indicator, no text snapshots,
+        // no classifier runs. The AX subrole is the documented signal —
+        // `AXSecureTextField` is set by NSSecureTextField and matched by
+        // every well-behaved third-party password input. We bail out *before*
+        // wiring notifications, so even keystroke-driven AXValueChanged
+        // events never reach our handler for this element.
+        if axReadString(element, kAXSubroleAttribute as String) == kAXSecureTextFieldSubrole as String {
+            focusedElement = nil
+            focusRetryTask?.cancel()
+            focusRetryTask = nil
+            Log.info("attachToFocusedElement: skipping secure field on \(observedApp?.localizedName ?? "?")")
+            return
+        }
+
         // We have a focused element — cancel any retry burst from a prior
         // empty attach so we don't keep polling against a working subscription.
         focusRetryTask?.cancel()
