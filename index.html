@@ -1369,13 +1369,13 @@ img { display: block; max-width: 100%; }
     <div class="rail">
       <div class="list" id="rail">
         <button class="snip active" data-demo="typo">
-          <div class="row1"><span class="key tx">Typo Fixer</span><span class="ms">instant</span></div>
+          <div class="row1"><span class="key tx">Word Replacements</span><span class="ms">instant</span></div>
           <div class="label">Fixes the typos you actually make</div>
           <div class="desc">Learns from your own corrections. Backspace once and it never re-fixes that word.</div>
           <span class="bar"></span>
         </button>
         <button class="snip" data-demo="style">
-          <div class="row1"><span class="key sty">Style Guide</span><span class="ms">instant</span></div>
+          <div class="row1"><span class="key sty">Word Replacements</span><span class="ms">instant</span></div>
           <div class="label">Your banned words, swapped</div>
           <div class="desc">Add &ldquo;utilize&rdquo; once. Halen offers &ldquo;use&rdquo; every time after. No model call.</div>
           <span class="bar"></span>
@@ -1387,7 +1387,7 @@ img { display: block; max-width: 100%; }
           <span class="bar"></span>
         </button>
         <button class="snip" data-demo="sentiment">
-          <div class="row1"><span class="key sg">Sentiment Guard</span><span class="ms">~120 ms</span></div>
+          <div class="row1"><span class="key sg">Writing Coach</span><span class="ms">~120 ms</span></div>
           <div class="label">Read for tone before you send</div>
           <div class="desc">A small local classifier checks each sentence. Pops up if the tone trips a rule.</div>
           <span class="bar"></span>
@@ -2105,13 +2105,15 @@ navIO.observe(document.getElementById('demo'));
 // maps to an actual built-in plugin in the shipped app.
 
 const DEMOS = {
-  // Typo Fixer — learned-corrections dictionary. Inline replace at word
-  // boundary; no model call. See Sources/Halen/Features/TypoFixer.swift.
+  // Word Replacements (auto-typo path) — learned-corrections dictionary.
+  // Inline replace at word boundary; no model call. See
+  // Sources/Halen/Features/TypoFixer/TypoFixer.swift (the engine, wrapped
+  // by WordReplacements).
   typo: { type: 'typo' },
 
-  // Personal Style Guide — pure rule scan, no model. The built-in
-  // "utilize → use" rule matches StyleRulesStore.builtins[0]. Visual is
-  // a single-word swap inside a longer sentence, popover-driven.
+  // Word Replacements (preferences path) — pure rule scan, no model. The
+  // built-in "utilize → use" rule matches StyleRulesStore.builtins[0].
+  // Single-word swap inside a longer sentence, popover-driven.
   style: { type: 'style' },
 
   // ;casual — AI snippet, replacesPrior=true. The trigger dissolves
@@ -2125,9 +2127,10 @@ const DEMOS = {
     expanded: 'Hey Alex, could we lock the scope this week? I want to make sure we land it cleanly.',
     pop: { l: 'HALEN · matched', v: 'softening prior paragraph via gemma4:e4b' }, delay: 950,
   },
-  // Sentiment Guard — Qwen 2.5 0.5B classifier on each sentence end.
-  // Hostile label triggers the guard card with Send-anyway and
-  // Rephrase actions. See Sources/Halen/Features/SentimentGuard/.
+  // Writing Coach (tone tab) — Qwen 2.5 0.5B classifier on each sentence
+  // end. Hostile label triggers the guard card with Send-anyway and
+  // Rephrase actions. See Sources/Halen/Features/SentimentGuard/ (the
+  // engine, wrapped by WritingCoach).
   sentiment: { type: 'sentiment' },
 };
 
@@ -2311,7 +2314,7 @@ async function playTypo() {
     }
     if (seg.fix) {
       await wait(360);
-      $popL.textContent = 'HALEN · typo fixer';
+      $popL.textContent = 'HALEN · word replacements';
       $popV.textContent = `${seg.text.trim()} → ${seg.fix.trim()}`;
       $pop.classList.add('show');
       await wait(420);
@@ -2335,7 +2338,7 @@ async function playSentiment() {
   await typeOut($trigger, hostile, 22);
   if (userInterrupt) return;
   await wait(300);
-  $popL.textContent = 'HALEN · sentiment guard';
+  $popL.textContent = 'HALEN · writing coach';
   $popV.textContent = 'classifying tone · gemma4:e4b';
   $pop.classList.add('show');
   await wait(900);
@@ -2386,7 +2389,7 @@ async function playStyle() {
     }
     if (seg.fix) {
       await wait(420);
-      $popL.textContent = 'HALEN · style guide';
+      $popL.textContent = 'HALEN · word replacements';
       $popV.textContent = `${seg.text} → ${seg.fix} · personal rule`;
       $pop.classList.add('show');
       // Hold the popover slightly longer than the typo demo's 420 ms —

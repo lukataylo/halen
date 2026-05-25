@@ -191,11 +191,10 @@ final class HostBridge {
     // MARK: - Tone profiles
     //
     // The host owns `AppToneProfileStore` as a shared `HalenServices`
-    // member because Sentiment Guard and Clarity Checker (still in-process
-    // in v0.2.0) read it on every classification. Exposing the store
-    // over RPC means an external Tone Profiles plugin can edit the
-    // *same* data the in-process readers see — no migration needed when
-    // the editor plugin is extracted before its in-process consumers.
+    // member because Writing Coach (tone + clarity classifiers) and the
+    // ;reply / ⌃⌥E email-reply action in Snippet Expander both read it
+    // on every classification. Exposing the store over RPC lets an
+    // external plugin edit the *same* data the in-process readers see.
     //
     // Ungated for now. A future security pass might gate writes on a
     // `profiles` permission, but for v0.2.0 the data is per-user

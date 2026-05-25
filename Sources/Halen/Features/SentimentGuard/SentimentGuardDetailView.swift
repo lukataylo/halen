@@ -87,7 +87,7 @@ struct SentimentGuardDetailView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
                 cardLabel("Ignored apps")
-                Text("Sentiment Guard stays silent in these apps. Type a bundle id (e.g. com.apple.iChat).")
+                Text("Writing Coach stays silent in these apps. Type a bundle id (e.g. com.apple.iChat).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -99,7 +99,7 @@ struct SentimentGuardDetailView: View {
                         .padding(.horizontal, 8).padding(.vertical, 5)
                         .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
                         .accessibilityLabel("New ignored bundle id")
-                        .accessibilityHint("Type a bundle id like com.apple.iChat to silence Sentiment Guard there.")
+                        .accessibilityHint("Type a bundle id like com.apple.iChat to silence Writing Coach there.")
                     Button {
                         addIgnoredApp()
                     } label: {
@@ -111,7 +111,7 @@ struct SentimentGuardDetailView: View {
                     .foregroundStyle(newIgnoredApp.trimmingCharacters(in: .whitespaces).isEmpty
                                      ? Color.secondary.opacity(0.4) : Color.accentColor)
                     .accessibilityLabel("Add bundle id to ignore list")
-                    .accessibilityHint("Adds the bundle id you just typed so Sentiment Guard stops firing there.")
+                    .accessibilityHint("Adds the bundle id you just typed so Writing Coach stops firing there.")
                 }
 
                 if ignoredApps.isEmpty {
@@ -139,7 +139,7 @@ struct SentimentGuardDetailView: View {
                                 .buttonStyle(.plain)
                                 .help("Remove from ignore list")
                                 .accessibilityLabel("Remove \(bundleId) from ignore list")
-                                .accessibilityHint("Sentiment Guard will fire in this app again.")
+                                .accessibilityHint("Writing Coach will fire in this app again.")
                             }
                             .padding(.horizontal, 6).padding(.vertical, 3)
                         }

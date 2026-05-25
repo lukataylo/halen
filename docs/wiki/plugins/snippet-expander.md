@@ -52,6 +52,33 @@ write-back path as an AI snippet — sending only the selected text to Gemma 4
 (`.medium` tier, `taskKind: .generation`) with a fixed "rewrite more clearly
 and concisely" prompt.
 
+## Email reply (⌃⌥E and `;reply`)
+
+Drafts a reply to the focused email. Fires either by pressing ⌃⌥E or by
+typing `;reply` in a message body. Both routes call the same helper:
+[`EmailReplyDrafter`](../../../Sources/Halen/Features/SnippetExpander/EmailReplyDrafter.swift).
+
+Behaviour:
+
+1. Bail with a notification if the frontmost app isn't on the known mail
+   list (Mail, Outlook, Spark, Airmail, Canary, Mimestream).
+2. Capture the message via `AskHalenContext` (selected text → surrounding
+   paragraph → clipboard).
+3. Resolve the tone: user-selected default (Settings → Snippet Expander →
+   Email reply) wins; otherwise the per-app Tone Profile.
+4. Ask Gemma 4 to draft the reply.
+5. Insert at the caret if it's in an editable field with no selection;
+   otherwise copy to clipboard and notify.
+
+`;reply` is special-cased in `handle(text:caretOffset:)` — it bypasses the
+normal SnippetStore expansion path so the trigger is consumed without
+trying to expand it as text.
+
+Folded in from the standalone Email Reply plugin in v0.3. A returning
+user who had `com.halen.email-reply` enabled keeps ⌃⌥E working: the
+migration in `PluginRegistry` flips Snippet Expander on if it wasn't
+already.
+
 ## The three snippet kinds
 
 Defined in
@@ -129,6 +156,8 @@ Defined in
 | `;summary`  | ai           | "Summarise the following text in three concise bullet points." |
 | `;rephrase` | ai           | "Rewrite the following paragraph more concisely while keeping its meaning." |
 | `;formal`   | ai           | "Rewrite the following paragraph in a more formal, professional tone." |
+| `;casual`   | ai           | "Rewrite the following paragraph in a friendlier, more casual tone." |
+| `;reply`    | action       | Drafts a reply to the focused email. Equivalent to ⌃⌥E. |
 
 Built-ins can be toggled but not deleted. The store merges any
 built-in the user doesn't already have on every launch, so adding a new

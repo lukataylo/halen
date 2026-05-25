@@ -16,7 +16,7 @@ import IOKit.hid
 final class SnippetExpander: HalenPlugin {
     let id = "com.halen.snippet-expander"
     let name = "Snippet Expander"
-    let summary = "Type ;tag to expand into your snippets or AI-generated content."
+    let summary = "Type ;tag to expand. \u{2303}\u{2325}R rewrites a selection."
     let icon = "text.bubble"
     let category: PluginCategory = .productivity
 
@@ -192,16 +192,6 @@ final class SnippetExpander: HalenPlugin {
 
     func makeDetailView() -> AnyView {
         AnyView(SnippetExpanderDetailView(store: store))
-    }
-
-    /// Menu-equivalent entry point for the ⌃⌥R rephrase-selection hotkey.
-    /// The user has to have something selected in another app first — the
-    /// menubar dropdown's open by definition means Halen is frontmost when
-    /// the click happens, so the menu path relies on the selection
-    /// surviving the dropdown losing focus (it does: AX selection state is
-    /// per-element, not per-key-window).
-    func invokeRephraseSelectionFromMenu() {
-        rephraseSelection()
     }
 
     // MARK: - Trigger detection

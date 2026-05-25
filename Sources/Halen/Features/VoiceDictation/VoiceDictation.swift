@@ -19,7 +19,7 @@ import UserNotifications
 final class VoiceDictation: HalenPlugin {
     let id = "com.halen.voice-dictation"
     let name = "Voice Dictation"
-    let summary = "Press \u{2303}\u{2325}Space, speak, press again — text appears at your cursor."
+    let summary = "Press \u{2303}\u{2325}Space. Speak. Press again."
     let icon = "mic.fill"
     let category: PluginCategory = .voice
 
@@ -78,13 +78,6 @@ final class VoiceDictation: HalenPlugin {
 
     func makeDetailView() -> AnyView {
         AnyView(VoiceDictationDetailView(state: state))
-    }
-
-    /// Menu-equivalent entry point. Mirrors the ⌃⌥Space hotkey path so users
-    /// who can't press chord combinations still reach the dictation
-    /// start/stop toggle from the dropdown.
-    func invokeFromMenu() {
-        toggleRecording()
     }
 
     // MARK: - Hotkey

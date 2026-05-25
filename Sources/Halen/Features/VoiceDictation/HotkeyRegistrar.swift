@@ -2,13 +2,15 @@ import Carbon.HIToolbox
 import AppKit
 import Foundation
 
-/// Process-wide catalogue of Carbon hotkey ids. Adding a new hotkey here AND
-/// passing `.rawValue` to `HotkeyRegistrar.register(..., id:)` keeps id
-/// collisions a compile-time concern instead of a runtime surprise.
+/// Process-wide catalogue of in-process hotkey ids. Held by
+/// `HotkeyRegistrar.register(..., id:)` so distinct chords can be
+/// distinguished should two plugins ever race on the same callback. The
+/// `id` parameter is also a legacy of the Carbon-backed implementation
+/// (Carbon's EventHotKeyID disambiguated handlers); kept on the
+/// NSEvent-backed path for API compatibility with external plugins
+/// allocated ids in the 100+ range via `PluginHost`.
 enum HotkeyID: UInt32 {
     case voiceDictation = 1
-    case askHalen       = 2
-    case emailReply     = 3
     case autocomplete   = 4
 }
 

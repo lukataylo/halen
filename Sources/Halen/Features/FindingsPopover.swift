@@ -45,10 +45,10 @@ final class StreamingRewriteState: ObservableObject {
 /// Caret-anchored popover that lists one or more `Finding`s with optional
 /// per-item fixes, plus an optional generative "Rewrite via Gemma 4" action.
 ///
-/// Generalises SentimentGuard's original two-button popover: that popover is
-/// the *single-finding* case — no findings list, a context preview of the
-/// flagged text, an approve button, and a rewrite button. Clarity Checker and
-/// Style Guide use the multi-finding form.
+/// Generalises the original tone-classifier popover: a single-finding form
+/// (context preview + approve + rewrite buttons) used by Writing Coach's
+/// tone tab, and a multi-finding form used by Writing Coach's clarity tab
+/// and Word Replacements' style-preference scanner.
 ///
 /// When `streaming` is provided, the primary action flips the popover into a
 /// streaming-preview layout: tokens stream into a scrollable text pane and

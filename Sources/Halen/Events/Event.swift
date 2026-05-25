@@ -103,7 +103,7 @@ enum Event: Sendable {
         /// Stable identifier — `<source>:<paragraphHash>`. Replacing a finding
         /// with a new one from the same source+paragraph is a no-op for the UI.
         let id: String
-        /// Plugin id of the emitter, e.g. `com.halen.sentiment-guard`.
+        /// Plugin id of the emitter, e.g. `com.halen.writing-coach`.
         let source: String
         let severity: Severity
         /// One-line headline shown in the hover popover, e.g. "Reads as Irritated".

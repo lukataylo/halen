@@ -41,8 +41,8 @@ In all cases the text goes only to the local inference backend the router
 picks (Apple Foundation Models, the bundled Gemma 4 model, or your Ollama
 daemon) — never off-device. Plugins that downstream the text further:
 
-- **Sentiment Guard** re-windows to ~800 chars around the caret before
-  hashing and sending for tone classification.
+- **Writing Coach** re-windows to ~800 chars around the caret before
+  hashing and sending for tone + clarity classification.
 - **Burnout Copilot** re-windows to ~800 chars before its yes/no tone call.
 - **Snippet Expander (AI snippets)** sends the 500 chars *immediately
   preceding* the trigger as prior context; the ⌃⌥R rephrase hotkey sends only
@@ -52,7 +52,10 @@ daemon) — never off-device. Plugins that downstream the text further:
   clipboard entry.
 - **Meeting Prep** sends EventKit event titles, attendee names, and notes
   — never anything from focused text fields.
-- **Typo Fixer** does string diffs locally; it never sends text to a model.
+- **Word Replacements** auto-typo path does string diffs locally; it never
+  sends text to a model. The preferences path is pure rule-matching too.
+- **Snippet Expander's `;reply` / ⌃⌥E** sends the focused email's body
+  (selected text → surrounding paragraph → clipboard) to Gemma.
 - **Voice Dictation** streams audio buffers to `SFSpeechRecognizer` with
   `requiresOnDeviceRecognition = true` (see below).
 

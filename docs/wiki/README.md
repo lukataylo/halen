@@ -1,17 +1,7 @@
 # Halen Wiki
 
-Writing tools moved to the cloud while you weren't looking.
-
-Halen is the move back. A menubar app that watches the text near your
-cursor and runs small, focused plugins against it — fixing typos,
-catching hostile drafts, expanding snippets, briefing you before a
-meeting, nudging you to take a break.
-
-Every plugin runs locally. Apple Silicon is fast enough for that now.
-
-No cloud round-trips. No drafts uploaded. No accounts.
-
-Your words stay yours. Not as a feature. As a default.
+Halen is a menubar writing assistant for macOS. Models run on-device.
+Your text never leaves your Mac.
 
 ---
 
@@ -24,8 +14,7 @@ Your words stay yours. Not as a feature. As a default.
 - **Same contract, in-process or out.** Event names are JSON-RPC
   method names. In-process plugins call them via Swift. External
   plugins read NDJSON over stdio. Burnout Copilot and Meeting Prep
-  already run out-of-process; the rest live inside the menubar app
-  for now.
+  run out-of-process; bundled plugins live inside the menubar app.
 - **Tier-based, multi-backend inference.** Plugins ask for
   `classifier`, `small`, `medium`, or `large`. `RouterInferenceClient`
   picks a backend and falls through on failure. The `.classifier`
@@ -34,10 +23,9 @@ Your words stay yours. Not as a feature. As a default.
 - **AX write-back, not synthetic keystrokes.** Corrections and snippet
   expansions use `kAXSelectedTextRangeAttribute` +
   `kAXSelectedTextAttribute`. Quieter, faster, more accurate.
-- **A marketplace UI in the menubar.** Category-grouped plugin list,
-  per-plugin toggle, per-plugin detail panel. Onboarding walks you
-  through what to enable. Defaults are tuned for *useful without
-  surprises*.
+- **A marketplace UI in the menubar.** A flat plugin list, per-plugin
+  toggle, per-plugin detail panel. Onboarding walks you through what to
+  enable. Defaults are tuned for *useful without surprises*.
 
 ## Read the deep dives
 
@@ -52,27 +40,23 @@ Your words stay yours. Not as a feature. As a default.
 
 ## Bundled plugins (in-process)
 
-Ten plugins ship inside the menubar binary. The marketplace dropdown
+Six plugins ship inside the menubar binary. The marketplace dropdown
 toggles them on or off and opens their detail panel.
 
 | Plugin | Category | Default | What it does |
 |---|---|---|---|
-| Ask Halen | Productivity | On | ⌃H opens a floating palette. Asks one question with your focused app, selection, and clipboard already in context. |
-| [Typo Fixer](plugins/typo-fixer.md) | Writing | On | Replaces known typos at word boundaries. Learns new ones from how you edit. |
-| [Sentiment Guard](plugins/sentiment-guard.md) | Writing | On | Classifies your drafts on-device. Pops a warning when the tone trips a rule you set. |
-| [Snippet Expander](plugins/snippet-expander.md) | Productivity | On | `;tag` expands to static, dynamic, or AI-generated text. ⌃⌥R rephrases the selection in place. |
-| [Clarity Checker](plugins/clarity-checker.md) | Writing | On | Flags passive voice, run-ons, vague phrasing. One-tap Gemma rewrite. |
-| [Voice Dictation](plugins/voice-dictation.md) | Voice | Off | ⌃⌥Space opens a listening pill. Apple's on-device speech recognizer transcribes; the text lands at your caret. |
-| [Inline Autocomplete](plugins/autocomplete.md) | Writing | Off | Suggests the next few words as ghost text. Tab to accept. |
-| [Personal Style Guide](plugins/style-guide.md) | Writing | Off | Your banned-words → preferred-words list, scanned per paragraph. |
-| [Email Reply](plugins/email-reply.md) | Productivity | Off | ⌃⌥E drafts a reply to the email you're reading, in the tone you pick. |
-| [Tone Profiles](plugins/tone-profiles.md) | Writing | Off | Per-app tone hints (formal vs casual), shared with the other writing plugins. |
+| Ask Halen | Productivity | On | ⌃H opens a floating palette. One question, with your focused app + selection + clipboard as context. |
+| [Word Replacements](plugins/word-replacements.md) | Writing | On | Fixes your typos. Swaps in your preferred terms. |
+| [Writing Coach](plugins/writing-coach.md) | Writing | On | Catches hostile tone and clarity issues. One tap to rewrite. |
+| [Snippet Expander](plugins/snippet-expander.md) | Productivity | On | `;tag` expands. `;reply` or ⌃⌥E drafts an email. ⌃⌥R rewrites a selection. |
+| [Voice Dictation](plugins/voice-dictation.md) | Voice | Off | ⌃⌥Space opens a listening pill. Apple's on-device transcription writes at your caret. |
+| [Autocomplete](plugins/autocomplete.md) | Writing | Off | Suggests the next few words as ghost text. Tab to accept. |
 
 ## External plugins (out-of-process, JSON-RPC over stdio)
 
-Same `HalenPlugin` contract, just over a stdio socket instead of a
-Swift call. Ship in this repo under [`plugins/`](../../plugins/) and
-install into `~/Library/Application Support/Halen/Plugins/`.
+Same `HalenPlugin` contract, over a stdio socket instead of a Swift
+call. Ship in this repo under [`plugins/`](../../plugins/) and install
+into `~/Library/Application Support/Halen/Plugins/`.
 
 | Plugin | Category | What it does |
 |---|---|---|

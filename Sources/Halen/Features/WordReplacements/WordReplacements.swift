@@ -25,7 +25,7 @@ import SwiftUI
 final class WordReplacements: HalenPlugin {
     let id = "com.halen.word-replacements"
     let name = "Word Replacements"
-    let summary = "Auto-fixes your typos and swaps banned words for preferred ones."
+    let summary = "Fixes your typos. Swaps in your preferred terms."
     let icon = "character.cursor.ibeam"
     let category: PluginCategory = .writing
 

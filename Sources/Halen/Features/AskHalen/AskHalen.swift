@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import Carbon.HIToolbox
 import Observation
 import ApplicationServices
 import IOKit.hid
@@ -26,7 +25,7 @@ import UserNotifications
 final class AskHalen: HalenPlugin {
     let id = "com.halen.ask-halen"
     let name = "Ask Halen"
-    let summary = "⌃H anywhere to ask your local AI with the page's context attached."
+    let summary = "Press \u{2303}H. Ask your Mac anything, with context."
     let icon = "sparkles.rectangle.stack"
     let category: PluginCategory = .productivity
 
@@ -105,13 +104,6 @@ final class AskHalen: HalenPlugin {
 
     func makeDetailView() -> AnyView {
         AnyView(AskHalenDetailView())
-    }
-
-    /// Menu-equivalent entry point. Mirrors the ⌃H hotkey path so users who
-    /// can't press chord combinations (Switch Control, RSI, non-US layouts
-    /// where ⌃H collides) still reach the palette from the dropdown.
-    func invokeFromMenu() {
-        togglePalette()
     }
 
     // MARK: - Palette

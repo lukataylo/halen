@@ -90,8 +90,8 @@ struct SnippetExpanderDetailView: View {
     private var emailReplyCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
-                cardLabel("Email reply (;reply or ⌃⌥E)")
-                Text("Type ;reply in your message body, or press ⌃⌥E in any native mail app (Mail, Outlook, Spark, Airmail, Canary, Mimestream). Halen drafts a reply via Gemma and inserts it at your cursor.")
+                cardLabel("Email reply")
+                Text("Type ;reply or press ⌃⌥E in Mail, Outlook, Spark, Airmail, Canary, or Mimestream. Halen drafts a reply at your cursor.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -114,11 +114,11 @@ struct SnippetExpanderDetailView: View {
 
     private var emailToneHint: String {
         switch EmailReplyDrafter.ReplyTone(rawValue: emailToneRaw) ?? .match {
-        case .match:   return "Uses the tone you set per-app in Settings → App tone profiles."
-        case .formal:  return "Always draft in a formal, professional register."
-        case .casual:  return "Always draft in a casual, relaxed register."
-        case .concise: return "Always keep replies as short as politely possible."
-        case .warm:    return "Always lead with warmth — acknowledge the sender first."
+        case .match:   return "Uses the per-app tone in Settings."
+        case .formal:  return "Formal, professional."
+        case .casual:  return "Casual, relaxed."
+        case .concise: return "Short. Two or three sentences."
+        case .warm:    return "Warm. Acknowledges the sender first."
         }
     }
 

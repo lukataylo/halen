@@ -26,7 +26,7 @@ import SwiftUI
 final class WritingCoach: HalenPlugin {
     let id = "com.halen.writing-coach"
     let name = "Writing Coach"
-    let summary = "Flags hostile tone, passive voice, and run-ons before you send."
+    let summary = "Catches tone and clarity issues as you write."
     let icon = "text.magnifyingglass"
     let category: PluginCategory = .writing
 

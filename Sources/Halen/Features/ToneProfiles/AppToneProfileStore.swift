@@ -2,9 +2,9 @@ import Foundation
 import Observation
 
 /// The register the user writes in for a given app — Slack reads casual, the
-/// company wiki reads formal. Plugins that classify or rewrite text (Sentiment
-/// Guard, Clarity Checker) read this to bias their thresholds and prompts so a
-/// blunt Slack message isn't judged the way a blunt email is.
+/// company wiki reads formal. Read by Writing Coach (tone + clarity
+/// classifiers) and Snippet Expander's email-reply action so a blunt
+/// Slack message isn't judged the way a blunt email is.
 enum ToneProfile: String, Codable, CaseIterable, Sendable, Identifiable {
     case formal
     case casual
@@ -36,8 +36,9 @@ enum ToneProfile: String, Codable, CaseIterable, Sendable, Identifiable {
 
 /// Host service: per-app tone profiles keyed by bundle id. Owned by the host
 /// and exposed through `HalenServices.toneProfiles` so any plugin can read a
-/// consistent profile for the app the user is currently in. The Tone Profiles
-/// plugin's detail view is the editor; every other touch is a read.
+/// consistent profile for the app the user is currently in. The editor
+/// lives at Settings → App tone profiles (`ToneProfilesDetailView`); every
+/// other touch is a read.
 @Observable
 @MainActor
 final class AppToneProfileStore {

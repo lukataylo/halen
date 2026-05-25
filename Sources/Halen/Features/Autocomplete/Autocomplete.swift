@@ -16,8 +16,8 @@ import ApplicationServices
 @MainActor
 final class Autocomplete: HalenPlugin {
     let id = "com.halen.autocomplete"
-    let name = "Inline Autocomplete"
-    let summary = "Suggests the next few words as ghost text — Tab to accept."
+    let name = "Autocomplete"
+    let summary = "Tab to accept the next few words."
     let icon = "text.append"
     let category: PluginCategory = .writing
 
