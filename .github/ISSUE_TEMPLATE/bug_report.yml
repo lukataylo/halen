@@ -26,8 +26,8 @@ body:
     id: halen-version
     attributes:
       label: Halen version
-      description: Settings → About — copy the whole `v0.2.0 (2)` line.
-      placeholder: v0.2.0 (2)
+      description: Settings → About — copy the whole `v0.3.0 (3)` line.
+      placeholder: v0.3.0 (3)
     validations:
       required: true
 

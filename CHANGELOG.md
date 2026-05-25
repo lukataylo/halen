@@ -4,27 +4,39 @@ All notable changes to Halen are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning is [semver](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] — 2026-05-25
 
-### Accessibility
-- **VoiceOver announcements for inline edits.** When Halen fixes a typo, expands a snippet, or applies a rewrite, VoiceOver speaks the change at the user's cursor instead of leaving the edit silent.
-- **Reduce Motion and Reduce Transparency support.** Overlay animations (busy loader, voice pulse, nav transitions) and translucent surfaces (dropdown, GlassCard, onboarding) honor the macOS accessibility preferences and update live.
-- **Menu equivalents for global hotkeys.** Ask Halen, Rephrase selection, Reply to email, and Start dictation are now keyboard-reachable from a Quick Actions section in the menubar dropdown — no chord required.
+Six plugins, down from ten. Same features, simpler marketplace.
 
-### Usability
-- **Hotkey conflict detection.** Two plugins claiming the same chord now surface in Settings instead of silently clobbering each other.
-- **Permission states disambiguated.** "Denied" and "Not requested yet" are distinct labels, each pointing at the right remediation.
-- **Ollama URL validates as you type.** The Save button stays disabled until the URL is well-formed; the red outline appears on the first invalid keystroke instead of after Save.
-- **`Open` button hidden on granted permissions.** Cleaner permission rows; the deep-link only shows when there's something left to grant.
-- **Streaming-rewrite failure copy clarified.** "Couldn't rephrase" → "Rewrite failed. The model may be busy — try again."
+### Plugin lineup
+- **Word Replacements** (new) replaces Typo Fixer + Personal Style Guide. One plugin, two tabs in its detail view — auto-typos and your preferred terms. Existing settings carry over.
+- **Writing Coach** (new) replaces Sentiment Guard + Clarity Checker. Tone and clarity findings on the caret indicator from one classifier pass. Existing rules carry over.
+- **Email Reply** is now part of Snippet Expander. Type `;reply` in any mail app or press ⌃⌥E. Default tone picker lives in Snippet Expander's detail view.
+- **Tone Profiles** moved to Settings → App tone profiles. No longer a marketplace toggle.
 
-### Performance
-- **SHA-256 paragraph hash allocates one buffer instead of 65 strings.** Polish-grade win on the per-paragraph settle path.
-- **Latency assertions in CI.** ParagraphClassifier P50 < 5 ms and sha256Hex P50 < 100 µs are now regression-gated.
+### Hotkeys
+- **Voice Dictation** rebinds to ⌃⌥Space. The previous ⌥⌘H collided with macOS's "Hide Others" shortcut, which intercepted the keystroke before Halen could see it.
+- All global hotkeys now route through `NSEvent` monitors instead of Carbon's `RegisterEventHotKey`. On macOS 14+ the Carbon path stopped delivering events to handlers for chords that overlapped Cocoa menu shortcuts — silent registration but never fired.
 
-### Code health
-- **TypoFixer files moved into `Features/TypoFixer/`** to match the per-plugin folder convention.
-- **`PluginStoreModel.registryURL` no longer force-unwraps;** a malformed literal surfaces in the UI's failure card instead of crashing on launch.
+### Voice Dictation
+- Redesigned listening pill — 32×7 dot matrix with per-dot glow, a continuous scanner highlight on the centre row, and a deep-black capsule with a soft cobalt aura. Reduce Motion pins the scanner at mid-position.
+
+### Privacy
+- **Halen no longer appears in password fields.** Secure text fields (every login form, the macOS lock dialog, sudo prompts wrapped by a GUI helper) are skipped entirely at the AX subscription layer — no caret indicator, no text snapshots, no classifier runs.
+
+### Reliability
+- **Cancelled tone classifications no longer poison dedup.** A superseded paragraph hash is no longer added to the LRU, so the next classification of the same paragraph runs cleanly.
+- **Caret indicator appears in Notes, Messages, and Electron apps.** The AX-focused-element notification doesn't fire reliably in WebKit-backed editors; a short retry burst (300 / 800 / 1600 ms after focus change) catches it.
+
+### Settings
+- **Inline underline preview removed.** The Halen mark's severity tint carries the same signal without the AX-frame guesswork that made the underline drift off-screen. Preserved on a feature branch for a future per-glyph implementation.
+
+### Developer experience
+- **No more 8x codesign password prompts per local build.** Run `scripts/setup-signing-keychain.sh` once; subsequent rebuilds are silent across reboots.
+
+### Code quality
+- Removed orphaned `invokeFromMenu` paths from Ask Halen, Voice Dictation, and Snippet Expander.
+- Wiki and website copy updated to the new plugin lineup. README rewritten as customer-facing; architecture details live in `docs/wiki/`.
 
 ## [0.2.0] — 2026-05-23
 
