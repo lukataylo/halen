@@ -36,6 +36,16 @@ final class SnippetStore {
         Snippet(trigger: ";casual",   kind: .ai,
                 value: "Rewrite the following paragraph in a friendlier, more casual tone. Output only the rewrite, no preamble, no quotes.",
                 displayName: "Make prior paragraph casual", builtin: true, replacesPrior: true),
+        // Folded-in email reply action — formerly the standalone
+        // EmailReply plugin. Special-cased in
+        // SnippetExpander.handle(...): the trigger fires the built-in
+        // drafter instead of being expanded as text. The `value` is
+        // documentation-only (never written to the field) and
+        // intentionally describes the user-visible behaviour so it
+        // reads correctly in the snippet list.
+        Snippet(trigger: ";reply",    kind: .staticText,
+                value: "[Built-in: drafts a reply to the focused email via Gemma. Also ⌃⌥E.]",
+                displayName: "Draft email reply", builtin: true),
     ]
 
     // MARK: - Lookup

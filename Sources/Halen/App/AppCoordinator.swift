@@ -228,8 +228,10 @@ final class AppCoordinator {
         // Checker plugins. Same wrapper pattern as Word Replacements.
         registry.register(WritingCoach(services: services))
         registry.register(VoiceDictation(services: services))
+        // Snippet Expander now also handles the email-reply action — see
+        // EmailReplyDrafter + the ;reply built-in trigger + the ⌃⌥E
+        // hotkey installed in SnippetExpander.start().
         registry.register(SnippetExpander(services: services))
-        registry.register(EmailReply(services: services))
         registry.register(Autocomplete(services: services))
 
         // Out-of-process plugins under ~/Library/Application Support/Halen/Plugins/.

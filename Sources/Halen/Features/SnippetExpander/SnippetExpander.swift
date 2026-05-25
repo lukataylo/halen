@@ -35,6 +35,19 @@ final class SnippetExpander: HalenPlugin {
     /// NSEvent monitor handles for the ⌃⌥R rephrase-selection hotkey.
     private var globalHotkeyMonitor: Any?
     private var localHotkeyMonitor: Any?
+    /// NSEvent monitor handles for the ⌃⌥E email-reply hotkey. Lives
+    /// here (not in a separate plugin) since the Email Reply standalone
+    /// folded into Snippet Expander — it's surfaced as the `;reply`
+    /// built-in trigger plus this hotkey for users who prefer chords.
+    private var emailReplyGlobalMonitor: Any?
+    private var emailReplyLocalMonitor: Any?
+    /// In-flight email reply draft Task. Cancelled by a subsequent
+    /// invocation so a second ⌃⌥E supersedes a slow first one.
+    private var emailReplyInflight: Task<Void, Never>?
+    /// Built-in trigger that fires the email-reply drafter instead of
+    /// expanding a snippet. Special-cased in `handle(text:caretOffset:)`
+    /// so it bypasses the normal expansion path.
+    private static let emailReplyTrigger = ";reply"
 
     /// Sentinel passed to `applyReplacement` for hotkey-driven writes — keeps
     /// the self-edit suppression list happy without colliding with any real
@@ -59,6 +72,7 @@ final class SnippetExpander: HalenPlugin {
             }
         }
         installRephraseHotkey()
+        installEmailReplyHotkey()
     }
 
     func stop() {
@@ -67,6 +81,10 @@ final class SnippetExpander: HalenPlugin {
         recentWrites.removeAll()
         if let m = globalHotkeyMonitor { NSEvent.removeMonitor(m); globalHotkeyMonitor = nil }
         if let m = localHotkeyMonitor  { NSEvent.removeMonitor(m); localHotkeyMonitor  = nil }
+        if let m = emailReplyGlobalMonitor { NSEvent.removeMonitor(m); emailReplyGlobalMonitor = nil }
+        if let m = emailReplyLocalMonitor  { NSEvent.removeMonitor(m); emailReplyLocalMonitor  = nil }
+        emailReplyInflight?.cancel()
+        emailReplyInflight = nil
     }
 
     // MARK: - Rephrase-selection hotkey (⌃⌥R)
@@ -97,6 +115,39 @@ final class SnippetExpander: HalenPlugin {
             return event
         }
         Log.info("SnippetExpander: ⌃⌥R rephrase-selection monitors installed (global=\(globalHotkeyMonitor != nil), local=\(localHotkeyMonitor != nil))")
+    }
+
+    /// Install global + local `.keyDown` monitors for ⌃⌥E. Mirrors the
+    /// rephrase-hotkey install above — same NSEvent path, same Input
+    /// Monitoring gating, distinct monitor handles so each chord can be
+    /// torn down independently. Fires `EmailReplyDrafter.draft` against
+    /// the current focused-app context.
+    private func installEmailReplyHotkey() {
+        let isHotkey: (NSEvent) -> Bool = { event in
+            event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.control, .option]
+                && event.charactersIgnoringModifiers?.lowercased() == "e"
+        }
+        emailReplyGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard isHotkey(event) else { return }
+            MainActor.assumeIsolated { self?.fireEmailReply() }
+        }
+        emailReplyLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if isHotkey(event) {
+                MainActor.assumeIsolated { self?.fireEmailReply() }
+                return nil
+            }
+            return event
+        }
+        Log.info("SnippetExpander: ⌃⌥E email-reply monitors installed (global=\(emailReplyGlobalMonitor != nil), local=\(emailReplyLocalMonitor != nil))")
+    }
+
+    /// Cancel any prior draft, kick off a new one. Wraps the static
+    /// `EmailReplyDrafter.draft` so the inflight slot stays in the
+    /// plugin instance (the drafter itself is stateless).
+    private func fireEmailReply() {
+        emailReplyInflight?.cancel()
+        emailReplyInflight = EmailReplyDrafter.draft(services: services,
+                                                     caretObserver: caretObserver)
     }
 
     /// Rephrase whatever text is currently selected, in place. No-op when
@@ -175,6 +226,18 @@ final class SnippetExpander: HalenPlugin {
         let now = Date()
         recentWrites.removeAll { now.timeIntervalSince($0.timestamp) > 3 }
         if recentWrites.contains(where: { $0.trigger == token }) { return }
+
+        // Built-in email-reply action — bypasses the SnippetStore path
+        // entirely. The trigger is consumed (replaced by an empty
+        // string) so the user doesn't see ";reply" lingering in their
+        // text while the draft is composing.
+        if token.lowercased() == Self.emailReplyTrigger {
+            applyReplacement("", at: tokenRange,
+                             trigger: Self.emailReplyTrigger,
+                             announce: "Drafting email reply")
+            fireEmailReply()
+            return
+        }
 
         guard let snippet = store.snippet(for: token) else { return }
         expand(snippet, at: tokenRange, fullText: ns)

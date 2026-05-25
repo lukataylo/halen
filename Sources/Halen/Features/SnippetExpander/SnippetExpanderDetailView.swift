@@ -69,13 +69,56 @@ struct SnippetExpanderDetailView: View {
         }
     }
 
+    @AppStorage(EmailReplyDrafter.defaultToneKey) private var emailToneRaw: String =
+        EmailReplyDrafter.ReplyTone.match.rawValue
+
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
                 triggersCard
+                emailReplyCard
                 howItWorksCard
             }
             .padding(12)
+        }
+    }
+
+    /// Settings card for the built-in ;reply / ⌃⌥E email-reply action.
+    /// Folded in from the former standalone Email Reply plugin so users
+    /// still have a per-default-tone knob in the place they'd look for
+    /// it (Snippet Expander's detail view is where ;reply lives).
+    private var emailReplyCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                cardLabel("Email reply (;reply or ⌃⌥E)")
+                Text("Type ;reply in your message body, or press ⌃⌥E in any native mail app (Mail, Outlook, Spark, Airmail, Canary, Mimestream). Halen drafts a reply via Gemma and inserts it at your cursor.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Picker("", selection: $emailToneRaw) {
+                    ForEach(EmailReplyDrafter.ReplyTone.allCases, id: \.rawValue) { tone in
+                        Text(tone.label).tag(tone.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .accessibilityLabel("Default reply tone")
+                .accessibilityHint("Picks the default register Halen uses when drafting an email reply.")
+                Text(emailToneHint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var emailToneHint: String {
+        switch EmailReplyDrafter.ReplyTone(rawValue: emailToneRaw) ?? .match {
+        case .match:   return "Uses the tone you set per-app in Settings → App tone profiles."
+        case .formal:  return "Always draft in a formal, professional register."
+        case .casual:  return "Always draft in a casual, relaxed register."
+        case .concise: return "Always keep replies as short as politely possible."
+        case .warm:    return "Always lead with warmth — acknowledge the sender first."
         }
     }
 

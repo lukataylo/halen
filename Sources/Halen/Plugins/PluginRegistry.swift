@@ -84,17 +84,41 @@ final class PluginRegistry {
         // legacy "on" as user intent ("I wanted this behaviour"); stamp
         // the migrated value into the new key so subsequent lookups are
         // single-source.
-        let legacyMigrations: [String: [String]] = [
+        // Merge migrations where the legacy plugins were default-ON
+        // (typo-fixer, style-guide, sentiment-guard, clarity-checker).
+        // A returning user's explicit on or off carries straight
+        // through: any legacy "on" → new id on; all legacies stored as
+        // "off" → new id off (the user opted out of that behaviour and
+        // we should preserve that across the merge).
+        let strictMigrations: [String: [String]] = [
             "com.halen.word-replacements": ["com.halen.typo-fixer",
                                             "com.halen.style-guide"],
             "com.halen.writing-coach":     ["com.halen.sentiment-guard",
                                             "com.halen.clarity-checker"],
         ]
-        if let legacy = legacyMigrations[id],
+        if let legacy = strictMigrations[id],
            let migrated = Self.migratedFromLegacy(anyOf: legacy, defaults: defaults) {
             defaults.set(migrated, forKey: defaultsKey(for: id))
             return migrated
         }
+
+        // Additive migrations where the legacy plugin was default-OFF
+        // (email-reply folded into snippet-expander). A "false" legacy
+        // value is ambiguous between "user explicitly opted out" and
+        // "user never touched the default-off toggle", so we only
+        // honor the migration when the legacy was explicitly enabled.
+        // Default-on state of the host plugin (snippet-expander) is
+        // preserved otherwise.
+        let additiveMigrations: [String: [String]] = [
+            "com.halen.snippet-expander": ["com.halen.email-reply"],
+        ]
+        if let legacy = additiveMigrations[id],
+           let migrated = Self.migratedFromLegacy(anyOf: legacy, defaults: defaults),
+           migrated {
+            defaults.set(true, forKey: defaultsKey(for: id))
+            return true
+        }
+
         return !Self.defaultDisabledPluginIds.contains(id)
     }
 
@@ -118,18 +142,17 @@ final class PluginRegistry {
 
     private func defaultsKey(for id: String) -> String { "plugin.\(id).enabled" }
 
-    /// Plugins that start **off** for a fresh install — the "Pick what's on"
-    /// step of onboarding flips them on if the user opts in. Everything not
-    /// in this set defaults to on. Picked to match the immediate-value
-    /// threshold: a brand-new user should get tone/clarity/typo/ask/snippets
-    /// without surprises; the rest are niche (Voice) or interrupt-heavy
-    /// (Autocomplete). StyleGuide and EmailReply behaviour now lives inside
-    /// the merged Writing Coach + Snippet Expander, so they don't appear
-    /// here as their own plugin entries.
+    /// Plugins that start **off** for a fresh install — the "Pick what's
+    /// on" step of onboarding flips them on if the user opts in.
+    /// Everything not in this set defaults to on. Picked to match the
+    /// immediate-value threshold: a brand-new user gets Ask Halen, Word
+    /// Replacements, Writing Coach, and Snippet Expander (which carries
+    /// the folded-in email-reply action). Voice Dictation and Inline
+    /// Autocomplete stay opt-in — Voice needs mic/speech permission
+    /// prompts the user shouldn't get on first launch, Autocomplete's
+    /// ghost-text is continuously interrupting and deserves consent.
     static let defaultDisabledPluginIds: Set<String> = [
         "com.halen.voice-dictation",
         "com.halen.autocomplete",
-        "com.halen.style-guide",
-        "com.halen.email-reply",
     ]
 }
