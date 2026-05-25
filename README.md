@@ -38,14 +38,14 @@ Halen updates itself. You'll never need to come back to this page.
 
 ## What it does
 
-| | Plugin | What it does |
-|---|---|---|
-| <img src="https://api.iconify.design/sf-symbols/sparkles-rectangle-stack.svg?color=%231635D6" width="20"/> | **Ask Halen** | Press ⌃H. Ask anything. Halen knows what's on screen. |
-| <img src="https://api.iconify.design/sf-symbols/character-cursor-ibeam.svg?color=%231635D6" width="20"/> | **Word Replacements** | Fixes your typos. Swaps in your preferred terms. |
-| <img src="https://api.iconify.design/sf-symbols/text-magnifyingglass.svg?color=%231635D6" width="20"/> | **Writing Coach** | Catches hostile tone, passive voice, and run-ons. One tap to rewrite. |
-| <img src="https://api.iconify.design/sf-symbols/text-bubble.svg?color=%231635D6" width="20"/> | **Snippet Expander** | Type `;sig`, `;today`, `;summary`, `;reply`. Or ⌃⌥R to rewrite a selection. |
-| <img src="https://api.iconify.design/sf-symbols/waveform.svg?color=%231635D6" width="20"/> | **Voice Dictation** | Press ⌃⌥Space. Speak. Press again. Apple's on-device transcription. |
-| <img src="https://api.iconify.design/sf-symbols/text-append.svg?color=%231635D6" width="20"/> | **Autocomplete** | Tab to accept the next few words. |
+| Plugin | What it does |
+|---|---|
+| ✨ **Ask Halen** | Press ⌃H. Ask anything. Halen knows what's on screen. |
+| ✏️ **Word Replacements** | Fixes your typos. Swaps in your preferred terms. |
+| 🔍 **Writing Coach** | Catches hostile tone, passive voice, and run-ons. One tap to rewrite. |
+| 💬 **Snippet Expander** | Type `;sig`, `;today`, `;summary`, `;reply`. Or ⌃⌥R to rewrite a selection. |
+| 🎙️ **Voice Dictation** | Press ⌃⌥Space. Speak. Press again. Apple's on-device transcription. |
+| ⌨️ **Autocomplete** | Tab to accept the next few words. |
 
 Plus two add-ons you can install from the Plugin Store: **Burnout Copilot** (focus suggestions from your calendar and tone history) and **Meeting Prep** (a one-page brief 15 minutes before each meeting).
 
