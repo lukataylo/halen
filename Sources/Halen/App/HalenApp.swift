@@ -18,14 +18,7 @@ struct HalenApp: App {
                 hotkeyConflicts: appDelegate.coordinator.hotkeyConflicts,
                 onOpenStore: { appDelegate.coordinator.pluginStoreWindow.show() },
                 onRunSetupAgain: { appDelegate.coordinator.onboardingWindow.presentAgain() },
-                updater: appDelegate.coordinator.updater,
-                quickActions: QuickActionsBridge(
-                    isAvailable: { appDelegate.coordinator.isPluginEnabled($0) },
-                    askHalen:           { appDelegate.coordinator.invokeAskHalen() },
-                    rephraseSelection:  { appDelegate.coordinator.invokeRephraseSelection() },
-                    emailReply:         { appDelegate.coordinator.invokeEmailReply() },
-                    startDictation:     { appDelegate.coordinator.invokeStartDictation() }
-                )
+                updater: appDelegate.coordinator.updater
             )
         } label: {
             Image(nsImage: Self.menubarIcon)

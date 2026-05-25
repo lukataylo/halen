@@ -36,7 +36,6 @@ struct SettingsView: View {
     @State private var permissions = SystemPermissionsModel()
     @AppStorage(OverlayController.showDotKey) private var showCaretIndicator: Bool = true
     @AppStorage(OverlayController.dotStyleKey) private var overlayDotStyle: String = "solid"
-    @AppStorage(OverlayController.underlineEnabledKey) private var inlineUnderlines: Bool = false
     /// Two-way binding to the WS bridge's enabled preference. Toggling
     /// here also calls into the bridge to actually start/stop it live.
     @AppStorage(WebSocketBridge.enabledKey) private var webSocketEnabled: Bool = true
@@ -334,30 +333,6 @@ struct SettingsView: View {
                         Spacer()
                     }
 
-                    // Preview-feature toggle: when ON, a severity-coloured
-                    // underline strip is drawn under the flagged paragraph
-                    // in addition to the cursor-indicator tint. Per-glyph
-                    // (Grammarly-style) underlines need an AX-overlay
-                    // system that's tracked separately — this v1 is the
-                    // scaffold + the visible affordance.
-                    Divider().opacity(0.4)
-                    HStack(alignment: .top, spacing: 10) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Inline underlines")
-                                .font(.callout)
-                                .fontWeight(.medium)
-                            Text("Beta. Underlines flagged text. Best in Notes and TextEdit.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer()
-                        Toggle("", isOn: $inlineUnderlines)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                            .accessibilityLabel("Inline underlines (beta)")
-                            .accessibilityHint("Underlines flagged text in apps that allow it, such as Notes and TextEdit.")
-                    }
                 }
             }
         }

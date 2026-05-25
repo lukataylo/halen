@@ -28,10 +28,6 @@ final class OverlayController {
     /// `BusyLoaderPanel` owns the NSPanel, the rotating ring layer, and the
     /// glow animation; this class just orchestrates when to ask it to show.
     private let busy = BusyLoaderPanel()
-    /// Optional inline-underline surface for active findings. Hidden by
-    /// default; toggled on via the "Inline underlines (preview)" Settings
-    /// switch. Always installed so flipping the toggle is instantaneous.
-    private let underline = InlineUnderlinePanel()
 
     /// Active findings keyed by source plugin id. One finding per source so
     /// re-classifying the same paragraph (or the next one) cleanly replaces
@@ -84,25 +80,8 @@ final class OverlayController {
     /// reads this via `@AppStorage` so the toggle takes effect live.
     static let dotStyleKey = "halen.overlayDotStyle"
 
-    /// UserDefaults key for the "Inline underlines (preview)" toggle. When
-    /// ON, `InlineUnderlinePanel` draws a severity-coloured strip under the
-    /// flagged paragraph in addition to the cursor-indicator tint. OFF by
-    /// default — the v1 single-rect underline is a preview of the eventual
-    /// per-glyph Grammarly-style overlay (UX-1 proper).
-    static let underlineEnabledKey = "halen.overlayUnderlines"
-    static var underlinesEnabled: Bool {
-        UserDefaults.standard.object(forKey: underlineEnabledKey) as? Bool ?? false
-    }
-
-    /// Weak ref — owned by AppCoordinator. Read-only access; used to query
-    /// the focused text element's bounding rect when sizing the inline
-    /// underline (the finding's caret-shaped anchor is the wrong width for
-    /// a strip-under-the-paragraph affordance — see `composeUnderlineRect`).
-    private weak var caretObserver: CaretObserver?
-
-    init(eventBus: EventBus, caretObserver: CaretObserver? = nil) {
+    init(eventBus: EventBus) {
         self.eventBus = eventBus
-        self.caretObserver = caretObserver
     }
 
     func start() {
@@ -133,9 +112,6 @@ final class OverlayController {
         // `BusyLoaderPanel`. `install()` is idempotent so re-`start()`ing
         // doesn't accumulate panels.
         busy.install()
-        // Inline-underline preview panel. Always installed; visibility is
-        // driven by `recomputeIndicatorState` reading the Settings toggle.
-        underline.install()
 
         subscribeTask = Task { @MainActor [eventBus, weak self] in
             for await event in eventBus.subscribe() {
@@ -188,9 +164,7 @@ final class OverlayController {
                 if !Self.indicatorEnabled {
                     self.caretPanel?.orderOut(nil)
                     self.busy.hide()
-                    self.underline.hide()
                 }
-                // Underline toggle changes mid-session — reflect immediately.
                 self.recomputeIndicatorState()
             }
         }
@@ -210,7 +184,6 @@ final class OverlayController {
         }
         busyDepth = 0
         busy.teardown()
-        underline.teardown()
         caretPanel?.orderOut(nil)
         caretPanel = nil
     }
@@ -402,39 +375,6 @@ final class OverlayController {
             // hanging around forever.
             scheduleAutoHide()
         }
-
-        // Inline underline preview — gated on the Settings toggle so we
-        // don't surprise users who haven't opted in. When ON, draw a strip
-        // under the highest-severity finding; when OFF or no finding,
-        // hide the strip.
-        if Self.underlinesEnabled, let highest, Self.indicatorEnabled {
-            underline.show(at: composeUnderlineRect(from: highest.anchor),
-                           severity: highest.severity)
-        } else {
-            underline.hide()
-        }
-    }
-
-    /// The finding's anchor is the *caret bounds* (a 1-2 pt vertical sliver
-    /// where the cursor blinks) — perfect for popover positioning, wrong for
-    /// a paragraph-width underline strip. When we can read the focused text
-    /// element's frame, swap in its X-range while keeping the caret's
-    /// vertical line so the strip spans the field at the caret's row. When
-    /// we can't, return the caret rect unchanged — the underline will look
-    /// like a stub (clamped to 20 pt minimum in InlineUnderlinePanel) but
-    /// that's a graceful degradation, not a crash.
-    private func composeUnderlineRect(from caretAnchor: Event.CaretRect) -> Event.CaretRect {
-        guard let element = caretObserver?.currentElement,
-              let axFrame = axReadFrame(element) else {
-            return caretAnchor
-        }
-        let fieldCocoa = axRectToCocoa(axFrame)
-        return Event.CaretRect(
-            x: fieldCocoa.minX,
-            y: caretAnchor.y,
-            width: fieldCocoa.width,
-            height: caretAnchor.height
-        )
     }
 }
 
