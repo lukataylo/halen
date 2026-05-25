@@ -79,20 +79,21 @@ final class PluginRegistry {
         if let stored = defaults.object(forKey: defaultsKey(for: id)) as? Bool {
             return stored
         }
-        // Migration: a returning user who had Typo Fixer or Style Guide
-        // on before the merge expects the new Word Replacements plugin to
-        // pick up where they left off. Honor either old key as a signal
-        // of "user wanted this behaviour", and stamp the migrated value
-        // into the new key so the lookup is single-source from then on.
-        if id == "com.halen.word-replacements" {
-            let migrated = Self.migratedFromLegacy(
-                anyOf: ["com.halen.typo-fixer", "com.halen.style-guide"],
-                defaults: defaults
-            )
-            if let migrated {
-                defaults.set(migrated, forKey: defaultsKey(for: id))
-                return migrated
-            }
+        // Migration: merged plugins inherit their enabled-state from
+        // whichever of the legacy ids was last persisted. Honor any
+        // legacy "on" as user intent ("I wanted this behaviour"); stamp
+        // the migrated value into the new key so subsequent lookups are
+        // single-source.
+        let legacyMigrations: [String: [String]] = [
+            "com.halen.word-replacements": ["com.halen.typo-fixer",
+                                            "com.halen.style-guide"],
+            "com.halen.writing-coach":     ["com.halen.sentiment-guard",
+                                            "com.halen.clarity-checker"],
+        ]
+        if let legacy = legacyMigrations[id],
+           let migrated = Self.migratedFromLegacy(anyOf: legacy, defaults: defaults) {
+            defaults.set(migrated, forKey: defaultsKey(for: id))
+            return migrated
         }
         return !Self.defaultDisabledPluginIds.contains(id)
     }

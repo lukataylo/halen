@@ -224,10 +224,11 @@ final class AppCoordinator {
         // the merge — the wrapper just starts/stops them together and
         // hosts a tabbed detail view.
         registry.register(WordReplacements(services: services, typoStore: typoStore))
-        registry.register(SentimentGuard(services: services))
+        // Writing Coach merges the previous Sentiment Guard + Clarity
+        // Checker plugins. Same wrapper pattern as Word Replacements.
+        registry.register(WritingCoach(services: services))
         registry.register(VoiceDictation(services: services))
         registry.register(SnippetExpander(services: services))
-        registry.register(ClarityChecker(services: services))
         registry.register(EmailReply(services: services))
         registry.register(Autocomplete(services: services))
 
