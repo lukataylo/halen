@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Dark pill shown near the caret while dictation is recording.
-/// Animated audio-level visualiser in the middle; Stop (commit) and Cancel
+/// Pixel-grid voice indicator shown near the caret while dictation is
+/// recording. Deep-black capsule, glowing recording dot on the left, a
+/// dotted-matrix waveform in the middle, Stop (commit) and Cancel
 /// (discard) buttons on the right.
 @MainActor
 struct VoiceListeningIndicator: View {
@@ -9,98 +10,182 @@ struct VoiceListeningIndicator: View {
     let onStop: () -> Void
     let onCancel: () -> Void
     @State private var pulse = false
-    /// Honors macOS "Reduce motion": when on, the expanding outer ring is
-    /// pinned to a steady 0.4-alpha halo instead of scaling out and fading
-    /// repeatedly. The solid 9pt centre dot is unchanged either way so
-    /// "we're recording" still reads at a glance.
+    /// Honors macOS "Reduce motion": the expanding halo behind the
+    /// recording dot stays at rest size/opacity rather than pulsing.
     @State private var prefs = AccessibilityPreferences.shared
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Recording-dot indicator
-            ZStack {
-                Circle()
-                    .fill(Color.halenCobalt.opacity(0.4))
-                    .scaleEffect(prefs.reduceMotion ? 1.0 : (pulse ? 1.7 : 1.0))
-                    .opacity(prefs.reduceMotion ? 1 : (pulse ? 0 : 1))
-                Circle()
-                    .fill(Color.halenCobalt)
-                    .frame(width: 9, height: 9)
-            }
-            .frame(width: 20, height: 20)
-
-            // Live visualiser
+        HStack(spacing: 10) {
+            recordingDot
             VoiceWaveformView(levels: state.audioLevels)
                 .frame(maxWidth: .infinity)
-                .frame(height: 28)
-
-            // Stop = commit transcript
+                .frame(height: 32)
             CircleIconButton(
                 systemImage: "stop.fill",
                 tint: Color.halenCobalt,
                 action: onStop
             )
-
-            // Cancel = discard
             CircleIconButton(
                 systemImage: "xmark",
-                tint: Color.secondary,
+                tint: Color(white: 0.18),
                 action: onCancel
             )
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 9)
         .background(
             Capsule(style: .continuous)
-                .fill(Color(white: 0.08))
-                .overlay(
-                    Capsule(style: .continuous)
-                        // Border was 0.08 — fails contrast on most monitors. 0.25
-                        // stays subtle but readable in well-lit rooms, where the
-                        // near-black pill body would otherwise dissolve into a
-                        // bright background (e.g. white IDE / browser) without a
-                        // visible edge. Still well under WCAG AA for text, which
-                        // is fine — this border is decorative chrome, not a glyph.
-                        .strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.4), radius: 10, x: 0, y: 4)
+                .fill(Color(white: 0.03))
+                // Single, smaller drop shadow. The earlier cobalt aura
+                // (radius 16) read as a faint rectangle because its
+                // outer falloff was almost exactly at the NSPanel's
+                // rectangular bound — even with the panel oversized,
+                // a sub-pixel shadow tail clips visibly there.
+                .shadow(color: Color.black.opacity(0.5), radius: 10, x: 0, y: 4)
         )
+        // Outer padding inside the (deliberately oversized) NSPanel.
+        // Padding ≥ 2× shadow radius keeps the shadow falloff well
+        // inside the panel bounds so there's no visible rectangular
+        // cut-off at its edge.
+        .padding(.horizontal, 24)
+        .padding(.vertical, 22)
         .onAppear {
-            // Skip the repeating pulse under Reduce Motion. The halo stays
-            // at its rest size/opacity so the indicator is fully static.
             guard !prefs.reduceMotion else { return }
             withAnimation(.easeOut(duration: 1.1).repeatForever(autoreverses: false)) {
                 pulse = true
             }
         }
     }
+
+    /// Cobalt recording dot with a soft expanding halo. Inside a 26 pt
+    /// circle filled at low alpha so it reads as a "button" without
+    /// stealing focus from the waveform.
+    private var recordingDot: some View {
+        ZStack {
+            Circle()
+                .fill(Color.halenCobalt.opacity(0.18))
+                .frame(width: 26, height: 26)
+            Circle()
+                .fill(Color.halenCobalt.opacity(0.5))
+                .frame(width: 18, height: 18)
+                .scaleEffect(prefs.reduceMotion ? 1.0 : (pulse ? 1.55 : 1.0))
+                .opacity(prefs.reduceMotion ? 0.55 : (pulse ? 0 : 0.8))
+            Circle()
+                .fill(Color.halenCobalt)
+                .frame(width: 9, height: 9)
+                .shadow(color: Color.halenCobalt.opacity(0.85), radius: 4)
+        }
+        .frame(width: 26, height: 26)
+    }
 }
 
-/// Simple bar-style audio visualiser. Each bar's height tracks one entry in
-/// `levels` (a rolling window of recent RMS amplitudes). New samples push
-/// the window left so the most recent audio is on the right.
+/// Dot-matrix audio visualiser. Each column tracks one entry in `levels`
+/// (a rolling RMS-amplitude window). The column lights N dots from the
+/// vertical centre outward, top + bottom, where N scales with the
+/// level. Quiet dots stay faintly visible so the grid is always
+/// readable as a grid; loud dots ramp up brightness and gain a glow.
+/// A continuous shimmer travels along the centre row so the indicator
+/// reads as "listening" even during silence.
 @MainActor
 struct VoiceWaveformView: View {
     let levels: [Float]
-    private let barCount = 28
-    private let accent = Color.halenCobalt   // chart bars use the brand colour
+    /// 0…1, advances continuously. Drives the centre-row scanner: the
+    /// dot at column `c` brightens when `phase` is near `c/columnCount`.
+    @State private var phase: Double = 0
+    @State private var prefs = AccessibilityPreferences.shared
+    private let columnCount = 32
+    private let rowCount = 7   // odd — gives a symmetric centre row
+    private let accent = Color.halenCobalt
 
     var body: some View {
         GeometryReader { geo in
-            let displayed = Array(levels.suffix(barCount))
-            let spacing: CGFloat = 3
-            let barWidth = max(1.5, (geo.size.width - spacing * CGFloat(barCount - 1)) / CGFloat(barCount))
-            HStack(alignment: .center, spacing: spacing) {
-                ForEach(0..<displayed.count, id: \.self) { i in
-                    let level = CGFloat(displayed[i])
-                    let h = max(2, level * geo.size.height)
-                    Capsule()
-                        .fill(accent.opacity(0.35 + Double(level) * 0.65))
-                        .frame(width: barWidth, height: h)
+            let displayed = Self.padLevels(Array(levels.suffix(columnCount)),
+                                           target: columnCount)
+            let dotSize: CGFloat = 3
+            let xSpacing = max(0, (geo.size.width - dotSize * CGFloat(columnCount)) / CGFloat(max(1, columnCount - 1)))
+            let ySpacing = max(0, (geo.size.height - dotSize * CGFloat(rowCount)) / CGFloat(max(1, rowCount - 1)))
+            let centreRow = (rowCount - 1) / 2
+
+            // Bind the ranges locally — without this the nested ForEach
+            // picks SwiftUI's `Binding<...>` overload of `ForEach`
+            // instead of `Range<Int>` and the body fails to typecheck.
+            let columns = Array(0..<columnCount)
+            let rows = Array(0..<rowCount)
+            HStack(spacing: xSpacing) {
+                ForEach(columns, id: \.self) { (col: Int) in
+                    let level = CGFloat(displayed[col])
+                    // Lit rows = how far we extend from the centre. A
+                    // level of 1.0 fills every row; 0.0 only lights the
+                    // centre row. +0.5 so quiet input still shows two
+                    // rows of dim dots instead of a flatline.
+                    let lit = max(0.5, level * CGFloat(centreRow + 1))
+                    // Centre-row scanner pulse. `phase` runs 0→1; each
+                    // column's contribution peaks when phase passes
+                    // through `col/columnCount`. Gaussian-ish falloff
+                    // (width ~3 columns) gives a smooth travelling
+                    // highlight rather than a hard cursor.
+                    let columnPhase = Double(col) / Double(columnCount)
+                    let phaseDistance = min(abs(phase - columnPhase),
+                                            1 - abs(phase - columnPhase))   // wrap
+                    let scanGlow = max(0, 1 - phaseDistance * Double(columnCount) / 3)
+                    VStack(spacing: ySpacing) {
+                        ForEach(rows, id: \.self) { (row: Int) in
+                            let distance = CGFloat(abs(row - centreRow))
+                            let on = distance < lit
+                            let edgeFalloff = on ? max(0.35, 1 - distance / max(1, lit)) : 0
+                            // Centre-row baseline: even when audio is
+                            // silent, the centre row tracks `scanGlow`
+                            // so the strip never goes fully dead.
+                            let isCentre = (row == centreRow)
+                            // Centre row layers an always-on scanner
+                            // pulse over its audio-driven brightness;
+                            // off-centre rows are purely auditory with
+                            // a low baseline so the grid is readable.
+                            let baseAlpha: Double = isCentre
+                                ? max(on ? Double(edgeFalloff) : 0.18,
+                                      0.18 + scanGlow * 0.7)
+                                : (on ? Double(edgeFalloff) : 0.10)
+                            // Glow scales with brightness — the
+                            // scanner's travelling highlight gets the
+                            // same haze as a loud-syllable peak.
+                            let glowAlpha: Double = isCentre
+                                ? baseAlpha * 0.9
+                                : (on ? baseAlpha * 0.9 : 0)
+                            Circle()
+                                .fill(accent.opacity(baseAlpha))
+                                .frame(width: dotSize, height: dotSize)
+                                .shadow(color: accent.opacity(glowAlpha),
+                                        radius: max(0, glowAlpha * 3))
+                        }
+                    }
+                    .animation(.easeOut(duration: 0.08), value: level)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .center)
         }
+        .onAppear { startScanner() }
+    }
+
+    /// Loop `phase` 0→1 over ~1.6 s. Honors Reduce Motion: leaves
+    /// `phase` pinned so the centre row reads as a steady mid-bright
+    /// stripe instead of a travelling scanner.
+    private func startScanner() {
+        guard !prefs.reduceMotion else {
+            phase = 0.5   // pleasant mid-position when motion is off
+            return
+        }
+        withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
+            phase = 1
+        }
+    }
+
+    /// Left-pad `levels` with zeros so the dot grid keeps a stable width
+    /// even before the recorder has emitted `columnCount` samples.
+    /// Padding on the left means new audio lights up on the right edge,
+    /// matching how the user reads the timeline (latest = newest).
+    private static func padLevels(_ levels: [Float], target: Int) -> [Float] {
+        guard levels.count < target else { return levels }
+        return Array(repeating: 0, count: target - levels.count) + levels
     }
 }
 
@@ -152,9 +237,9 @@ struct VoiceDictationDetailView: View {
             VStack(alignment: .leading, spacing: 10) {
                 cardLabel("Hotkey")
                 HStack(spacing: 6) {
+                    KeyCap(label: "\u{2303}")
                     KeyCap(label: "\u{2325}")
-                    KeyCap(label: "\u{2318}")
-                    KeyCap(label: "H")
+                    KeyCap(label: "Space")
                     Spacer()
                 }
                 Text("Press to start. Press again to stop and insert the transcript at your cursor.")

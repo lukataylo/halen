@@ -163,28 +163,32 @@ final class HotkeyConflictRegistry {
     }
 }
 
-/// Carbon `RegisterEventHotKey` wrapper. The NSEvent global monitor we tried first
-/// didn't fire reliably for ⌥⌘Space — Carbon's path is the canonical mechanism for
-/// menubar apps that need a real, system-wide shortcut, and it works without
-/// Input Monitoring permission.
+/// Global-hotkey wrapper backed by `NSEvent.addGlobalMonitorForEvents`.
+///
+/// Originally implemented via Carbon's `RegisterEventHotKey`. The Carbon
+/// path stopped delivering events to the handler on this build's machine
+/// for any chord with a Cocoa-menu collision or any modifier combination
+/// the system has progressively reserved on macOS 14+ — registration
+/// succeeded (no errors logged) but the callback never fired. Meanwhile
+/// AskHalen's `NSEvent`-monitor path worked reliably for ⌃H on the same
+/// machine.
+///
+/// This rewrite matches the AskHalen path: an Input-Monitoring-gated
+/// global monitor for events in other apps, plus a local monitor so the
+/// chord still fires when Halen itself is frontmost (and the local one
+/// can swallow it via `nil` return so SwiftUI text fields don't see a
+/// stray keystroke).
+///
+/// `keyCode` is still the Carbon `kVK_*` virtual key (callers don't
+/// change). `modifiers` is still the Carbon mask (`controlKey`,
+/// `optionKey`, `cmdKey`, `shiftKey`) — we translate to
+/// `NSEvent.ModifierFlags` inside the match check so the per-plugin
+/// `register` call sites don't need to change.
 @MainActor
 final class HotkeyRegistrar {
-    /// `nonisolated(unsafe)` because `deinit` (which runs on whatever thread
-    /// releases the last reference, not necessarily the main actor) must read
-    /// these to tear down the Carbon registration. The access is genuinely
-    /// safe: every other touch is from `register`/`unregister` (both
-    /// `@MainActor`), and `deinit` only runs once no reference remains — so no
-    /// `@MainActor` method can be executing concurrently with it. Same
-    /// reasoning as `registeredID` below.
-    nonisolated(unsafe) private var hotKeyRef: EventHotKeyRef?
-    nonisolated(unsafe) private var handlerRef: EventHandlerRef?
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
     private var onFire: (() -> Void)?
-    /// `registeredID` and `signature` are read from the Carbon C callback,
-    /// which can fire on any thread. They're written only from `register`/
-    /// `unregister` (both `@MainActor`) and are simple scalars, so
-    /// `nonisolated(unsafe)` reflects the actual guarantee.
-    nonisolated(unsafe) private var registeredID: UInt32 = 0
-    nonisolated static let signature: OSType = 0x48414c4e   // 'HALN'
 
     /// What the registrar holds right now, so `unregister()` can tell the
     /// conflict registry which chord/owner to release. Without this the
@@ -194,29 +198,24 @@ final class HotkeyRegistrar {
     private var currentKeyCode: UInt32 = 0
     private var currentModifiers: UInt32 = 0
 
-    /// Result of a `register` attempt. Carbon-level failures (handler
-    /// install, OS refusal) report `.carbonFailure`; intra-Halen
-    /// conflicts report `.conflict` so the caller can degrade gracefully
-    /// and the Settings UI can surface the collision.
-    enum RegistrationFailure: Error {
-        case conflict(HotkeyConflict)
-        case carbonFailure(OSStatus)
-    }
-
     /// Register a global hotkey for `owner`. `owner` is the human-readable
     /// plugin label (e.g. "Voice Dictation") shown in the conflict warning
-    /// if another plugin already holds the same chord. Returns `true` on
-    /// success; on failure the registrar stays unregistered and the caller
-    /// is expected to log a degraded-state warning.
+    /// if another plugin already holds the same chord. The `id` parameter
+    /// is accepted for API compatibility with the previous Carbon-backed
+    /// implementation but no longer needed — NSEvent monitors don't share
+    /// a process-wide handler the way Carbon's event target did, so
+    /// per-registrar closures are isolated by construction.
     @discardableResult
     func register(keyCode: UInt32,
                   modifiers: UInt32,
                   id: UInt32 = 1,
                   owner: String,
                   onFire: @escaping () -> Void) -> Bool {
+        _ = id   // kept for caller compatibility, see doc comment above
+
         // First: ask the process-wide registry whether this chord is
-        // free. Doing this before any Carbon call means a conflict
-        // doesn't leak a handler install we'd then need to roll back.
+        // free. Doing this before any monitor install means a conflict
+        // doesn't leak a monitor we'd then need to roll back.
         if let conflict = HotkeyConflictRegistry.shared.claim(
             keyCode: keyCode, modifiers: modifiers, owner: owner) {
             Log.warn("HotkeyRegistrar: \(owner) wanted \(conflict.displayChord) but \(conflict.existingOwner) already holds it")
@@ -225,106 +224,68 @@ final class HotkeyRegistrar {
 
         unregister()
         self.onFire = onFire
-        self.registeredID = id
         self.currentOwner = owner
         self.currentKeyCode = keyCode
         self.currentModifiers = modifiers
 
-        var eventSpec = EventTypeSpec(
-            eventClass: OSType(kEventClassKeyboard),
-            eventKind: UInt32(kEventHotKeyPressed)
-        )
+        // Global-monitor key-down needs Input Monitoring. The install
+        // succeeds either way; without permission the callback never
+        // fires for events from other apps. Request explicitly so the
+        // first-launch prompt happens before the user wonders why
+        // nothing's working.
+        let granted = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+        if !granted {
+            Log.warn("HotkeyRegistrar: \(owner) — Input Monitoring not granted; chord will only fire while Halen is frontmost. Grant in System Settings → Privacy & Security → Input Monitoring.")
+        }
 
-        let userData = Unmanaged.passUnretained(self).toOpaque()
-        let callback: EventHandlerUPP = { _, eventRef, userData in
-            guard let userData, let eventRef else { return noErr }
-            let registrar = Unmanaged<HotkeyRegistrar>.fromOpaque(userData).takeUnretainedValue()
+        let targetMask = Self.cocoaModifierMask(carbon: modifiers)
+        let targetKeyCode = CGKeyCode(keyCode)
 
-            // Carbon's `GetApplicationEventTarget` delivers every
-            // `kEventHotKeyPressed` to every installed handler whose
-            // `EventTypeSpec` matches — including handlers belonging to OTHER
-            // `HotkeyRegistrar` instances in this process. Without filtering
-            // by `EventHotKeyID`, registering ⌥Space here would *also* fire
-            // the VoiceDictation ⌥⌘H handler (and vice-versa).
-            var firedID = EventHotKeyID()
-            let status = GetEventParameter(
-                eventRef,
-                OSType(kEventParamDirectObject),
-                OSType(typeEventHotKeyID),
-                nil,
-                MemoryLayout<EventHotKeyID>.size,
-                nil,
-                &firedID
-            )
-            guard status == noErr,
-                  firedID.signature == HotkeyRegistrar.signature,
-                  firedID.id == registrar.registeredID
-            else { return noErr }
+        let match: (NSEvent) -> Bool = { event in
+            event.keyCode == targetKeyCode
+                && event.modifierFlags.intersection(.deviceIndependentFlagsMask) == targetMask
+        }
 
-            DispatchQueue.main.async {
-                registrar.onFire?()
+        // Global monitor: keystrokes in other apps. Cannot consume the
+        // event (NSEvent returns Void), so an app whose own menu binds
+        // the same chord may still see it — same trade-off AskHalen has
+        // lived with for ⌃H.
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard match(event) else { return }
+            // Log + fire on the main actor (NSEvent global monitor
+            // delivers on the main thread, but be explicit so behaviour
+            // matches the local-monitor path below where SwiftUI focus
+            // ops require @MainActor isolation).
+            MainActor.assumeIsolated {
+                Log.info("HotkeyRegistrar: \(owner) fired (global)")
+                self?.onFire?()
             }
-            return noErr
         }
 
-        var newHandler: EventHandlerRef?
-        let installStatus = InstallEventHandler(
-            GetApplicationEventTarget(),
-            callback,
-            1,
-            &eventSpec,
-            userData,
-            &newHandler
-        )
-        guard installStatus == noErr else {
-            Log.warn("HotkeyRegistrar: InstallEventHandler failed (\(installStatus))")
-            // Roll back the conflict-registry claim so the chord doesn't
-            // stay marked as held by an owner that never actually got it.
-            HotkeyConflictRegistry.shared.release(
-                keyCode: keyCode, modifiers: modifiers, owner: owner)
-            self.currentOwner = nil
-            return false
-        }
-        handlerRef = newHandler
-
-        // Signature+id is the app-local identity Carbon uses to disambiguate
-        // multiple hotkeys. Two registrars MUST use distinct ids or the
-        // callback's filter (above) won't distinguish them.
-        let hotKeyID = EventHotKeyID(signature: Self.signature, id: id)
-        var newHotKey: EventHotKeyRef?
-        let registerStatus = RegisterEventHotKey(
-            keyCode,
-            modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &newHotKey
-        )
-        guard registerStatus == noErr else {
-            Log.warn("HotkeyRegistrar: RegisterEventHotKey failed (\(registerStatus))")
-            if let handler = handlerRef {
-                RemoveEventHandler(handler)
-                handlerRef = nil
+        // Local monitor: keystrokes while Halen itself is frontmost.
+        // Returning `nil` swallows the event so e.g. a ⌃⌥Space pressed
+        // while typing in Halen's own Snippets editor still toggles
+        // dictation rather than getting interpreted as text input.
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard match(event) else { return event }
+            MainActor.assumeIsolated {
+                Log.info("HotkeyRegistrar: \(owner) fired (local)")
+                self?.onFire?()
             }
-            HotkeyConflictRegistry.shared.release(
-                keyCode: keyCode, modifiers: modifiers, owner: owner)
-            self.currentOwner = nil
-            return false
+            return nil
         }
-        hotKeyRef = newHotKey
-        Log.info("HotkeyRegistrar: \(owner) registered keyCode=\(keyCode) modifiers=\(modifiers)")
+
+        if globalMonitor == nil {
+            Log.warn("HotkeyRegistrar: \(owner) — addGlobalMonitorForEvents returned nil")
+        }
+
+        Log.info("HotkeyRegistrar: \(owner) registered keyCode=\(keyCode) modifiers=\(modifiers) (global=\(globalMonitor != nil), local=\(localMonitor != nil), inputMonitoring=\(granted))")
         return true
     }
 
     func unregister() {
-        if let ref = hotKeyRef {
-            UnregisterEventHotKey(ref)
-            hotKeyRef = nil
-        }
-        if let ref = handlerRef {
-            RemoveEventHandler(ref)
-            handlerRef = nil
-        }
+        if let m = globalMonitor { NSEvent.removeMonitor(m); globalMonitor = nil }
+        if let m = localMonitor  { NSEvent.removeMonitor(m); localMonitor  = nil }
         if let owner = currentOwner {
             HotkeyConflictRegistry.shared.release(
                 keyCode: currentKeyCode, modifiers: currentModifiers, owner: owner)
@@ -335,12 +296,24 @@ final class HotkeyRegistrar {
         onFire = nil
     }
 
-    /// Safety net only — `VoiceDictation.stop()` calls `unregister()` on the
-    /// main actor as the real teardown path. This catches a registrar that's
-    /// released without `stop()` having run. Reads `hotKeyRef`/`handlerRef`
-    /// off-actor, which is sound: see the `nonisolated(unsafe)` note above.
+    /// Translate a Carbon modifier bitmask (`controlKey | optionKey | …`)
+    /// to its `NSEvent.ModifierFlags` equivalent. Keeps `register`
+    /// callers using familiar Carbon constants while the matching
+    /// internally uses Cocoa flags.
+    private static func cocoaModifierMask(carbon: UInt32) -> NSEvent.ModifierFlags {
+        var mask: NSEvent.ModifierFlags = []
+        if carbon & UInt32(controlKey) != 0 { mask.insert(.control) }
+        if carbon & UInt32(optionKey)  != 0 { mask.insert(.option)  }
+        if carbon & UInt32(shiftKey)   != 0 { mask.insert(.shift)   }
+        if carbon & UInt32(cmdKey)     != 0 { mask.insert(.command) }
+        return mask
+    }
+
+    /// Safety net only — `VoiceDictation.stop()` calls `unregister()` on
+    /// the main actor as the real teardown path. This catches a registrar
+    /// that's released without `stop()` having run.
     deinit {
-        if let ref = hotKeyRef { UnregisterEventHotKey(ref) }
-        if let ref = handlerRef { RemoveEventHandler(ref) }
+        if let m = globalMonitor { NSEvent.removeMonitor(m) }
+        if let m = localMonitor  { NSEvent.removeMonitor(m) }
     }
 }

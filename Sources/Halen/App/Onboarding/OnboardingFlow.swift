@@ -120,14 +120,14 @@ struct OnboardingFlow: View {
                            body: "Catches angry-sounding messages before you send.")
                 Divider().opacity(0.3).padding(.leading, 44)
                 featureRow(icon: "text.magnifyingglass",
-                           tint: Color(red: 0.93, green: 0.78, blue: 0.20),
+                           tint: Color(red: 0.82, green: 0.55, blue: 0.05),
                            title: "Clarity",
                            body: "Flags passive voice and run-on sentences.")
                 Divider().opacity(0.3).padding(.leading, 44)
                 featureRow(icon: "sparkles",
                            tint: Color.accentColor,
                            title: "Quick Ask",
-                           body: "⌃⌥H opens a palette. Ask anything.")
+                           body: "⌃H opens a palette. Ask anything.")
             }
             .padding(.vertical, 4)
             .background(

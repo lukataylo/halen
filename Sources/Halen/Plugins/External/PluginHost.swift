@@ -108,7 +108,7 @@ final class PluginHost {
         await instance.terminate()
         instances.removeAll { $0.manifest.id == id }
         // Unregister any Carbon hotkeys this plugin held. Without this,
-        // toggling Voice Dictation off would leave its ⌥⌘H hotkey live
+        // toggling Voice Dictation off would leave its ⌃⌥Space hotkey live
         // (Carbon's registration outlives the plugin process otherwise).
         if let registered = hotkeys.removeValue(forKey: id) {
             for (_, registrar) in registered {

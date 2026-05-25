@@ -75,15 +75,13 @@ Used by `GlassCard`, the menubar dropdown, the onboarding window, and
 every other glass surface. New code SHOULD use this modifier instead of
 `.background(.regularMaterial)` directly.
 
-### Quick Actions in the menubar dropdown
+### Hotkey discovery in the marketplace
 
 The four global-hotkey features (Ask Halen ⌃H, Rephrase selection
-⌃⌥R, Reply to email ⌃⌥E, Start dictation ⌥⌘H) all have a
-keyboard-reachable button in the menubar dropdown. The chord is shown
-as a hint, but the button works regardless of whether the user can
-press it. Switch Control, RSI, and non-US-layout users land here.
-
-Every new hotkey-driven feature MUST add a Quick Actions row.
+⌃⌥R, Reply to email ⌃⌥E, Start dictation ⌃⌥Space) each surface their
+chord in the plugin row's summary text — so a user who can't press
+chord combinations can still see what the binding is, and what plugin
+to dig into for the menu-driven equivalent inside each detail view.
 
 ### Semantic fonts everywhere
 

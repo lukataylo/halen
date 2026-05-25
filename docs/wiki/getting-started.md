@@ -111,12 +111,12 @@ so the TCC entry matches.
 
 ### 2. Microphone (Voice Dictation only)
 
-Triggered the first time you press ⌥⌘H.
+Triggered the first time you press ⌃⌥Space.
 `AVCaptureDevice.requestAccess(for: .audio)` shows the prompt.
 
 Usage string (`NSMicrophoneUsageDescription` in `Info.plist`):
 
-> Halen captures audio when you press ⌥⌘H so it can transcribe your
+> Halen captures audio when you press ⌃⌥Space so it can transcribe your
 > speech locally and insert it at your cursor. Audio never leaves this Mac.
 
 ### 3. Speech Recognition (Voice Dictation only)
@@ -168,7 +168,7 @@ Usage string (`NSInputMonitoringUsageDescription`):
 
 If you deny it, the hotkeys still fire while Halen itself is frontmost. Grant
 it under **System Settings → Privacy & Security → Input Monitoring** for
-system-wide use. (Voice Dictation's ⌥⌘H uses Carbon `RegisterEventHotKey`
+system-wide use. (Voice Dictation's ⌃⌥Space uses Carbon `RegisterEventHotKey`
 instead and needs no permission beyond Accessibility.)
 
 ## Where data lives
@@ -194,7 +194,7 @@ without overwriting user changes — see each plugin's "Storage" section.
 |---|---|
 | Menubar says "Accessibility permission required" | App is signed by a different identity than the TCC entry. Re-add `build/Halen.app` to System Settings. |
 | Any permission stuck — granted but not working, and System Settings won't let you toggle it | The code signature changed (ad-hoc / failed `codesign` / new identity) and TCC's grant is orphaned on the old signature. Run `scripts/reset-permissions.sh` (`tccutil reset` for every service Halen uses), then relaunch and re-grant. |
-| ⌥⌘H does nothing | Another app owns the shortcut. Logs show `HotkeyRegistrar: RegisterEventHotKey failed`. |
+| ⌃⌥Space does nothing | Another app owns the shortcut. Logs show `HotkeyRegistrar: RegisterEventHotKey failed`. |
 | ⌃H / ⌃⌥R fire only when Halen is frontmost | Input Monitoring not granted. Add Halen under System Settings → Privacy & Security → Input Monitoring. (⌃H is also consumed as backspace inside Terminal / iTerm by design.) |
 | Typo Fixer never fires | Focused text field is non-AX (Electron / web / terminal). Logs show `replaceRange: failed to set selection range`. |
 | Sentiment Guard never fires | No inference backend available. Check Settings → Inference for backend status; if relying on Ollama, confirm it's running with `curl http://localhost:11434/api/tags`. |

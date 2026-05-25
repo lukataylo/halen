@@ -62,7 +62,7 @@ toggles them on or off and opens their detail panel.
 | [Sentiment Guard](plugins/sentiment-guard.md) | Writing | On | Classifies your drafts on-device. Pops a warning when the tone trips a rule you set. |
 | [Snippet Expander](plugins/snippet-expander.md) | Productivity | On | `;tag` expands to static, dynamic, or AI-generated text. ⌃⌥R rephrases the selection in place. |
 | [Clarity Checker](plugins/clarity-checker.md) | Writing | On | Flags passive voice, run-ons, vague phrasing. One-tap Gemma rewrite. |
-| [Voice Dictation](plugins/voice-dictation.md) | Voice | Off | ⌥⌘H opens a listening pill. Apple's on-device speech recognizer transcribes; the text lands at your caret. |
+| [Voice Dictation](plugins/voice-dictation.md) | Voice | Off | ⌃⌥Space opens a listening pill. Apple's on-device speech recognizer transcribes; the text lands at your caret. |
 | [Inline Autocomplete](plugins/autocomplete.md) | Writing | Off | Suggests the next few words as ghost text. Tab to accept. |
 | [Personal Style Guide](plugins/style-guide.md) | Writing | Off | Your banned-words → preferred-words list, scanned per paragraph. |
 | [Email Reply](plugins/email-reply.md) | Productivity | Off | ⌃⌥E drafts a reply to the email you're reading, in the tone you pick. |

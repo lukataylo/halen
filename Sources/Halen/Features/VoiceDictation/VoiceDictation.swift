@@ -6,7 +6,7 @@ import Carbon.HIToolbox
 import ApplicationServices
 import UserNotifications
 
-/// Global-hotkey-driven dictation. ⌥⌘H toggles recording. While listening, a
+/// Global-hotkey-driven dictation. ⌃⌥Space toggles recording. While listening, a
 /// floating indicator pulses near the caret. On stop, the transcription (local,
 /// on-device via Apple's `SFSpeechRecognizer`) is inserted into the text field
 /// that was focused when recording began, at the caret position captured then.
@@ -19,7 +19,7 @@ import UserNotifications
 final class VoiceDictation: HalenPlugin {
     let id = "com.halen.voice-dictation"
     let name = "Voice Dictation"
-    let summary = "Press \u{2325}\u{2318}H, speak, press again — text appears at your cursor."
+    let summary = "Press \u{2303}\u{2325}Space, speak, press again — text appears at your cursor."
     let icon = "mic.fill"
     let category: PluginCategory = .voice
 
@@ -64,7 +64,7 @@ final class VoiceDictation: HalenPlugin {
             }
         }
         state.refreshPermissions()
-        Log.info("VoiceDictation started (hotkey: \u{2325}\u{2318}H)")
+        Log.info("VoiceDictation started (hotkey: \u{2303}\u{2325}Space)")
     }
 
     func stop() {
@@ -80,7 +80,7 @@ final class VoiceDictation: HalenPlugin {
         AnyView(VoiceDictationDetailView(state: state))
     }
 
-    /// Menu-equivalent entry point. Mirrors the ⌥⌘H hotkey path so users
+    /// Menu-equivalent entry point. Mirrors the ⌃⌥Space hotkey path so users
     /// who can't press chord combinations still reach the dictation
     /// start/stop toggle from the dropdown.
     func invokeFromMenu() {
@@ -90,9 +90,20 @@ final class VoiceDictation: HalenPlugin {
     // MARK: - Hotkey
 
     private func registerHotkey() {
-        let cmdOpt = UInt32(cmdKey | optionKey)
-        let h = UInt32(kVK_ANSI_H)
-        let ok = hotkey.register(keyCode: h, modifiers: cmdOpt,
+        // ⌃⌥Space — two modifiers plus the space bar, easy to thumb-chord,
+        // and nothing on a stock macOS install claims it. Earlier attempts
+        // and why they failed:
+        //   - ⌥⌘H: macOS reserves it for "Hide Others"; the menu-bar
+        //     intercepts before Carbon's RegisterEventHotKey sees it.
+        //   - ⌃G: every Cocoa Edit menu binds it for "Find Next"; the
+        //     frontmost app's menu shortcut wins against our global
+        //     registration whenever a Cocoa app is active.
+        // ⌃⌥Space is in neither category — no Cocoa menu uses Control+
+        // Option chords with Space, and Spotlight (⌘Space) / Raycast
+        // (default ⌘Space) don't collide.
+        let ctrlOpt = UInt32(controlKey | optionKey)
+        let space = UInt32(kVK_Space)
+        let ok = hotkey.register(keyCode: space, modifiers: ctrlOpt,
                                  id: HotkeyID.voiceDictation.rawValue,
                                  owner: name) { [weak self] in
             self?.toggleRecording()
@@ -102,7 +113,7 @@ final class VoiceDictation: HalenPlugin {
             // Halen plugin loaded earlier already claimed it — the
             // conflict registry handles the latter and the warning card
             // in Settings surfaces both owners.
-            Log.warn("VoiceDictation: failed to register ⌥⌘H — see Settings → Conflicting hotkeys")
+            Log.warn("VoiceDictation: failed to register ⌃⌥Space — see Settings → Conflicting hotkeys")
         }
     }
 
@@ -127,7 +138,7 @@ final class VoiceDictation: HalenPlugin {
         // Graceful denial: if either permission is `.denied`, don't even
         // start the recorder (it would fail silently inside AVAudioEngine).
         // Surface a notification with a one-click jump to Settings so the
-        // user has a path forward. Before this, ⌥⌘H just looked broken.
+        // user has a path forward. Before this, ⌃⌥Space just looked broken.
         if state.micPermission == .denied || state.speechPermission == .denied {
             postPermissionDeniedNotification()
             Log.warn("VoiceDictation: hotkey suppressed — mic=\(state.micPermission), speech=\(state.speechPermission)")
@@ -219,7 +230,7 @@ final class VoiceDictation: HalenPlugin {
 
     // MARK: - Permission denial fallback
 
-    /// Posts a one-shot system notification when ⌥⌘H is pressed but Mic or
+    /// Posts a one-shot system notification when ⌃⌥Space is pressed but Mic or
     /// Speech Recognition is denied. The notification body names which
     /// permission needs flipping; the user clicks through to the right
     /// pane of System Settings.
@@ -269,15 +280,24 @@ final class VoiceDictation: HalenPlugin {
 
     private func showListeningIndicator() {
         if listeningPanel != nil { return }
-        let width: CGFloat = 300
-        let height: CGFloat = 52
+        // Panel is larger than the visible capsule on all sides — that
+        // padding gives SwiftUI's soft drop shadow room to bloom inside
+        // the rectangular panel bounds. Without it the shadow gets
+        // clipped at the panel's hard corners and reads as a visible
+        // rectangle around the capsule.
+        let width: CGFloat = 388   // capsule 340 + 24 each side for shadow bleed
+        let height: CGFloat = 100  // capsule 56  + 22 each side for shadow bleed
         // Listening pill — statusBar level (sits above floating popovers),
-        // interactive (hosts Stop/Cancel buttons).
+        // interactive (hosts Stop/Cancel buttons). Panel shadow OFF —
+        // NSWindow's drop shadow tracks the panel's rectangular frame,
+        // which would draw a visible rectangle around the capsule's
+        // rounded corners. The SwiftUI view inside applies its own
+        // shape-conforming shadow instead.
         let panel = HalenFloatingPanel.make(
             size: NSSize(width: width, height: height),
             level: .statusBar,
             interactive: true,
-            shadow: true
+            shadow: false
         )
         panel.contentView = NSHostingView(
             rootView: VoiceListeningIndicator(

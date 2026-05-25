@@ -3,7 +3,7 @@
 > Plugin id: `com.halen.voice-dictation` · Category: Voice · Code:
 > [`Sources/Halen/Features/VoiceDictation/`](../../../Sources/Halen/Features/VoiceDictation/)
 
-Press **⌥⌘H**, speak, press again — the transcription appears at your
+Press **⌃⌥Space**, speak, press again — the transcription appears at your
 cursor. Apple's on-device recogniser does the speech-to-text; nothing
 hits the network.
 
@@ -21,12 +21,16 @@ works without any additional TCC prompt beyond Accessibility.
 The signature `'HALN'` (`0x48414c4e`) is used as the `EventHotKeyID`.
 
 ```swift
-let cmdOpt = UInt32(cmdKey | optionKey)
-let h = UInt32(kVK_ANSI_H)
-hotkey.register(keyCode: h, modifiers: cmdOpt,
+let ctrlOpt = UInt32(controlKey | optionKey)
+let space = UInt32(kVK_Space)
+hotkey.register(keyCode: space, modifiers: ctrlOpt,
                 id: HotkeyID.voiceDictation.rawValue) { [weak self] in
     self?.toggleRecording()
 }
+
+// ⌃⌥Space deliberately avoids the ⌥⌘ family — macOS reserves ⌥⌘H for
+// "Hide Others" (and ⌥⌘M / ⌥⌘D / etc.), which intercept the keystroke
+// at the menu-bar level before Carbon's RegisterEventHotKey sees it.
 ```
 
 `HotkeyRegistrar` installs an `EventHandlerUPP` on
@@ -59,7 +63,7 @@ if #available(macOS 13.0, *) {
 
 Errors with NSError codes `301` and `216` (cancellation and benign
 end-of-audio) are filtered out so the UI doesn't flash an error when the
-user just presses ⌥⌘H again to stop.
+user just presses ⌃⌥Space again to stop.
 
 ## Permission flow
 
@@ -75,7 +79,7 @@ whether each is `granted` / `denied` / `notDetermined`.
 `Info.plist` strings:
 
 - `NSMicrophoneUsageDescription`:
-  > Halen captures audio when you press ⌥⌘H so it can transcribe your
+  > Halen captures audio when you press ⌃⌥Space so it can transcribe your
   > speech locally and insert it at your cursor. Audio never leaves this Mac.
 - `NSSpeechRecognitionUsageDescription`:
   > Halen uses Apple's on-device speech recognition to convert your

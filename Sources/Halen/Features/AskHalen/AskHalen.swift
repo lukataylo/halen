@@ -513,12 +513,13 @@ private struct AskHalenDetailView: View {
         card {
             cardHeader("Model")
             Picker("", selection: $tierRaw) {
-                Text("Small — fastest").tag(ModelTier.small.rawValue)
-                Text("Medium — balanced").tag(ModelTier.medium.rawValue)
-                Text("Large — best quality").tag(ModelTier.large.rawValue)
+                Text("Small").tag(ModelTier.small.rawValue)
+                Text("Medium").tag(ModelTier.medium.rawValue)
+                Text("Large").tag(ModelTier.large.rawValue)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .help("Small is fastest, Large is highest quality. Medium is the balanced default.")
 
             HStack(alignment: .firstTextBaseline) {
                 Text("Temperature")
