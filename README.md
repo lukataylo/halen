@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/lukataylo/halen/releases/latest"><img src="https://img.shields.io/github/v/release/lukataylo/halen?include_prereleases&label=download" alt="Latest release"></a>
+  <a href="https://github.com/lukataylo/halen/releases/latest"><img src="https://img.shields.io/github/v/release/lukataylo/halen?label=download&color=1635D6" alt="Latest release"></a>
   <a href="https://github.com/lukataylo/halen/releases"><img src="https://img.shields.io/github/downloads/lukataylo/halen/total?label=downloads&color=1635D6" alt="Total downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple" alt="macOS 14+">
