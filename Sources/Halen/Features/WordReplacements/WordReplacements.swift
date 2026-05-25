@@ -25,7 +25,7 @@ import SwiftUI
 final class WordReplacements: HalenPlugin {
     let id = "com.halen.word-replacements"
     let name = "Word Replacements"
-    let summary = "Fixes your typos. Swaps in your preferred terms."
+    let summary = "Fixes typos. Swaps in your preferred terms."
     let icon = "character.cursor.ibeam"
     let category: PluginCategory = .writing
 

@@ -16,7 +16,7 @@ import IOKit.hid
 final class SnippetExpander: HalenPlugin {
     let id = "com.halen.snippet-expander"
     let name = "Snippet Expander"
-    let summary = "Type ;tag to expand. \u{2303}\u{2325}R rewrites a selection."
+    let summary = "Type ;tag to expand. \u{2303}\u{2325}R to rewrite."
     let icon = "text.bubble"
     let category: PluginCategory = .productivity
 

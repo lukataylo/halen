@@ -25,7 +25,7 @@ import UserNotifications
 final class AskHalen: HalenPlugin {
     let id = "com.halen.ask-halen"
     let name = "Ask Halen"
-    let summary = "Press \u{2303}H. Ask your Mac anything, with context."
+    let summary = "Press \u{2303}H. Ask your Mac anything."
     let icon = "sparkles.rectangle.stack"
     let category: PluginCategory = .productivity
 
