@@ -79,7 +79,40 @@ final class PluginRegistry {
         if let stored = defaults.object(forKey: defaultsKey(for: id)) as? Bool {
             return stored
         }
+        // Migration: a returning user who had Typo Fixer or Style Guide
+        // on before the merge expects the new Word Replacements plugin to
+        // pick up where they left off. Honor either old key as a signal
+        // of "user wanted this behaviour", and stamp the migrated value
+        // into the new key so the lookup is single-source from then on.
+        if id == "com.halen.word-replacements" {
+            let migrated = Self.migratedFromLegacy(
+                anyOf: ["com.halen.typo-fixer", "com.halen.style-guide"],
+                defaults: defaults
+            )
+            if let migrated {
+                defaults.set(migrated, forKey: defaultsKey(for: id))
+                return migrated
+            }
+        }
         return !Self.defaultDisabledPluginIds.contains(id)
+    }
+
+    /// Returns `true` if any of `anyOf` was persisted as enabled, `false`
+    /// if any was persisted as disabled (with no enabled siblings), or
+    /// `nil` if none of them were ever stored (= fresh install, fall
+    /// through to defaultDisabled logic).
+    private static func migratedFromLegacy(anyOf legacyIds: [String],
+                                           defaults: UserDefaults) -> Bool? {
+        var anyStored = false
+        var anyEnabled = false
+        for id in legacyIds {
+            let key = "plugin.\(id).enabled"
+            guard let value = defaults.object(forKey: key) as? Bool else { continue }
+            anyStored = true
+            if value { anyEnabled = true }
+        }
+        guard anyStored else { return nil }
+        return anyEnabled
     }
 
     private func defaultsKey(for id: String) -> String { "plugin.\(id).enabled" }

@@ -218,12 +218,16 @@ final class AppCoordinator {
         // the Plugin Store, with their privileged work (calendar, the break
         // prompt) behind the JSON-RPC boundary like any third-party plugin.
         registry.register(AskHalen(services: services))
-        registry.register(TypoFixer(services: services, store: typoStore))
+        // Word Replacements merges the previous Typo Fixer + Style Guide
+        // plugins. Both engines live underneath as separate objects so
+        // their distinct UX patterns (silent inline vs popover) survive
+        // the merge — the wrapper just starts/stops them together and
+        // hosts a tabbed detail view.
+        registry.register(WordReplacements(services: services, typoStore: typoStore))
         registry.register(SentimentGuard(services: services))
         registry.register(VoiceDictation(services: services))
         registry.register(SnippetExpander(services: services))
         registry.register(ClarityChecker(services: services))
-        registry.register(StyleGuide(services: services))
         registry.register(EmailReply(services: services))
         registry.register(Autocomplete(services: services))
 

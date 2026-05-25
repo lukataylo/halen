@@ -21,6 +21,9 @@ final class TypoFixer: HalenPlugin {
 
     private let eventBus: EventBus
     private let store: TypoStore
+    /// Exposed for the merged Word Replacements detail view to bind to.
+    /// Internal getter only — the engine still owns the store.
+    var storeForDetailView: TypoStore { store }
     private weak var caretObserver: CaretObserver?
     private var task: Task<Void, Never>?
 
