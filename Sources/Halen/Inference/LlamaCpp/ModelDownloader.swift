@@ -139,11 +139,13 @@ final class ModelDownloader {
             // refuses to let cross actor boundaries). Snapshot the spec
             // fields the detached body needs into locals for the same reason.
             //
-            // `weak let` — Swift accepts this on every toolchain we still
-            // build with (Swift 5.10+). The runtime can nil out the
-            // pointee under a `let` binding because `weak` storage is
-            // semantically a reference cell, not the variable itself.
-            weak let weakSelf = self
+            // `weak var` (not `let`) — Swift 5.10 rejects `weak let`:
+            // "'weak' must be a mutable variable, because it may change
+            // at runtime". The runtime mutates the storage to nil when
+            // the pointee dies, so the binding has to be mutable. Swift
+            // 6 accepts `weak let` but CI runs on 5.10 (Xcode 15.4) and
+            // is the source of truth.
+            weak var weakSelf = self
             let sourceURL = spec.sourceURL
             let expectedSize = spec.expectedSize
             let inner = Task.detached(priority: .utility) {
