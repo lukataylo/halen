@@ -3,6 +3,15 @@
     <channel>
         <title>Halen</title>
         <item>
+            <title>0.3.0</title>
+            <pubDate>Mon, 25 May 2026 16:37:28 +0000</pubDate>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/lukataylo/halen/releases/download/v0.3.0/Halen-0.3.0.dmg" length="5633091" type="application/octet-stream" sparkle:edSignature="LGZpvRCrF/78LI3fcowgeXxxk3vxsiH0gKl78g8sFJzl87yoOnc6hqqfb/HdBDGccYvCGyvviQ8tN9RRDzj9Ag=="/>
+        </item>
+        <item>
             <title>0.2.0</title>
             <pubDate>Sat, 23 May 2026 20:08:38 +0100</pubDate>
             <sparkle:version>2</sparkle:version>
