@@ -22,6 +22,10 @@ Halen is a writing assistant that lives in your menubar. It catches angry-soundi
 
 Every model runs on your Mac. Your text never goes to a server.
 
+<p align="center">
+  <img src="assets/screenshot-writing-coach.png" alt="Halen catching a hostile sentence in Notes. A popover headed 'This reads as Hostile' shows a suggested rewrite that softens the tone, with Close and Copy buttons." width="780"/>
+</p>
+
 ## Install
 
 [**Download Halen**](https://github.com/lukataylo/halen/releases/latest) — signed, notarized, free. Apple Silicon, macOS 14 or later.
@@ -44,6 +48,10 @@ Halen updates itself. You'll never need to come back to this page.
 | <img src="https://api.iconify.design/sf-symbols/text-append.svg?color=%231635D6" width="20"/> | **Autocomplete** | Tab to accept the next few words. |
 
 Plus two add-ons you can install from the Plugin Store: **Burnout Copilot** (focus suggestions from your calendar and tone history) and **Meeting Prep** (a one-page brief 15 minutes before each meeting).
+
+<p align="center">
+  <img src="assets/screenshot-plugins.png" alt="Halen's menubar dropdown showing the six bundled plugins with toggles — Ask Halen, Word Replacements, Writing Coach, Voice Dictation, and Snippet Expander all enabled." width="500"/>
+</p>
 
 ## Why local
 
