@@ -73,8 +73,13 @@ final class AccessibilityPreferences {
         ) { [weak self] _ in
             // The observer is queued on .main, but the closure isn't
             // statically @MainActor — bounce through a Task to satisfy
-            // the actor checker without dropping the update.
-            Task { @MainActor in
+            // the actor checker without dropping the update. Re-capture
+            // `self` weakly on the Task closure so Swift 5.10's strict
+            // concurrency checker doesn't flag "reference to captured
+            // var 'self' in concurrently-executing code" (the outer
+            // observer closure is non-Sendable; the inner Task closure
+            // is, so the capture has to be made explicit again).
+            Task { @MainActor [weak self] in
                 self?.refresh()
             }
         }

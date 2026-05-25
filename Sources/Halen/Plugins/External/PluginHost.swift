@@ -165,7 +165,10 @@ final class PluginHost {
                 id: carbonId,
                 owner: pluginName
             ) { [weak self] in
-                Task { @MainActor in
+                // Re-capture self on the Task closure — Swift 5.10's
+                // strict concurrency rejects the outer-closure capture
+                // being read inside a concurrently-executing Task body.
+                Task { @MainActor [weak self] in
                     self?.deliverHotkeyFired(pluginId: pluginId, hotkeyId: hotkeyId)
                 }
             }
