@@ -1,15 +1,18 @@
 # Privacy
 
-One constraint. Nothing leaves the machine.
+One constraint. Nothing you write leaves the machine.
 
 Not the text near your cursor. Not your drafts. Not your voice.
 Not a hashed fingerprint of any of it. Not an anonymous telemetry
 ping. Nothing.
 
-The few egress points that do exist all hit localhost — the local
-inference backend you chose, or your local Ollama daemon if you
-opted in. This page documents every one of them, the per-plugin
-boundaries, and the on-disk files Halen writes.
+Inference runs on localhost — the backend you chose, or your local
+Ollama daemon if you opted in. Exactly two requests ever reach the
+public internet, and neither carries any of your content: a
+once-a-day software-update check (Sparkle), and a one-time model
+download if you opt into the bundled Gemma model. This page documents
+every one of them, the per-plugin boundaries, and the on-disk files
+Halen writes.
 
 ## What Halen sees
 
@@ -96,21 +99,32 @@ a remote process; only you can point it elsewhere. The request body contains:
 With the default endpoint, that traffic does not leave the loopback interface
 unless you have configured Ollama itself to bind to a non-localhost address.
 
-Two more outbound paths exist, both user-initiated and neither carrying any of
-your text:
+A few more connections exist. **None of them carries any of your text, voice,
+or calendar data:**
 
-- **Bundled-model download.** If you choose to download the bundled Gemma 4
-  model from Settings → Inference (instead of using Apple Intelligence or a
-  `BUNDLE_MODEL=1` build), `ModelDownloader` fetches a single GGUF file from
-  Hugging Face (`huggingface.co/unsloth/gemma-4-E4B-it-GGUF`). This is a
-  one-time file transfer, not telemetry.
+- **Software-update check.** Halen updates itself with
+  [Sparkle](https://sparkle-project.org), the standard open-source updater for
+  Mac apps. Once a day — and whenever you click *Check for Updates* in Settings
+  — it fetches the static appcast at `https://halen.dev/appcast.xml`. If a newer
+  build exists, the signed `.dmg` is downloaded from GitHub Releases and verified
+  against a pinned **EdDSA public key** before it installs. The request body is
+  empty: no account, no device id, no usage data — just the standard headers
+  (including your IP, as with any HTTPS request) needed to fetch a file. You can
+  turn automatic checks off from the "Automatically check for updates" toggle in
+  Sparkle's update dialog.
+- **Bundled-model download.** If you choose to download the Gemma 4 model from
+  Settings → Inference (instead of using Apple Intelligence or a `BUNDLE_MODEL=1`
+  build), `ModelDownloader` fetches a single GGUF file from Hugging Face
+  (`huggingface.co/unsloth/gemma-4-E4B-it-GGUF`). A one-time file transfer, not
+  telemetry.
 - **Browser extension bridge.** If you enable the WebSocket bridge for the
-  optional browser extension, Halen listens on `127.0.0.1:50765` (loopback
-  only) so the extension can forward typing events from browser text fields.
+  optional browser extension, Halen listens on `127.0.0.1:50765` (loopback only)
+  so the extension can forward typing events from browser text fields. It only
+  *accepts* inbound connections; it never dials out.
 
-There is **no analytics SDK, no remote logging endpoint, no auto-updater, and
-no crash reporter** anywhere in the project. Nothing about your text, voice,
-or calendar is ever uploaded.
+Apart from the update check above, there is **no other outbound network code**
+in the project: no analytics SDK, no remote logging endpoint, no crash reporter.
+Nothing about your text, voice, or calendar is ever uploaded.
 
 ## Apple on-device speech recognition
 
@@ -163,7 +177,7 @@ Nothing is uploaded.
 | Microphone              | Voice Dictation      | Capture audio for SFSpeechRecognizer |
 | Speech Recognition      | Voice Dictation      | Convert audio to text **on-device** |
 | Calendars (full access) | Burnout Copilot, Meeting Prep | Read events; Burnout writes the `🌿 Halen break` event |
-| Notifications           | Meeting Prep         | Post the "briefing ready" alert |
+| Notifications           | Meeting Prep, Ask Halen | Briefing-ready alerts, and clipboard-fallback notices when a result can't be inserted at the caret |
 | Input Monitoring        | Ask Halen, Snippet Expander | Match the ⌃H and ⌃⌥R hotkeys system-wide — only those hotkeys, no other keystrokes |
 
 You can deny any of these and the host continues to run. The dependent
