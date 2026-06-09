@@ -318,7 +318,7 @@ private struct InstalledPluginRow: View {
 
     private func tag(_ text: String) -> some View {
         Text(text.uppercased())
-            .font(.system(size: 8, weight: .bold))
+            .font(.caption2.weight(.bold))
             .tracking(0.4)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 5)

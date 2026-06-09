@@ -492,7 +492,7 @@ private struct AskHalenDetailView: View {
             Text("Press ⌃H anywhere")
                 .font(.system(.callout, weight: .medium))
             Text("A floating palette opens with your focused app, selection, and clipboard in context. Terminals consume ⌃H as backspace, so the hotkey won't fire inside Terminal or iTerm.")
-                .font(.system(size: 11))
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -503,7 +503,7 @@ private struct AskHalenDetailView: View {
 
     private var modelCard: some View {
         card {
-            cardHeader("Model")
+            cardLabel("Model")
             Picker("", selection: $tierRaw) {
                 Text("Small").tag(ModelTier.small.rawValue)
                 Text("Medium").tag(ModelTier.medium.rawValue)
@@ -515,17 +515,18 @@ private struct AskHalenDetailView: View {
 
             HStack(alignment: .firstTextBaseline) {
                 Text("Temperature")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption)
+                    .fontWeight(.medium)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(String(format: "%.2f", temperature))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
             .padding(.top, 4)
             Slider(value: $temperature, in: 0.0...1.0, step: 0.05)
             Text("Lower is more literal. Higher is more creative. 0.40 reads as a balanced default for question answering.")
-                .font(.system(size: 10.5))
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -533,13 +534,13 @@ private struct AskHalenDetailView: View {
 
     private var contextCard: some View {
         card {
-            cardHeader("Context")
+            cardLabel("Context")
             Toggle(isOn: $includeParagraph) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Include surrounding paragraph")
-                        .font(.system(size: 12))
+                        .font(.callout)
                     Text("The paragraph your cursor is in. Off makes Ask Halen a pure Q&A surface.")
-                        .font(.system(size: 10.5))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -552,9 +553,9 @@ private struct AskHalenDetailView: View {
             Toggle(isOn: $includeClipboard) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Include clipboard contents")
-                        .font(.system(size: 12))
+                        .font(.callout)
                     Text("Recent clipboard text. Useful for \"summarise what I just copied,\" off if your clipboard has sensitive things you don't want a model to see.")
-                        .font(.system(size: 10.5))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -567,11 +568,11 @@ private struct AskHalenDetailView: View {
     private var privacyNote: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "lock.fill")
-                .font(.system(size: 11))
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.top, 1)
             Text("Whatever you turn on here is sent to the local model only. Nothing leaves your Mac.")
-                .font(.system(size: 11))
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -593,13 +594,5 @@ private struct AskHalenDetailView: View {
                         .strokeBorder(.separator.opacity(0.4), lineWidth: 0.5)
                 )
         )
-    }
-
-    private func cardHeader(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 10.5, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .textCase(.uppercase)
-            .tracking(0.6)
     }
 }
