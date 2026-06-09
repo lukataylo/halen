@@ -1348,7 +1348,7 @@ img { display: block; max-width: 100%; }
     <p class="st">No accounts.</p>
   </div>
 
-  <p class="st">Halen sits in your menu bar, near your <span class="kw" data-swarm="caret">cursor</span>. The models never leave your Mac.</p>
+  <p class="st">Halen lives in your menu bar, near your <span class="kw" data-swarm="caret">cursor</span>. The models never leave your Mac.</p>
 
   <div class="stanza">
     <p class="st">Your words stay yours.</p>
@@ -1361,7 +1361,7 @@ img { display: block; max-width: 100%; }
 <!-- ============ DEMO ============ -->
 <section class="demo" id="demo">
   <div class="demo-head">
-    <h2>Plugins for the cursor.</h2>
+    <h2>Tools for the cursor.</h2>
     <p>Pick one. Watch what it does.</p>
   </div>
 
@@ -1375,7 +1375,7 @@ img { display: block; max-width: 100%; }
           <span class="bar"></span>
         </button>
         <button class="snip" data-demo="style">
-          <div class="row1"><span class="key sty">Word Replacements</span><span class="ms">instant</span></div>
+          <div class="row1"><span class="key sty">Banned Words</span><span class="ms">instant</span></div>
           <div class="label">Your banned words, swapped</div>
           <div class="desc">Add &ldquo;utilize&rdquo; once. Halen offers &ldquo;use&rdquo; every time after. No model call.</div>
           <span class="bar"></span>
@@ -1389,7 +1389,7 @@ img { display: block; max-width: 100%; }
         <button class="snip" data-demo="sentiment">
           <div class="row1"><span class="key sg">Writing Coach</span><span class="ms">~120 ms</span></div>
           <div class="label">Read for tone before you send</div>
-          <div class="desc">A small local classifier checks each sentence. Pops up if the tone trips a rule.</div>
+          <div class="desc">A small local model checks each sentence. Pops up if the tone trips a rule.</div>
           <span class="bar"></span>
         </button>
       </div>
@@ -1465,7 +1465,7 @@ img { display: block; max-width: 100%; }
           <img class="mark" src="assets/halen-icon.svg" alt="" />
           <div class="msg">
             <span class="l" id="popL">HALEN · matched</span>
-            <span class="v" id="popV">expanding ;polite via gemma4:e4b</span>
+            <span class="v" id="popV">expanding ;polite via Gemma 4 E4B</span>
           </div>
           <span class="kbd">⏎</span>
         </div>
@@ -1473,7 +1473,7 @@ img { display: block; max-width: 100%; }
           <span class="icon">!</span>
           <div class="txt">
             <strong>This reads as <span>hostile</span></strong>
-            <em>gemma4:e4b · 100% local · 118 ms</em>
+            <em>Gemma 4 E4B · 100% local · 118 ms</em>
           </div>
           <div class="actions">
             <button id="guardSend">Send anyway</button>
@@ -1612,7 +1612,7 @@ img { display: block; max-width: 100%; }
       </a>
       <span class="dl-specs">
         <span class="chip">macOS 14+</span>
-        <span class="chip">Apple Silicon only</span>
+        <span class="chip">Apple Silicon native</span>
         <span class="chip">Free · MIT</span>
       </span>
     </div>
@@ -1712,7 +1712,7 @@ const SWARMS = {
   models: [
     { text: 'gemma4:e4b', kind: 'dark' },
     { text: 'gemma4:e2b', kind: 'dark' },
-    { text: 'gemma4:26b', kind: 'dark' },
+    { text: 'gemma4:27b', kind: 'dark' },
     { text: 'ollama', kind: 'dark' },
     { text: 'on disk', kind: 'tag' },
     { text: 'localhost:11434', kind: 'tag' },
@@ -2125,7 +2125,7 @@ const DEMOS = {
     prefix: '',
     rewritePrior: 'Hey Alex, just lock the scope already. We’ve redone this three times.',
     expanded: 'Hey Alex, could we lock the scope this week? I want to make sure we land it cleanly.',
-    pop: { l: 'HALEN · matched', v: 'softening prior paragraph via gemma4:e4b' }, delay: 950,
+    pop: { l: 'HALEN · matched', v: 'softening prior paragraph via Gemma 4 E4B' }, delay: 950,
   },
   // Writing Coach (tone tab) — Qwen 2.5 0.5B classifier on each sentence
   // end. Hostile label triggers the guard card with Send-anyway and
@@ -2339,7 +2339,7 @@ async function playSentiment() {
   if (userInterrupt) return;
   await wait(300);
   $popL.textContent = 'HALEN · writing coach';
-  $popV.textContent = 'classifying tone · gemma4:e4b';
+  $popV.textContent = 'classifying tone · Gemma 4 E4B';
   $pop.classList.add('show');
   await wait(900);
   $pop.classList.remove('show');
@@ -2348,7 +2348,7 @@ async function playSentiment() {
   await wait(3000);
   if (userInterrupt) return;
   $popL.textContent = 'HALEN · rephrasing';
-  $popV.textContent = 'softening tone · gemma4:e4b';
+  $popV.textContent = 'softening tone · Gemma 4 E4B';
   $pop.classList.add('show');
   $trigger.style.transition = 'opacity 0.4s';
   $trigger.style.opacity = '0';
