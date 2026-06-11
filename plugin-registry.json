@@ -24,6 +24,17 @@
       "category": "focus",
       "sourceURL": "https://github.com/lukataylo/halen/tree/main/plugins/burnout-copilot",
       "downloadURL": "https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/com.halen.burnout-copilot.zip"
+    },
+    {
+      "id": "com.halen.mother",
+      "name": "Mother",
+      "summary": "Hardcore local discipline. Keeps you off the apps and sites you blocked — and means it.",
+      "author": "Halen Labs",
+      "version": "1.0.0",
+      "icon": "lock.shield",
+      "category": "focus",
+      "sourceURL": "https://github.com/lukataylo/halen/tree/main/plugins/mother",
+      "downloadURL": "https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/com.halen.mother.zip"
     }
   ]
 }

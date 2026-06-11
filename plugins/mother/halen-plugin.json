@@ -1,0 +1,13 @@
+{
+  "id": "com.halen.mother",
+  "name": "Mother",
+  "summary": "Hardcore local discipline. Keeps you off the apps and sites you blocked — and means it.",
+  "version": "1.0.0",
+  "halenApiVersion": "0.1",
+  "executable": "/usr/bin/python3",
+  "args": ["plugin.py"],
+  "events": ["app.focused"],
+  "permissions": ["notifications"],
+  "icon": "lock.shield",
+  "category": "focus"
+}

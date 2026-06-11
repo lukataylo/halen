@@ -68,6 +68,7 @@ Everything by default. Concretely:
 - **Approved-draft fingerprints** — `~/Library/Application Support/Halen/com.halen.sentiment-guard/approved.json`. **SHA-256 hex digests** of windowed drafts the user marked "Looks fine". The plaintext is *not* persisted — only the hash.
 - **Snippets** — `~/Library/Application Support/Halen/com.halen.snippet-expander/snippets.json`. Local file.
 - **Briefed-event ids** — `~/Library/Application Support/Halen/com.halen.meeting-prep/processed.json`. Local file. Contains only EventKit event identifiers, not titles or contents.
+- **Mother rulebook & ledger** — `~/Library/Application Support/Halen/com.halen.mother/config.json` (your app/site blocklist and schedule) and `state.json` (a local log of blocks and overrides — app name or site host, timestamp, action). Local files. Nothing is sent anywhere; Mother makes no network requests at all.
 
 ## Network traffic
 
