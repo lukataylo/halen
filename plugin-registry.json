@@ -24,6 +24,17 @@
       "category": "focus",
       "sourceURL": "https://github.com/lukataylo/halen/tree/main/plugins/burnout-copilot",
       "downloadURL": "https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/com.halen.burnout-copilot.zip"
+    },
+    {
+      "id": "com.halen.reasoning-compactor",
+      "name": "Reasoning Compactor",
+      "summary": "Compacts verbose LLM reasoning on-device to save tokens — ⌃⌥K to compact a selection, works with any model's chain-of-thought.",
+      "author": "Halen Labs",
+      "version": "1.0.0",
+      "icon": "rectangle.compress.vertical",
+      "category": "productivity",
+      "sourceURL": "https://github.com/lukataylo/halen/tree/main/plugins/reasoning-compactor",
+      "downloadURL": "https://github.com/lukataylo/halen/releases/download/v0.1.0-alpha/com.halen.reasoning-compactor.zip"
     }
   ]
 }
