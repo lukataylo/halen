@@ -166,3 +166,13 @@ model**), the short-selection guard, chunking of a long trace into multiple
 passes, the background nudge plus cooldown suppression, and clean shutdown. In
 extractive mode it additionally asserts the output is a **verbatim subset** of
 the input and that the **answer-bearing step survives**.
+
+It has also been run true end-to-end against a **real local model**
+(Qwen2.5-0.5B-Instruct GGUF via llama.cpp — the same model family as Halen's
+`classifier` tier) serving `inference/complete`, on a serious reasoning trace
+(Kadane's maximum-subarray, with a brute-force dead-end and a numeric trace).
+Extractive compacted it 2.3× (−57%) with the answer preserved and every kept
+sentence verbatim. The same trace under `abstractive` on that small model
+compressed less and *dropped the answer* (it ran out of tokens mid-rewrite) —
+which is exactly why extractive (faithful, answer-force-kept) is the default:
+the guarantees hold regardless of how capable the local model is.

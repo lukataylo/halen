@@ -553,7 +553,7 @@ def handle_hotkey():
         if dollars >= 0.005:
             session += f" (~${dollars:.2f})"
         call("ui/toast", {"title": "Reasoning compacted → clipboard",
-                          "body": body + "." + session + "."})
+                          "body": body + session + "."})
         _log(f"reasoning-compactor: {before_tok}->{after_tok} tokens "
              f"(-{pct}%, {mult:.1f}x), session total {total}")
     finally:
