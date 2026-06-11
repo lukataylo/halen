@@ -1,6 +1,8 @@
 {
   "_comment": "Reasoning Compactor settings. Edit, then re-enable the plugin (or restart Halen) to reload. All keys are optional; omitted keys fall back to the built-in defaults documented in README.md.",
 
+  "mode": "extractive",
+
   "target_keep_ratio": 0.45,
   "target_tokens": 0,
 

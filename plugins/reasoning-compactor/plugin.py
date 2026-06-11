@@ -115,6 +115,10 @@ def _resolve(msg):
 # modes (`rate` vs `target_token`): if `target_tokens > 0` it wins and sets an
 # absolute budget, otherwise the ratio is used.
 DEFAULTS = {
+    # "extractive" keeps a verbatim subset of the original steps (the mechanism
+    # TokenSkip / step-entropy / LLMLingua actually use — faithful by
+    # construction); "abstractive" lets the model rewrite the trace shorter.
+    "mode": "extractive",
     "target_keep_ratio": 0.45,      # keep ~45% of tokens (≈ TokenSkip's cut)
     "target_tokens": 0,             # >0 ⇒ absolute output budget, overrides ratio
     "usd_per_million_tokens": 3.0,  # for the $-saved estimate in toasts
@@ -163,6 +167,8 @@ def load_config():
         except ValueError:
             pass
 
+    mode = os.environ.get("HALEN_RC_MODE", cfg["mode"])
+    cfg["mode"] = mode if mode in ("extractive", "abstractive") else "extractive"
     cfg["target_keep_ratio"] = min(0.95, max(0.1, float(cfg["target_keep_ratio"])))
     cfg["target_tokens"] = max(0, int(cfg["target_tokens"]))
     if not isinstance(cfg["clipboard_cmd"], list) or not cfg["clipboard_cmd"]:
@@ -288,7 +294,84 @@ def chunk_prose(text, budget):
     return chunks
 
 
-def build_prompt(text, target):
+_SENT_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_ANSWER_RE = re.compile(
+    r"(final answer|the answer is|answer\s*[:=]|in conclusion|conclusion\s*:|"
+    r"result is|hence the|therefore the)", re.I)
+_PARSE_FAILED = object()   # extractive sentinel: model gave no usable indices
+
+
+def split_steps(prose):
+    """Split a prose passage into atomic reasoning steps (newline- then
+    sentence-delimited). Extractive compaction selects a subset of these."""
+    steps = []
+    for line in prose.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        for sent in _SENT_SPLIT.split(line):
+            sent = sent.strip()
+            if sent:
+                steps.append(sent)
+    return steps
+
+
+def _extractive_prompt(steps, keep_n):
+    numbered = "\n".join(f"{i + 1}. {s}" for i, s in enumerate(steps))
+    return (
+        "Below is an LLM's chain-of-thought, split into numbered steps. Select "
+        "the MINIMAL set of steps that preserves the logic and the final "
+        f"answer. Keep about {keep_n} of the {len(steps)} steps — the "
+        "load-bearing ones (facts, equations, intermediate results, decisions, "
+        "the final answer). Drop filler: self-talk, restatements, hedging, "
+        "dead-end second-guessing.\n"
+        "Output ONLY the numbers of the steps to KEEP, comma-separated, in any "
+        "order. No other text.\n\n"
+        f"Steps:\n{numbered}"
+    )
+
+
+def _extractive_pass(prose, target):
+    """Faithful compaction: ask the model which steps to KEEP, then rebuild the
+    passage from those original steps verbatim — the mechanism TokenSkip /
+    step-entropy / LLMLingua use. Returns the kept text, None if not worth
+    compacting, or `_PARSE_FAILED` if the model's reply had no usable indices."""
+    steps = split_steps(prose)
+    if len(steps) <= 2:
+        return None
+    input_tok = estimate_tokens(prose)
+    keep_ratio = min(1.0, target / input_tok) if input_tok else 1.0
+    keep_n = max(1, round(len(steps) * keep_ratio))
+    if keep_n >= len(steps):
+        return None
+    try:
+        result = call("inference/complete", {
+            "prompt": _extractive_prompt(steps, keep_n),
+            "tier": "medium",
+            "maxTokens": 128,
+            "temperature": 0.0,
+            "taskKind": "classification",
+        }, timeout=120)
+    except Exception as exc:
+        _log(f"reasoning-compactor: extractive inference failed: {exc}")
+        return _PARSE_FAILED
+    raw = (result or {}).get("text") or ""
+    model_idxs = sorted({int(n) - 1 for n in re.findall(r"\d+", raw)
+                         if 1 <= int(n) <= len(steps)})
+    if not model_idxs:
+        return _PARSE_FAILED
+    # Guarantee the conclusion survives: always keep the final step and any
+    # step that states an answer, even if the model dropped it.
+    forced = {len(steps) - 1}
+    forced |= {i for i, s in enumerate(steps) if _ANSWER_RE.search(s)}
+    idxs = sorted(set(model_idxs) | forced)
+    if len(idxs) >= len(steps):
+        return None
+    kept = " ".join(steps[i] for i in idxs)
+    return kept if len(kept) < len(prose) else None
+
+
+def _abstractive_prompt(text, target):
     return (
         "You compress an LLM's chain-of-thought reasoning. Rewrite the "
         "reasoning below so it is much shorter while staying a faithful, "
@@ -325,15 +408,15 @@ def _strip_wrapping(out):
     return out
 
 
-def _compact_pass(text, target):
-    """One on-device compaction call. Returns the compacted text, or None on
+def _abstractive_pass(text, target):
+    """One on-device rewrite call. Returns the compacted text, or None on
     failure / if it didn't actually shrink this passage."""
     # We compress, so the output is shorter than the input; 0.9× the input
     # (capped) is ample headroom and never truncates a genuine compaction.
     max_tokens = min(2048, max(256, round(estimate_tokens(text) * 0.9)))
     try:
         result = call("inference/complete", {
-            "prompt": build_prompt(text, target),
+            "prompt": _abstractive_prompt(text, target),
             "tier": "medium",
             "maxTokens": max_tokens,
             "temperature": 0.2,
@@ -348,17 +431,32 @@ def _compact_pass(text, target):
     return out
 
 
+def _compact_passage(text, target):
+    """Compact one prose passage using the configured mode. Extractive is
+    faithful-by-construction (a verbatim subset of the original); on a parse
+    failure it falls back to an abstractive rewrite so a stubborn model still
+    gets compaction."""
+    if CFG["mode"] == "extractive":
+        res = _extractive_pass(text, target)
+        if res is _PARSE_FAILED:
+            _log("reasoning-compactor: extractive parse failed → abstractive")
+            return _abstractive_pass(text, target)
+        return res
+    return _abstractive_pass(text, target)
+
+
 def compact(text):
     """Compact a reasoning trace. Single pass for ordinary inputs; for inputs
     with fenced code or above the single-pass budget, code blocks are preserved
     verbatim and prose is compacted chunk-by-chunk, then reassembled in order.
+    Each prose passage goes through `_compact_passage` (extractive by default).
     Returns the compacted text, or None if nothing got smaller."""
     total_in = estimate_tokens(text)
     segs = segment(text)
     has_code = any(kind == "code" for kind, _ in segs)
 
     if not has_code and total_in <= CFG["max_single_pass_tokens"]:
-        return _compact_pass(text, target_tokens_for(total_in))
+        return _compact_passage(text, target_tokens_for(total_in))
 
     out_parts = []
     changed = False
@@ -370,7 +468,7 @@ def compact(text):
         passages = ([content] if estimate_tokens(content) <= budget
                     else chunk_prose(content, budget))
         for passage in passages:
-            res = _compact_pass(passage, target_tokens_for(estimate_tokens(passage)))
+            res = _compact_passage(passage, target_tokens_for(estimate_tokens(passage)))
             if res:
                 out_parts.append(res)
                 changed = True
