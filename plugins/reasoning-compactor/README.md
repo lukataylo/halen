@@ -16,7 +16,8 @@ of you, not on any vendor's API, so it works with chain-of-thought from
 chat, a terminal, your editor, a scratch file — and press ⌃⌥K. The plugin reads
 the selection through the host's accessibility bridge, runs the compaction pass
 on-device, and puts the result on the clipboard. A notification reports the
-token savings; press ⌘V to paste it back.
+token savings — e.g. `~1.9k → 620 tokens · 3.1× smaller (−68%). ⌘V to paste.` —
+and a running per-session total (with an estimated dollar saving).
 
 > Why the clipboard instead of rewriting in place? Reasoning traces live in
 > browser chats, terminals and Electron editors, exactly the surfaces where
@@ -48,18 +49,29 @@ moves answer accuracy:
   via Step Entropy*, arXiv:2508.03346.
 - **TokenSkip** makes the compression ratio *controllable* by letting the model
   skip less-important tokens. On Qwen2.5-14B-Instruct it cuts reasoning tokens
-  by **~40% (313 → 181 on GSM8K) with < 0.4% accuracy drop**. — *TokenSkip:
-  Controllable Chain-of-Thought Compression in LLMs*, EMNLP 2025,
-  arXiv:2502.12067.
+  by **~40% (313 → 181 on GSM8K) with < 0.4% accuracy drop**, and notes that
+  *"mathematical equations tend to have a greater contribution to the final
+  answer"* while *"semantic connectors such as 'so' and 'since' generally
+  contribute less."* — *TokenSkip: Controllable Chain-of-Thought Compression in
+  LLMs*, EMNLP 2025, arXiv:2502.12067.
 
 This plugin applies the same principle at the prompt level rather than by
 fine-tuning: it instructs the local model to keep every load-bearing step
 (facts, equations, intermediate results, the conclusion verbatim) and drop the
 connective filler, targeting roughly **45% of the original token count** — in
-line with TokenSkip's reported reduction. The target adapts to how much
-redundancy the model actually finds; if a trace is already tight, the plugin
-detects that the output didn't shrink and tells you so instead of "compacting"
-it into something worse.
+line with TokenSkip's reported reduction.
+
+## Design borrowed from comparable projects
+
+These behaviours were lifted from the established prompt/CoT-compression tools
+after reviewing them:
+
+| Learning | Source | How it shows up here |
+|---|---|---|
+| Two compression modes: a **rate** *and* an absolute **target-token budget** | LLMLingua (`rate` vs `target_token`) | `target_keep_ratio` and `target_tokens` in `config.json` — set `target_tokens > 0` for a hard budget |
+| **Protect content that must survive** compression | LLMLingua `force_tokens` / `compress=False`; TokenSkip "keep the answer unchanged" | Fenced code blocks are split out and passed through **verbatim, never sent to the model**; the prompt pins the final answer, equations, numbers and identifiers |
+| **Report real savings**, not just a ratio | LLMLingua returns `origin_tokens`, `compressed_tokens`, `ratio`, `$ saving` | Toast shows `N → M tokens · X× smaller (−P%)` plus a session token + dollar total |
+| **Chunk long inputs** so output isn't truncated | LLMLingua coarse-to-fine / budget controller | Inputs over `max_single_pass_tokens` are compacted paragraph-chunk by chunk and reassembled in order |
 
 ### References
 
@@ -67,6 +79,7 @@ it into something worse.
   Entropy* — https://arxiv.org/abs/2508.03346
 - *TokenSkip: Controllable Chain-of-Thought Compression in LLMs* (EMNLP 2025) —
   https://arxiv.org/abs/2502.12067 · code: https://github.com/hemingkx/TokenSkip
+- *LLMLingua / LLMLingua-2* (Microsoft) — https://github.com/microsoft/LLMLingua
 - *TokenSqueeze: Performance-Preserving Compression for Reasoning LLMs* —
   https://arxiv.org/abs/2511.13223
 
@@ -81,6 +94,28 @@ cp -R reasoning-compactor \
 
 Then enable **Reasoning Compactor** in Halen's plugin list.
 
+## Configuration
+
+Edit `config.json` next to `plugin.py` (re-enable the plugin or restart Halen to
+reload). Every key is optional and falls back to the default below.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `target_keep_ratio` | `0.45` | Fraction of tokens to aim to keep (clamped to 0.1–0.95). |
+| `target_tokens` | `0` | Absolute output budget. `> 0` overrides the ratio. |
+| `usd_per_million_tokens` | `3.0` | Price used for the dollar-saved estimate in toasts. |
+| `min_chars` | `480` | Minimum selection length before ⌃⌥K does anything. |
+| `nudge_min_chars` | `900` | Minimum field length before the background nudge considers it. |
+| `nudge_min_saved_tokens` | `80` | Don't nudge unless at least this many tokens are saveable. |
+| `nudge_cooldown_seconds` | `480` | Per-trace cooldown between nudges. |
+| `max_single_pass_tokens` | `1200` | Prose above this is chunked so the model's output can't be truncated. |
+| `clipboard_cmd` | `["/usr/bin/pbcopy"]` | Command that receives the compacted text on stdin. |
+| `hotkey_keycode` / `hotkey_modifiers` | `40` / `6144` | Carbon key code + modifier bitmask (default ⌃⌥K). |
+
+`HALEN_RC_CLIPBOARD_CMD`, `HALEN_RC_TARGET_RATIO` and `HALEN_RC_TARGET_TOKENS`
+environment variables override the corresponding keys (used by the test
+harness).
+
 ## Protocol surface
 
 | Direction | Method / event | Why |
@@ -92,15 +127,17 @@ Then enable **Reasoning Compactor** in Halen's plugin list.
 | plugin → host | `inference/complete` | on-device compaction (`tier: medium`) |
 | plugin → host | `ui/toast` | report savings / nudge |
 
-The clipboard write uses `/usr/bin/pbcopy`, a subprocess the plugin spawns
-itself — no host capability is involved. Declared permissions: `inference`,
-`ax.read`, `notifications`.
+The clipboard write uses the configured `clipboard_cmd` (`/usr/bin/pbcopy` by
+default), a subprocess the plugin spawns itself — no host capability is
+involved. Declared permissions: `inference`, `ax.read`, `notifications`.
 
-## Tuning
+## Verification
 
-The constants near the top of `plugin.py` are the knobs:
-
-- `TARGET_KEEP_RATIO` — fraction of tokens to aim to keep (default `0.45`).
-- `MIN_CHARS` — minimum selection length before ⌃⌥K does anything.
-- `NUDGE_MIN_CHARS` / `NUDGE_MIN_SAVED_TOKENS` / `NUDGE_COOLDOWN` — how eager the
-  background nudge is.
+The logic is covered by a unit suite (token estimation, reasoning detection,
+code-aware segmentation incl. unclosed fences, paragraph chunking, ratio vs
+absolute-budget targeting, config/env overrides) and an end-to-end harness that
+runs `plugin.py` as a subprocess and plays the host over JSON-RPC stdio:
+handshake, hotkey registration, the segmentation + code-preservation path (and
+that **code is never sent to the model**), the short-selection guard, chunking
+of a long trace into multiple passes, the background nudge plus cooldown
+suppression, and clean shutdown.

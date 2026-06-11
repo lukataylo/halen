@@ -1,0 +1,20 @@
+{
+  "_comment": "Reasoning Compactor settings. Edit, then re-enable the plugin (or restart Halen) to reload. All keys are optional; omitted keys fall back to the built-in defaults documented in README.md.",
+
+  "target_keep_ratio": 0.45,
+  "target_tokens": 0,
+
+  "usd_per_million_tokens": 3.0,
+
+  "min_chars": 480,
+  "nudge_min_chars": 900,
+  "nudge_min_saved_tokens": 80,
+  "nudge_cooldown_seconds": 480,
+
+  "max_single_pass_tokens": 1200,
+
+  "clipboard_cmd": ["/usr/bin/pbcopy"],
+
+  "hotkey_keycode": 40,
+  "hotkey_modifiers": 6144
+}

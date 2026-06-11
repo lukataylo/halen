@@ -24,9 +24,12 @@ Two ways in:
     it never rewrites your text on its own, it only points at the opportunity.
 
 The compaction strategy follows the 2025 chain-of-thought-compression
-literature (Alibaba's step-entropy work and TokenSkip, EMNLP 2025): keep the
-high-information reasoning steps, prune the low-information connective filler,
-and preserve the conclusion verbatim. See README.md for the citations.
+literature (Alibaba's step-entropy work; TokenSkip, EMNLP 2025; Microsoft's
+LLMLingua): keep the high-information reasoning steps, prune the low-information
+connective filler, and preserve the conclusion, equations and code verbatim.
+Design choices borrowed from those projects — ratio *and* absolute-budget
+compression modes, protected (never-compressed) code segments, dollar-savings
+metrics, and chunking of long inputs — are documented in README.md.
 
 Every privileged operation (reading the selection, running inference, posting
 the notification) goes through the host over JSON-RPC — this plugin holds no
@@ -37,9 +40,12 @@ pattern Burnout Copilot uses for its Shortcuts trigger).
 Protocol: JSON-RPC 2.0, newline-delimited. stdin = host -> plugin,
 stdout = plugin -> host, stderr = log (forwarded into Halen's unified log).
 """
+import os
+import re
 import sys
 import json
 import time
+import shlex
 import hashlib
 import threading
 import itertools
@@ -102,27 +108,69 @@ def _resolve(msg):
     event.set()
 
 
-# --- tunables ----------------------------------------------------------------
+# --- configuration -----------------------------------------------------------
 
-# ⌃⌥K. Carbon virtual key code for `K` is 40 (kVK_ANSI_K); modifier bitmask is
-# controlKey (0x1000) | optionKey (0x800) = 0x1800.
+# Defaults; overridable by a sibling config.json and a few HALEN_RC_* env vars.
+# `target_keep_ratio` and `target_tokens` mirror LLMLingua's two compression
+# modes (`rate` vs `target_token`): if `target_tokens > 0` it wins and sets an
+# absolute budget, otherwise the ratio is used.
+DEFAULTS = {
+    "target_keep_ratio": 0.45,      # keep ~45% of tokens (≈ TokenSkip's cut)
+    "target_tokens": 0,             # >0 ⇒ absolute output budget, overrides ratio
+    "usd_per_million_tokens": 3.0,  # for the $-saved estimate in toasts
+    "min_chars": 480,               # min selection before ⌃⌥K does anything
+    "nudge_min_chars": 900,
+    "nudge_min_saved_tokens": 80,
+    "nudge_cooldown_seconds": 8 * 60,
+    "max_single_pass_tokens": 1200,  # chunk prose above this so output ≠ truncated
+    "clipboard_cmd": ["/usr/bin/pbcopy"],
+    "hotkey_keycode": 40,            # kVK_ANSI_K
+    "hotkey_modifiers": 0x1000 | 0x800,  # ⌃⌥ (controlKey | optionKey)
+}
+
 HOTKEY_ID = "reasoning-compactor.compact"
-HOTKEY_KEYCODE = 40
-HOTKEY_MODIFIERS = 0x1000 | 0x800
 
-# A reasoning trace has to be at least this long before compaction is worth a
-# round-trip. ~4 chars per token, so 480 chars ≈ 120 tokens.
-MIN_CHARS = 480
-# Background nudge thresholds: only point at clearly-bloated traces, and only
-# when the estimated saving clears a floor worth interrupting for.
-NUDGE_MIN_CHARS = 900
-NUDGE_MIN_SAVED_TOKENS = 80
-NUDGE_DEBOUNCE = 2.0           # let typing settle before classifying a field
-NUDGE_COOLDOWN = 8 * 60        # don't re-nag for the same field this often
-# Aim to keep ~45% of the tokens — in line with the ~40% reduction TokenSkip
-# reports on GSM8K at <0.4% accuracy loss. The model trims to the redundancy it
-# actually finds; this is the target, not a hard cut.
-TARGET_KEEP_RATIO = 0.45
+
+def load_config():
+    cfg = dict(DEFAULTS)
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            user = json.load(fh)
+        for key, val in (user or {}).items():
+            if key in cfg:
+                cfg[key] = val
+        _log(f"reasoning-compactor: loaded config.json ({len(user)} key(s))")
+    except FileNotFoundError:
+        pass
+    except Exception as exc:
+        _log(f"reasoning-compactor: bad config.json ignored ({exc})")
+
+    # Env overrides — mostly for testing / unusual setups.
+    clip = os.environ.get("HALEN_RC_CLIPBOARD_CMD")
+    if clip:
+        cfg["clipboard_cmd"] = shlex.split(clip)
+    ratio = os.environ.get("HALEN_RC_TARGET_RATIO")
+    if ratio:
+        try:
+            cfg["target_keep_ratio"] = float(ratio)
+        except ValueError:
+            pass
+    tt = os.environ.get("HALEN_RC_TARGET_TOKENS")
+    if tt:
+        try:
+            cfg["target_tokens"] = int(tt)
+        except ValueError:
+            pass
+
+    cfg["target_keep_ratio"] = min(0.95, max(0.1, float(cfg["target_keep_ratio"])))
+    cfg["target_tokens"] = max(0, int(cfg["target_tokens"]))
+    if not isinstance(cfg["clipboard_cmd"], list) or not cfg["clipboard_cmd"]:
+        cfg["clipboard_cmd"] = list(DEFAULTS["clipboard_cmd"])
+    return cfg
+
+
+CFG = load_config()
 
 # --- shared state ------------------------------------------------------------
 
@@ -135,12 +183,28 @@ _session_saved = 0                 # running total of tokens saved this session
 _session_runs = 0
 
 
-# --- token estimation --------------------------------------------------------
+# --- token estimation & formatting -------------------------------------------
 
 def estimate_tokens(text):
     """Rough token count. ~4 chars/token is the usual back-of-envelope for
     English prose and code; good enough to report savings and size requests."""
     return max(1, round(len(text) / 4))
+
+
+def fmt_tokens(n):
+    return f"{n / 1000:.1f}k" if n >= 1000 else str(int(n))
+
+
+def usd_saved(tokens):
+    return tokens / 1_000_000 * CFG["usd_per_million_tokens"]
+
+
+def target_tokens_for(input_tokens):
+    """Output budget for an input of this size — absolute if configured, else
+    the keep-ratio. Never asks for more tokens than the input has."""
+    if CFG["target_tokens"] > 0:
+        return max(1, min(CFG["target_tokens"], input_tokens))
+    return max(1, round(input_tokens * CFG["target_keep_ratio"]))
 
 
 # --- reasoning detection -----------------------------------------------------
@@ -168,14 +232,63 @@ def reasoning_signal(text):
     return hits
 
 
-def looks_like_reasoning(text, min_chars=MIN_CHARS):
+def looks_like_reasoning(text, min_chars=None):
+    min_chars = CFG["min_chars"] if min_chars is None else min_chars
     return len(text) >= min_chars and reasoning_signal(text) >= 2
 
 
 # --- compaction --------------------------------------------------------------
 
-def build_prompt(text):
-    target = max(1, round(estimate_tokens(text) * TARGET_KEEP_RATIO))
+_FENCE_RE = re.compile(r"^\s*```")
+
+
+def segment(text):
+    """Split into ordered (kind, content) segments where kind is "code" (a
+    fenced block — never compressed, mirroring LLMLingua's compress=False
+    sections, since code carries the reasoning) or "prose" (compressible)."""
+    segs = []
+    cur = []
+    in_code = False
+    for line in text.split("\n"):
+        is_fence = bool(_FENCE_RE.match(line))
+        if is_fence and not in_code:
+            if cur:
+                segs.append(("prose", "\n".join(cur)))
+                cur = []
+            in_code = True
+            cur.append(line)
+        elif is_fence and in_code:
+            cur.append(line)
+            segs.append(("code", "\n".join(cur)))
+            cur = []
+            in_code = False
+        else:
+            cur.append(line)
+    if cur:
+        # An unclosed fence is treated as code (pass-through) — safer than
+        # feeding a half-open block to the model.
+        segs.append(("code" if in_code else "prose", "\n".join(cur)))
+    return segs
+
+
+def chunk_prose(text, budget):
+    """Group paragraphs into chunks no larger than `budget` tokens so a single
+    inference call's output can't be truncated by maxTokens."""
+    parts = re.split(r"\n\s*\n", text)
+    chunks, cur, cur_tok = [], [], 0
+    for para in parts:
+        t = estimate_tokens(para)
+        if cur and cur_tok + t > budget:
+            chunks.append("\n\n".join(cur))
+            cur, cur_tok = [], 0
+        cur.append(para)
+        cur_tok += t
+    if cur:
+        chunks.append("\n\n".join(cur))
+    return chunks
+
+
+def build_prompt(text, target):
     return (
         "You compress an LLM's chain-of-thought reasoning. Rewrite the "
         "reasoning below so it is much shorter while staying a faithful, "
@@ -186,8 +299,9 @@ def build_prompt(text):
         "- Drop low-information filler: self-talk, restatements, hedging, "
         '"let me think", "wait", "okay", second-guessing that goes nowhere, '
         "and anything that does not change the outcome.\n"
-        "- Preserve the final answer / conclusion exactly.\n"
-        "- Keep the original language, notation and any code or numbers verbatim.\n"
+        "- Preserve the final answer / conclusion exactly as written.\n"
+        "- Keep equations, code, numbers, identifiers and notation verbatim — "
+        "they carry the reasoning and must not be paraphrased.\n"
         f"- Aim for about {target} tokens or fewer.\n"
         "- Output ONLY the compacted reasoning. No preamble, no commentary, "
         "no surrounding quotes or code fences.\n\n"
@@ -211,13 +325,15 @@ def _strip_wrapping(out):
     return out
 
 
-def compact(text):
-    """Run the on-device compaction pass. Returns the compacted text, or None
-    if it failed or didn't actually shrink the input."""
-    max_tokens = min(1536, max(128, estimate_tokens(text)))
+def _compact_pass(text, target):
+    """One on-device compaction call. Returns the compacted text, or None on
+    failure / if it didn't actually shrink this passage."""
+    # We compress, so the output is shorter than the input; 0.9× the input
+    # (capped) is ample headroom and never truncates a genuine compaction.
+    max_tokens = min(2048, max(256, round(estimate_tokens(text) * 0.9)))
     try:
         result = call("inference/complete", {
-            "prompt": build_prompt(text),
+            "prompt": build_prompt(text, target),
             "tier": "medium",
             "maxTokens": max_tokens,
             "temperature": 0.2,
@@ -227,22 +343,56 @@ def compact(text):
         _log(f"reasoning-compactor: inference failed: {exc}")
         return None
     out = _strip_wrapping((result or {}).get("text") or "")
-    if not out:
-        _log("reasoning-compactor: empty compaction")
-        return None
-    # If the model couldn't shrink it, don't pretend we saved anything.
-    if len(out) >= len(text):
-        _log("reasoning-compactor: already concise — no compaction applied")
+    if not out or len(out) >= len(text):
         return None
     return out
 
 
-def _pbcopy(text):
-    """Set the system clipboard via the pbcopy subprocess (no host capability
-    needed — same self-spawn pattern Burnout Copilot uses for Shortcuts)."""
-    proc = subprocess.run(["/usr/bin/pbcopy"], input=text.encode("utf-8"),
-                          timeout=10)
-    return proc.returncode == 0
+def compact(text):
+    """Compact a reasoning trace. Single pass for ordinary inputs; for inputs
+    with fenced code or above the single-pass budget, code blocks are preserved
+    verbatim and prose is compacted chunk-by-chunk, then reassembled in order.
+    Returns the compacted text, or None if nothing got smaller."""
+    total_in = estimate_tokens(text)
+    segs = segment(text)
+    has_code = any(kind == "code" for kind, _ in segs)
+
+    if not has_code and total_in <= CFG["max_single_pass_tokens"]:
+        return _compact_pass(text, target_tokens_for(total_in))
+
+    out_parts = []
+    changed = False
+    budget = CFG["max_single_pass_tokens"]
+    for kind, content in segs:
+        if kind == "code" or not content.strip():
+            out_parts.append(content)
+            continue
+        passages = ([content] if estimate_tokens(content) <= budget
+                    else chunk_prose(content, budget))
+        for passage in passages:
+            res = _compact_pass(passage, target_tokens_for(estimate_tokens(passage)))
+            if res:
+                out_parts.append(res)
+                changed = True
+            else:
+                out_parts.append(passage)
+
+    if not changed:
+        return None
+    combined = "\n\n".join(p for p in out_parts if p.strip())
+    return combined if len(combined) < len(text) else None
+
+
+def _clipboard_set(text):
+    """Set the system clipboard via the configured command (pbcopy by default)
+    — a subprocess the plugin spawns itself, no host capability involved."""
+    try:
+        proc = subprocess.run(CFG["clipboard_cmd"], input=text.encode("utf-8"),
+                              timeout=10)
+        return proc.returncode == 0
+    except Exception as exc:
+        _log(f"reasoning-compactor: clipboard set failed ({exc})")
+        return False
 
 
 def _record_saving(before, after):
@@ -268,7 +418,7 @@ def handle_hotkey():
             _log(f"reasoning-compactor: readSelection failed: {exc}")
             return
         text = (sel.get("text") or "").strip()
-        if len(text) < MIN_CHARS:
+        if len(text) < CFG["min_chars"]:
             call("ui/toast", {
                 "title": "Reasoning Compactor",
                 "body": "Select a reasoning trace (a few sentences or more), "
@@ -281,26 +431,33 @@ def handle_hotkey():
         if not compacted:
             call("ui/toast", {
                 "title": "Reasoning Compactor",
-                "body": f"That selection (~{before_tok} tokens) is already "
-                        "about as tight as it gets.",
+                "body": f"That selection (~{fmt_tokens(before_tok)} tokens) is "
+                        "already about as tight as it gets.",
             })
             return
 
-        if not _pbcopy(compacted):
-            _log("reasoning-compactor: pbcopy failed")
+        if not _clipboard_set(compacted):
+            call("ui/toast", {
+                "title": "Reasoning Compactor",
+                "body": "Compacted, but couldn't reach the clipboard. "
+                        "Check the clipboard command in config.json.",
+            })
             return
 
         saved, total = _record_saving(text, compacted)
         after_tok = estimate_tokens(compacted)
         pct = round(100 * saved / before_tok) if before_tok else 0
-        call("ui/toast", {
-            "title": "Reasoning compacted → clipboard",
-            "body": (f"~{before_tok} → ~{after_tok} tokens "
-                     f"(−{pct}%, {saved} saved). Press ⌘V to paste. "
-                     f"Saved ~{total} this session."),
-        })
+        mult = before_tok / after_tok if after_tok else 1.0
+        body = (f"~{fmt_tokens(before_tok)} → ~{fmt_tokens(after_tok)} tokens · "
+                f"{mult:.1f}× smaller (−{pct}%). Press ⌘V to paste.")
+        dollars = usd_saved(total)
+        session = f" Session: ~{fmt_tokens(total)} tokens saved"
+        if dollars >= 0.005:
+            session += f" (~${dollars:.2f})"
+        call("ui/toast", {"title": "Reasoning compacted → clipboard",
+                          "body": body + "." + session + "."})
         _log(f"reasoning-compactor: {before_tok}->{after_tok} tokens "
-             f"(-{pct}%), session total {total}")
+             f"(-{pct}%, {mult:.1f}x), session total {total}")
     finally:
         _busy.release()
 
@@ -310,12 +467,12 @@ def handle_hotkey():
 def schedule_nudge(text):
     """Debounce: only look at a field once typing has settled."""
     global _nudge_timer
-    if not looks_like_reasoning(text, NUDGE_MIN_CHARS):
+    if not looks_like_reasoning(text, CFG["nudge_min_chars"]):
         return
     with _nudge_timer_lock:
         if _nudge_timer is not None:
             _nudge_timer.cancel()
-        _nudge_timer = threading.Timer(NUDGE_DEBOUNCE, consider_nudge, args=(text,))
+        _nudge_timer = threading.Timer(2.0, consider_nudge, args=(text,))
         _nudge_timer.daemon = True
         _nudge_timer.start()
 
@@ -325,27 +482,27 @@ def consider_nudge(text):
         return
     digest = hashlib.sha1(text.encode("utf-8")).hexdigest()
     now = time.time()
+    cooldown = CFG["nudge_cooldown_seconds"]
     with _state_lock:
         last = _recent_nudges.get(digest, 0)
-        # Prune stale entries so the dict can't grow unbounded.
-        for k in [k for k, t in _recent_nudges.items() if now - t > NUDGE_COOLDOWN]:
-            _recent_nudges.pop(k, None)
-        if now - last < NUDGE_COOLDOWN:
+        for stale in [k for k, t in _recent_nudges.items() if now - t > cooldown]:
+            _recent_nudges.pop(stale, None)
+        if now - last < cooldown:
             return
         _recent_nudges[digest] = now
 
     before_tok = estimate_tokens(text)
-    est_saved = round(before_tok * (1 - TARGET_KEEP_RATIO))
-    if est_saved < NUDGE_MIN_SAVED_TOKENS:
+    est_saved = round(before_tok * (1 - CFG["target_keep_ratio"]))
+    if est_saved < CFG["nudge_min_saved_tokens"]:
         return
     _log(f"reasoning-compactor: bloated trace in focus (~{before_tok} tokens, "
          f"~{est_saved} saveable)")
     try:
         call("ui/toast", {
             "title": "Reasoning Compactor",
-            "body": (f"This looks like a long reasoning trace (~{before_tok} "
-                     f"tokens). Select it and press ⌃⌥K to compact "
-                     f"— about {est_saved} tokens to save."),
+            "body": (f"This looks like a long reasoning trace "
+                     f"(~{fmt_tokens(before_tok)} tokens). Select it and press "
+                     f"⌃⌥K to compact — about {est_saved} tokens to save."),
         }, timeout=20)
     except Exception as exc:
         _log(f"reasoning-compactor: nudge toast failed: {exc}")
@@ -358,10 +515,10 @@ def startup():
     try:
         call("hotkey/register", {
             "id": HOTKEY_ID,
-            "keyCode": HOTKEY_KEYCODE,
-            "modifiers": HOTKEY_MODIFIERS,
+            "keyCode": CFG["hotkey_keycode"],
+            "modifiers": CFG["hotkey_modifiers"],
         }, timeout=20)
-        _log("reasoning-compactor: registered hotkey ⌃⌥K")
+        _log("reasoning-compactor: registered compaction hotkey")
     except Exception as exc:
         _log(f"reasoning-compactor: hotkey register failed: {exc}")
 
