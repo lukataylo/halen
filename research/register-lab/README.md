@@ -66,6 +66,7 @@ python3 exam.py --quick                    # fast smoke run
 | file | what |
 |---|---|
 | `FINDINGS.md` | **read this first** — the written conclusion + curated dictionary |
+| `RELATED_WORK.md` | the findings cross-checked against papers, vendor docs, and prompt libraries |
 | `out/DICTIONARY.md` | auto-generated word→register dictionary, grouped by register |
 | `out/dictionary.json` | same, machine-readable (with fingerprints + mass-z) |
 | `out/REPORT.md` | mechanism: per-cluster fingerprints and labels |
