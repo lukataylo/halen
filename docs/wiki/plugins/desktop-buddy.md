@@ -15,7 +15,7 @@
 > companion holds no host capabilities of its own — every privileged call
 > (inference, AX reads/writes, calendar reads, hotkey wiring) goes through
 > `plugin.py`, then through the host. Declared permissions: `calendar`,
-> `inference`, `ax.write`, `ax.read`, `notifications`. See
+> `inference`, `ax.write`, `ax.read`. See
 > [plugins/README.md](../../../plugins/README.md) for the protocol.
 
 Desktop Buddy is a friendly Gemma-powered character that lives in the

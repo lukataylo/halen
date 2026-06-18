@@ -1,6 +1,6 @@
 # Reasoning Compactor
 
-> Plugin id: `com.halen.reasoning-compactor` · Category: Developer · Code:
+> Plugin id: `com.halen.reasoning-compactor` · Category: Productivity · Code:
 > [`plugins/reasoning-compactor/`](../../../plugins/reasoning-compactor/)
 >
 > **Runs out-of-process** as a JSON-RPC plugin over stdio, like Meeting Prep

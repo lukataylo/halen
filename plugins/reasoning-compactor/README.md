@@ -167,8 +167,9 @@ forced answer/conclusion keep), and `load_config` robustness against malformed
 clamping, bad `clipboard_cmd`).
 
 The end-to-end path — spawning `plugin.py` as a subprocess and driving the
-JSON-RPC stdio handshake — is exercised by the repo's plugin smoke harness (it
-asserts a clean `initialize` handshake and shutdown for every bundled plugin).
+JSON-RPC stdio handshake — is exercised by the repo's plugin smoke harness,
+`scripts/plugin-smoke-test.py`, which asserts a clean `initialize` handshake and
+clean exit for every bundled plugin (run `python3 scripts/plugin-smoke-test.py`).
 The model-dependent compaction quality (verbatim-subset guarantee, answer
 survival, extractive vs abstractive on a small local model) is validated
 manually against a real local model rather than in CI, since it needs the GGUF

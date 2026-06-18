@@ -495,7 +495,14 @@ def enforce_app(bundle_id, name):
         body = (f"{name} is on your blocklist. You're outside focus hours, so "
                 f"Mother will let you decide — once.")
         try:
-            confront = cfg("confrontTimeoutSeconds") or 45
+            # Guard against a non-positive / non-numeric misconfig: the popup's
+            # host-side lifetime must stay positive and below our RPC wait.
+            try:
+                confront = float(cfg("confrontTimeoutSeconds"))
+            except (TypeError, ValueError):
+                confront = 45.0
+            if confront <= 0:
+                confront = 45.0
             result = call("ui/prompt", {
                 "title": "Mother",
                 "body": body,

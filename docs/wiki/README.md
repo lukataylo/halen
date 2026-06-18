@@ -64,7 +64,7 @@ into `~/Library/Application Support/Halen/Plugins/`.
 | [Burnout Copilot](plugins/burnout-copilot.md) | Focus | Three signals. Two of three trip. "Take 10?" with a calendar block + Shortcuts integration. |
 | [Meeting Prep](plugins/meeting-prep.md) | Scheduling | 15 minutes before each event, drops a 5-bullet Gemma briefing on your clipboard. |
 | [Mother](plugins/mother.md) | Focus | Hardcore local discipline. Quits blocklisted apps and closes blocklisted browser tabs during your focus hours. No network. |
-| [Reasoning Compactor](plugins/reasoning-compactor.md) | Developer | ⌃⌥K compacts a verbose LLM chain-of-thought on-device — keeps the load-bearing steps and final answer, drops the filler. Copies the result to the clipboard. |
+| [Reasoning Compactor](plugins/reasoning-compactor.md) | Productivity | ⌃⌥K compacts a verbose LLM chain-of-thought on-device — keeps the load-bearing steps and final answer, drops the filler. Copies the result to the clipboard. |
 | [Desktop Buddy](plugins/desktop-buddy.md) | Productivity | A Gemma-powered character on your desktop; ⌃⌥B to focus it. **Pre-alpha — not in the Plugin Store**; needs its companion binary built via `build.sh`. |
 
 ## Source pointers
