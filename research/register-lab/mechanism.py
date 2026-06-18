@@ -71,37 +71,24 @@ def build_register_token_ids(lm: LM) -> dict[str, list[int]]:
     return out
 
 
-@torch.no_grad()
-def register_mass(lm: LM, prompt: str, reg_ids: dict[str, list[int]]) -> dict[str, float]:
-    """Probability mass on each register's onset tokens for the next position."""
-    ids = lm.tok(prompt, return_tensors="pt")
-    probs = torch.softmax(lm.model(**ids).logits[0, -1], dim=-1)
+def mass_from_lp(lp: "torch.Tensor", reg_ids: dict[str, list[int]]) -> dict[str, float]:
+    """Probability mass on each register's onset tokens, from a cached
+    next-token log-prob vector (probs = exp(lp))."""
+    probs = lp.exp()
     return {reg: float(probs[tids].sum()) for reg, tids in reg_ids.items()}
 
 
-@torch.no_grad()
-def boosted_tokens(lm: LM, variant: str, prompts: list[str],
-                   baseline_prompts: list[str], topn=8):
-    """Top next-tokens this variant promotes vs the cluster's average variant.
-
-    Averages the next-token log-probs across carriers for the variant and for
-    the whole cluster, then ranks by the variant's positive delta. Echoes of the
-    variant word itself are dropped so a word can't 'predict itself'."""
-    def avg_lp(ps):
-        acc = None
-        for p in ps:
-            lp = lm.full_next_token_logprobs(p)
-            acc = lp if acc is None else acc + lp
-        return acc / len(ps)
-
-    v_lp = avg_lp(prompts)
-    base_lp = avg_lp(baseline_prompts)
-    delta = v_lp - base_lp
+def boosted_from_lp(lm: LM, variant: str, variant_lp: "torch.Tensor",
+                    baseline_lp: "torch.Tensor", topn=20):
+    """Top next-tokens this variant promotes vs the cluster's average variant,
+    from cached log-prob vectors. Echoes of the variant word itself are dropped
+    so a word can't 'predict itself'."""
+    delta = variant_lp - baseline_lp
     vlow = variant.lower()
     out: list[str] = []
     for tid in torch.topk(delta, 200).indices.tolist():
         raw = lm.token_text(tid)
-        if not raw.startswith(" "):
+        if not raw.startswith(" "):   # word-onset tokens only (byte-BPE space)
             continue
         t = raw.strip().lower()
         if len(t) < 3 or not t.isalpha() or t in out:
@@ -143,35 +130,37 @@ def zscores(per_variant: dict[str, dict[str, float]]):
     return out
 
 
-def run():
+@torch.no_grad()
+def run(model_name: str = "gpt2", dtype: str = "float32"):
     t0 = time.time()
-    print("loading gpt2 ...", flush=True)
-    lm = LM("gpt2")
+    print(f"loading {model_name} ({dtype}) ...", flush=True)
+    lm = LM(model_name, dtype=dtype)
     reg_ids = build_register_token_ids(lm)
 
     results = []
     for c in CLUSTERS:
         print(f"  {c.name} ...", flush=True)
-        # all prompts for the cluster, indexed by variant
         prompts = {v: [cr.replace("{w}", v) for cr in c.carriers] for v in c.variants}
-        all_prompts = [p for ps in prompts.values() for p in ps]
+
+        # One forward pass per (variant, carrier); cache the next-token log-prob
+        # vector. Everything else (register mass, fingerprints) is derived from
+        # the cache, so a 3B model stays tractable on CPU.
+        carrier_lp = {v: [lm.full_next_token_logprobs(p) for p in prompts[v]]
+                      for v in c.variants}
+        avg_lp = {v: torch.stack(carrier_lp[v]).mean(dim=0) for v in c.variants}
+        baseline_lp = torch.stack(list(avg_lp.values())).mean(dim=0)
 
         mass = {}
         for v in c.variants:
-            per_carrier = [register_mass(lm, p, reg_ids) for p in prompts[v]]
+            per_carrier = [mass_from_lp(lp, reg_ids) for lp in carrier_lp[v]]
             mass[v] = {reg: stats.fmean(d[reg] for d in per_carrier) for reg in reg_ids}
         z = zscores(mass)
 
-        boosts = {
-            v: boosted_tokens(lm, v, prompts[v], all_prompts, topn=20)
-            for v in c.variants
-        }
+        boosts = {v: boosted_from_lp(lm, v, avg_lp[v], baseline_lp) for v in c.variants}
 
         dominant = {}
         for v in c.variants:
             reg, hits = classify_fingerprint(boosts[v])
-            # secondary, distributional check: the marker-mass z for that
-            # register. Map the label back to its register key for the lookup.
             key = next((k for k, lbl in REG_LABEL.items() if lbl == reg), None)
             dominant[v] = {
                 "register": reg,
@@ -183,15 +172,19 @@ def run():
             "mass": mass, "z": z, "dominant": dominant, "boosts": boosts,
         })
 
-    meta = {"model": lm.name, "method": "next-token register mass",
+    meta = {"model": lm.name, "method": "next-token register fingerprint",
             "runtime_s": round(time.time() - t0, 1)}
-    (OUT / "mechanism.json").write_text(json.dumps({"meta": meta, "results": results}, indent=2))
-    write_report(results, meta)
-    write_dictionary(results, meta)
-    print(f"done in {meta['runtime_s']}s. See ./out/DICTIONARY.md", flush=True)
+    # gpt2 keeps the canonical filenames; other models get a slug suffix so
+    # runs can be compared side by side without overwriting.
+    slug = "" if model_name == "gpt2" else "." + model_name.split("/")[-1].lower()
+    (OUT / f"mechanism{slug}.json").write_text(
+        json.dumps({"meta": meta, "results": results}, indent=2))
+    write_report(results, meta, slug)
+    write_dictionary(results, meta, slug)
+    print(f"done in {meta['runtime_s']}s. See ./out/DICTIONARY{slug}.md", flush=True)
 
 
-def write_report(results, meta):
+def write_report(results, meta, slug=""):
     L = ["# Register Lab — the mechanism: word choice reshapes P(next token)\n"]
     L.append(f"_Model: **{meta['model']}** · method: {meta['method']} · {meta['runtime_s']}s_\n")
     L.append(
@@ -229,10 +222,10 @@ def write_report(results, meta):
             toks = ", ".join(r["boosts"][v][:6])
             L.append(f"| `{v}`{tag} | {d['register']} | {d['fingerprint_hits']} | {toks} |")
         L.append("")
-    (OUT / "REPORT.md").write_text("\n".join(L))
+    (OUT / f"REPORT{slug}.md").write_text("\n".join(L))
 
 
-def write_dictionary(results, meta):
+def write_dictionary(results, meta, slug=""):
     entries = []
     for r in results:
         for v, d in r["dominant"].items():
@@ -242,7 +235,7 @@ def write_dictionary(results, meta):
                 "mass_z": d["mass_z"], "makes_likelier": r["boosts"][v],
                 "human_note": r["notes"].get(v, ""),
             })
-    (OUT / "dictionary.json").write_text(json.dumps(entries, indent=2))
+    (OUT / f"dictionary{slug}.json").write_text(json.dumps(entries, indent=2))
 
     by_reg: dict[str, list[dict]] = {}
     for e in entries:
@@ -280,8 +273,14 @@ def write_dictionary(results, meta):
             toks = ", ".join(e["makes_likelier"][:6])
             L.append(f"| **{e['word']}** | {e['means']} | {e['fingerprint_hits']} | {e['mass_z']:+.2f} | {toks} |")
         L.append("")
-    (OUT / "DICTIONARY.md").write_text("\n".join(L))
+    (OUT / f"DICTIONARY{slug}.md").write_text("\n".join(L))
 
 
 if __name__ == "__main__":
-    run()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--model", default="gpt2")
+    ap.add_argument("--dtype", default="float32",
+                    choices=["float32", "bfloat16", "float16"])
+    args = ap.parse_args()
+    run(args.model, args.dtype)

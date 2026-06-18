@@ -1,6 +1,6 @@
 # Register Lab — the mechanism: word choice reshapes P(next token)
 
-_Model: **gpt2** · method: next-token register mass · 30.7s_
+_Model: **gpt2** · method: next-token register fingerprint · 46.9s_
 
 Each synonym is dropped into identical carrier sentences; the only variable is the one word. We then read the model's **next-token distribution** and rank the tokens this word makes likelier than its synonyms do — its *register fingerprint*. The label is assigned by how many of those distinctive tokens fall into a register's vocabulary (`hits`); `mass_z` is a second, distributional check (how much next-token probability mass the word puts on that register's markers, in std-devs above its synonyms).
 

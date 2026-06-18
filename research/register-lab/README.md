@@ -56,9 +56,15 @@ toward one helpful-assistant voice) but does not remove it.
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install transformers
 python3 exam.py --samples 6 --tokens 60   # generation study (~10 min on CPU)
-python3 mechanism.py                       # authoritative dictionary (~30 s)
+python3 mechanism.py                       # authoritative dictionary (~45 s)
 python3 exam.py --quick                    # fast smoke run
-# both accept --model gpt2-medium (cleaner, ~3x slower)
+
+# mechanism.py is model-agnostic — point it at any HF causal LM. A modern
+# instruction-tuned model (vs 2019 GPT-2) shows how the effect changes at scale:
+python3 mechanism.py --model Qwen/Qwen2.5-3B-Instruct --dtype bfloat16
+# Gated models (Gemma) need an accepted-license HF token in HF_TOKEN.
+# Non-gpt2 runs write slugged outputs (DICTIONARY.<model>.md) so they compare
+# side by side without overwriting the gpt2 baseline.
 ```
 
 ## Outputs
@@ -67,6 +73,7 @@ python3 exam.py --quick                    # fast smoke run
 |---|---|
 | `FINDINGS.md` | **read this first** — the written conclusion + curated dictionary |
 | `RELATED_WORK.md` | the findings cross-checked against papers, vendor docs, and prompt libraries |
+| `COMPARISON.md` | GPT-2 vs a modern instruct model (Qwen2.5-3B): does the effect hold at scale? |
 | `out/DICTIONARY.md` | auto-generated word→register dictionary, grouped by register |
 | `out/dictionary.json` | same, machine-readable (with fingerprints + mass-z) |
 | `out/REPORT.md` | mechanism: per-cluster fingerprints and labels |

@@ -1,6 +1,6 @@
 # The LLM Word→Register Dictionary
 
-_Derived empirically from **gpt2** via next-token register mass. Each word is grouped under the register its distinctive next-token fingerprint matches. `hits` = how many of the word's boosted tokens are register markers; `mass_z` = next-token probability mass on that register (std-devs above the word's synonyms)._
+_Derived empirically from **gpt2** via next-token register fingerprint. Each word is grouped under the register its distinctive next-token fingerprint matches. `hits` = how many of the word's boosted tokens are register markers; `mass_z` = next-token probability mass on that register (std-devs above the word's synonyms)._
 
 **How to use it.** Pick a meaning, then choose the synonym whose register you want. *"Give me your hot take"* and *"give me your assessment"* are the same request — but the first word tilts the model's next-token distribution toward casual/forum language and the second toward formal/analytic language, and that tilt compounds across every following token into a whole different answer.
 

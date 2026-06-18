@@ -21,10 +21,15 @@ torch.manual_seed(0)
 
 
 class LM:
-    def __init__(self, model_name: str = "gpt2"):
+    def __init__(self, model_name: str = "gpt2", dtype: str = "float32"):
         self.name = model_name
+        torch_dtype = {"float32": torch.float32,
+                       "bfloat16": torch.bfloat16,
+                       "float16": torch.float16}[dtype]
         self.tok = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name, dtype=torch_dtype, low_cpu_mem_usage=True
+        )
         self.model.eval()
         if self.tok.pad_token_id is None:
             self.tok.pad_token = self.tok.eos_token
@@ -80,7 +85,10 @@ class LM:
         contrast one variant's distribution against a cluster baseline."""
         ids = self.tok(prompt, return_tensors="pt")
         logits = self.model(**ids).logits[0, -1]
-        return torch.log_softmax(logits, dim=-1)
+        # Cast to float32 before the softmax: a bf16/fp16 model returns low-
+        # precision logits, and the downstream mass sums / topk want stable
+        # full-precision values.
+        return torch.log_softmax(logits.float(), dim=-1)
 
     def token_text(self, token_id: int) -> str:
         return self.tok.decode([token_id])
