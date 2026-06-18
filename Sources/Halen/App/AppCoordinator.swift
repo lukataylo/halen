@@ -233,6 +233,10 @@ final class AppCoordinator {
         // hotkey installed in SnippetExpander.start().
         registry.register(SnippetExpander(services: services))
         registry.register(Autocomplete(services: services))
+        // Prompt Polish — ⌃⌥P rewrites the selected prompt in place with
+        // word-level edits tuned for modern LLMs (improve / set-tone /
+        // summarise / coding). Hotkey-only; no text-event subscription.
+        registry.register(PromptPolish(services: services))
 
         // Out-of-process plugins under ~/Library/Application Support/Halen/Plugins/.
         // Discover manifests synchronously (just filesystem scan + JSON parse),

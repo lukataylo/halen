@@ -1,0 +1,2187 @@
+{
+  "meta": {
+    "model": "Qwen/Qwen2.5-3B-Instruct",
+    "method": "next-token register fingerprint",
+    "runtime_s": 52.3
+  },
+  "results": [
+    {
+      "name": "greeting",
+      "gloss": "an opening salutation",
+      "notes": {
+        "Hey": "casual/Reddit",
+        "Yo": "Gen-Z / street",
+        "Greetings": "stiff/formal",
+        "Dear Sir or Madam": "legal/formal letter"
+      },
+      "mass": {
+        "Hello": {
+          "reddit_casual": 0.20220617204904556,
+          "academic": 0.03713507205247879,
+          "corporate": 0.0007754413090879098,
+          "genz_slang": 0.21376699954271317,
+          "legal_formal": 0.08039086312055588,
+          "marketing_hype": 0.001091742393327877,
+          "technical": 5.302554836816853e-05
+        },
+        "Hi": {
+          "reddit_casual": 0.214057557284832,
+          "academic": 0.033560801297426224,
+          "corporate": 0.000726814178051427,
+          "genz_slang": 0.22085370123386383,
+          "legal_formal": 0.07629966363310814,
+          "marketing_hype": 0.0011454183259047568,
+          "technical": 4.4679871507469215e-05
+        },
+        "Hey": {
+          "reddit_casual": 0.2527850866317749,
+          "academic": 0.02252167835831642,
+          "corporate": 0.0006840898422524333,
+          "genz_slang": 0.25165921449661255,
+          "legal_formal": 0.06609823368489742,
+          "marketing_hype": 0.000990601343801245,
+          "technical": 3.2152785252037575e-05
+        },
+        "Yo": {
+          "reddit_casual": 0.28032446652650833,
+          "academic": 0.02028544177301228,
+          "corporate": 0.0005830616573803127,
+          "genz_slang": 0.28182970732450485,
+          "legal_formal": 0.06084145046770573,
+          "marketing_hype": 0.0005602276214631274,
+          "technical": 2.0363781914056744e-05
+        },
+        "Greetings": {
+          "reddit_casual": 0.1944505199790001,
+          "academic": 0.04390234127640724,
+          "corporate": 0.0007906538303359412,
+          "genz_slang": 0.2007967308163643,
+          "legal_formal": 0.0844440795481205,
+          "marketing_hype": 0.0011865324922837317,
+          "technical": 5.829521069244947e-05
+        },
+        "Dear Sir or Madam": {
+          "reddit_casual": 0.31687842309474945,
+          "academic": 0.04606165178120136,
+          "corporate": 0.0005303380894474685,
+          "genz_slang": 0.3129180520772934,
+          "legal_formal": 0.0932561457157135,
+          "marketing_hype": 0.0007962702075019479,
+          "technical": 3.070833190577105e-05
+        }
+      },
+      "z": {
+        "Hello": {
+          "reddit_casual": -0.9298530147755584,
+          "academic": 0.32979678063147516,
+          "corporate": 0.9757445593700185,
+          "genz_slang": -0.834327697298673,
+          "legal_formal": 0.3216248100977373,
+          "marketing_hype": 0.5904543839420515,
+          "technical": 0.9898460289592722
+        },
+        "Hi": {
+          "reddit_casual": -0.6626628015967837,
+          "academic": -0.035841172948315306,
+          "corporate": 0.46941021707095476,
+          "genz_slang": -0.6562564183958383,
+          "legal_formal": -0.054063235060779834,
+          "marketing_hype": 0.8343538482531236,
+          "technical": 0.36185899068678634
+        },
+        "Hey": {
+          "reddit_casual": 0.2104517429250892,
+          "academic": -1.1651127355645805,
+          "corporate": 0.024539257056519496,
+          "genz_slang": 0.11780990794690467,
+          "legal_formal": -0.9908435819550216,
+          "marketing_hype": 0.13087694177888337,
+          "technical": -0.5807665059674527
+        },
+        "Yo": {
+          "reddit_casual": 0.8313287660317307,
+          "academic": -1.39387351637981,
+          "corporate": -1.0274257355422591,
+          "genz_slang": 0.8759197419900606,
+          "legal_formal": -1.4735652426191124,
+          "marketing_hype": -1.824709394452607,
+          "technical": -1.4678534869247621
+        },
+        "Greetings": {
+          "reddit_casual": -1.1047046704013106,
+          "academic": 1.0220695937257103,
+          "corporate": 1.134146294711007,
+          "genz_slang": -1.160238458111207,
+          "legal_formal": 0.6938249340340289,
+          "marketing_hype": 1.0211735768356796,
+          "technical": 1.3863722413872954
+        },
+        "Dear Sir or Madam": {
+          "reddit_casual": 1.6554399778168314,
+          "academic": 1.2429610505355217,
+          "corporate": -1.5764145926662385,
+          "genz_slang": 1.6570929238687544,
+          "legal_formal": 1.5030223155031501,
+          "marketing_hype": -0.7521493563571312,
+          "technical": -0.6894572681411381
+        }
+      },
+      "dominant": {
+        "Hello": {
+          "register": "neutral",
+          "fingerprint_hits": 1,
+          "mass_z": 0.0
+        },
+        "Hi": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "Hey": {
+          "register": "Reddit / casual",
+          "fingerprint_hits": 8,
+          "mass_z": 0.21
+        },
+        "Yo": {
+          "register": "Reddit / casual",
+          "fingerprint_hits": 9,
+          "mass_z": 0.83
+        },
+        "Greetings": {
+          "register": "academic",
+          "fingerprint_hits": 2,
+          "mass_z": 1.02
+        },
+        "Dear Sir or Madam": {
+          "register": "neutral",
+          "fingerprint_hits": 1,
+          "mass_z": 0.0
+        }
+      },
+      "boosts": {
+        "Hello": [
+          "increasing",
+          "eos",
+          "pricing",
+          "gentle",
+          "ticket",
+          "export",
+          "electrical",
+          "nicotine",
+          "chloride",
+          "spatial",
+          "circle",
+          "microwave",
+          "exporting",
+          "cloth",
+          "filament",
+          "processor",
+          "stefan",
+          "preprocessing",
+          "heatmap",
+          "chlor"
+        ],
+        "Hi": [
+          "eos",
+          "sql",
+          "stefan",
+          "loader",
+          "rst",
+          "maur",
+          "pricing",
+          "augustine",
+          "xls",
+          "hdf",
+          "rgb",
+          "california",
+          "dvd",
+          "drv",
+          "canada",
+          "discrimination",
+          "klein",
+          "ticket",
+          "ldb",
+          "classification"
+        ],
+        "Hey": [
+          "dudes",
+          "gotta",
+          "anybody",
+          "nope",
+          "yeah",
+          "dude",
+          "augustine",
+          "wanna",
+          "kla",
+          "stuff",
+          "anyone",
+          "got",
+          "cool",
+          "heck",
+          "guy",
+          "hold",
+          "hang",
+          "sounded",
+          "okay",
+          "guys"
+        ],
+        "Yo": [
+          "gotta",
+          "shit",
+          "dude",
+          "dudes",
+          "yeah",
+          "vibes",
+          "busted",
+          "stuff",
+          "fucked",
+          "badass",
+          "yup",
+          "huh",
+          "ain",
+          "wanna",
+          "def",
+          "yep",
+          "reckon",
+          "nah",
+          "hey",
+          "freaking"
+        ],
+        "Greetings": [
+          "eos",
+          "stefan",
+          "inherently",
+          "asf",
+          "jedoch",
+          "whim",
+          "jurisdiction",
+          "circle",
+          "beginning",
+          "seeks",
+          "thereafter",
+          "therefore",
+          "presently",
+          "township",
+          "recognizing",
+          "begin",
+          "thus",
+          "permitted",
+          "permitting",
+          "predecessors"
+        ],
+        "Dear Sir or Madam": [
+          "yours",
+          "your",
+          "usted",
+          "yourself",
+          "although",
+          "regards",
+          "ihrer",
+          "faithfully",
+          "children",
+          "regard",
+          "yourselves",
+          "seldom",
+          "respected",
+          "enclosing",
+          "foregoing",
+          "wrongly",
+          "notwithstanding",
+          "trusting",
+          "votre",
+          "patiently"
+        ]
+      }
+    },
+    {
+      "name": "opinion_noun",
+      "gloss": "a stated personal view",
+      "notes": {
+        "take": "casual/Reddit",
+        "hot take": "Reddit/Twitter",
+        "two cents": "casual idiom",
+        "assessment": "academic/corporate",
+        "position": "formal/legal"
+      },
+      "mass": {
+        "opinion": {
+          "reddit_casual": 0.04137295950204134,
+          "academic": 0.013626968255266547,
+          "corporate": 0.003984418246545829,
+          "genz_slang": 0.014930563978850842,
+          "legal_formal": 0.0756277609616518,
+          "marketing_hype": 0.00020121257148275618,
+          "technical": 2.495685293979477e-05
+        },
+        "take": {
+          "reddit_casual": 0.06045578606426716,
+          "academic": 0.008592840982601047,
+          "corporate": 0.0012146196677349508,
+          "genz_slang": 0.031762649305164814,
+          "legal_formal": 0.09564227238297462,
+          "marketing_hype": 0.0003279883385403082,
+          "technical": 3.616286085161846e-05
+        },
+        "two cents": {
+          "reddit_casual": 0.0712374784052372,
+          "academic": 0.007152850041165948,
+          "corporate": 0.0021501119481399655,
+          "genz_slang": 0.0449758293107152,
+          "legal_formal": 0.07944467104971409,
+          "marketing_hype": 0.00045007617154624313,
+          "technical": 7.740139335510321e-05
+        },
+        "hot take": {
+          "reddit_casual": 0.04341047815978527,
+          "academic": 0.006698407814837992,
+          "corporate": 0.00342855928465724,
+          "genz_slang": 0.027922402136027813,
+          "legal_formal": 0.09487063810229301,
+          "marketing_hype": 0.0007928087143227458,
+          "technical": 3.534864663379267e-05
+        },
+        "assessment": {
+          "reddit_casual": 0.02681139251217246,
+          "academic": 0.03289923630654812,
+          "corporate": 0.0043482786568347365,
+          "genz_slang": 0.01321431715041399,
+          "legal_formal": 0.10526815801858902,
+          "marketing_hype": 0.00020759687686222605,
+          "technical": 4.120003995922161e-05
+        },
+        "position": {
+          "reddit_casual": 0.07464750856161118,
+          "academic": 0.012642153131309897,
+          "corporate": 0.0012433247175067663,
+          "genz_slang": 0.05154299922287464,
+          "legal_formal": 0.07726041600108147,
+          "marketing_hype": 0.0003080466231040191,
+          "technical": 8.062239066930488e-05
+        }
+      },
+      "z": {
+        "opinion": {
+          "reddit_casual": -0.6763660899182744,
+          "academic": 0.0027611187032047274,
+          "corporate": 0.9971089213833199,
+          "genz_slang": -1.11612577358017,
+          "legal_formal": -1.111718094157882,
+          "marketing_hype": -0.8913579542245275,
+          "technical": -1.1268015246026104
+        },
+        "take": {
+          "reddit_casual": 0.4347422864380328,
+          "academic": -0.55564037222072,
+          "corporate": -1.2014199657956848,
+          "genz_slang": 0.0733418234315461,
+          "legal_formal": 0.6839473278996964,
+          "marketing_hype": -0.26382951367706575,
+          "technical": -0.6077119250872679
+        },
+        "two cents": {
+          "reddit_casual": 1.0625124248022286,
+          "academic": -0.7153687710199322,
+          "corporate": -0.4588725408900204,
+          "genz_slang": 1.0070733941428163,
+          "legal_formal": -0.7692718900035165,
+          "marketing_hype": 0.3404940824976926,
+          "technical": 1.302557413492076
+        },
+        "hot take": {
+          "reddit_casual": -0.5577304129539977,
+          "academic": -0.7657769555921023,
+          "corporate": 0.5558956164671001,
+          "genz_slang": -0.19803569656375794,
+          "legal_formal": 0.6147177090933104,
+          "marketing_hype": 2.036988791898806,
+          "technical": -0.6454283121875253
+        },
+        "assessment": {
+          "reddit_casual": -1.5242215689039638,
+          "academic": 2.1405027033777215,
+          "corporate": 1.2859232882620852,
+          "genz_slang": -1.2374072399774656,
+          "legal_formal": 1.547564212103962,
+          "marketing_hype": -0.8597562270826301,
+          "technical": -0.37437751142030123
+        },
+        "position": {
+          "reddit_casual": 1.2610633605359753,
+          "academic": -0.10647772324817233,
+          "corporate": -1.1786353194267993,
+          "genz_slang": 1.4711534925470315,
+          "legal_formal": -0.9652392649355728,
+          "marketing_hype": -0.36253917941227526,
+          "technical": 1.451761859805628
+        }
+      },
+      "dominant": {
+        "opinion": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "take": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "two cents": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "hot take": {
+          "register": "Reddit / casual",
+          "fingerprint_hits": 4,
+          "mass_z": -0.56
+        },
+        "assessment": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "position": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        }
+      },
+      "boosts": {
+        "opinion": [
+          "arou",
+          "refers",
+          "whether"
+        ],
+        "take": [
+          "specialised",
+          "birthday",
+          "exemple",
+          "purified",
+          "inspiration",
+          "simplified",
+          "holidays",
+          "cookbook",
+          "specified",
+          "specialization",
+          "classical",
+          "analogue",
+          "imagin",
+          "holiday",
+          "instantiated",
+          "pairs",
+          "autobi",
+          "epis",
+          "pair",
+          "leisure"
+        ],
+        "two cents": [
+          "ensure",
+          "encourage",
+          "avail",
+          "appreciate",
+          "simplify",
+          "appreciated",
+          "incent",
+          "include",
+          "kindly",
+          "bonus",
+          "frequency",
+          "assure",
+          "translate",
+          "amort",
+          "freq",
+          "forgot",
+          "coin",
+          "bumped",
+          "invo",
+          "coupon"
+        ],
+        "hot take": [
+          "fucking",
+          "shit",
+          "shitty",
+          "fucked",
+          "damn",
+          "fuck",
+          "damned",
+          "bullshit",
+          "crap",
+          "piss",
+          "freaking",
+          "idiot",
+          "sucks",
+          "dumpster",
+          "dumb",
+          "insane",
+          "obscene",
+          "screwed",
+          "egregious",
+          "suck"
+        ],
+        "assessment": [
+          "sudan",
+          "rwanda",
+          "aleppo",
+          "riyadh",
+          "jakarta",
+          "kabul",
+          "canberra",
+          "kerala",
+          "kuala",
+          "afghanistan",
+          "cambodia",
+          "nepal",
+          "maurit",
+          "mongolia",
+          "pyongyang",
+          "papua",
+          "bali",
+          "karachi",
+          "abu",
+          "samoa"
+        ],
+        "position": [
+          "advocate",
+          "supervisor",
+          "negotiations",
+          "district",
+          "modifications",
+          "amendment",
+          "arbitration",
+          "reforms",
+          "proposal",
+          "moderate",
+          "lpc",
+          "amendments",
+          "pending",
+          "committee",
+          "assemblycompany",
+          "negotiation",
+          "unauthorized",
+          "endorsements",
+          "legislative",
+          "approval"
+        ]
+      }
+    },
+    {
+      "name": "good_adj",
+      "gloss": "positive evaluation",
+      "notes": {
+        "awesome": "casual",
+        "fire": "Gen-Z slang",
+        "superb": "formal/marketing",
+        "excellent": "formal"
+      },
+      "mass": {
+        "good": {
+          "reddit_casual": 0.22434037551283836,
+          "academic": 0.19405147060751915,
+          "corporate": 0.00046958992606960237,
+          "genz_slang": 0.23171254992485046,
+          "legal_formal": 0.20466894283890724,
+          "marketing_hype": 0.001780071179382503,
+          "technical": 3.7713969959440874e-05
+        },
+        "great": {
+          "reddit_casual": 0.21042294800281525,
+          "academic": 0.25007040798664093,
+          "corporate": 0.0007333332323469222,
+          "genz_slang": 0.213233832269907,
+          "legal_formal": 0.26265857741236687,
+          "marketing_hype": 0.002256878127809614,
+          "technical": 7.525434193667024e-05
+        },
+        "excellent": {
+          "reddit_casual": 0.1951599419116974,
+          "academic": 0.24504734203219414,
+          "corporate": 0.0008709152461960912,
+          "genz_slang": 0.19962729886174202,
+          "legal_formal": 0.2550930380821228,
+          "marketing_hype": 0.002211362589150667,
+          "technical": 9.917252100422047e-05
+        },
+        "awesome": {
+          "reddit_casual": 0.2247684970498085,
+          "academic": 0.2480136677622795,
+          "corporate": 0.001231940637808293,
+          "genz_slang": 0.22644635289907455,
+          "legal_formal": 0.2610620744526386,
+          "marketing_hype": 0.002549664117395878,
+          "technical": 9.588596913090441e-05
+        },
+        "fire": {
+          "reddit_casual": 0.1636987365782261,
+          "academic": 0.28192827105522156,
+          "corporate": 0.0008804482640698552,
+          "genz_slang": 0.17206621170043945,
+          "legal_formal": 0.2930256947875023,
+          "marketing_hype": 0.002328923554159701,
+          "technical": 7.491633732570335e-05
+        },
+        "superb": {
+          "reddit_casual": 0.19537579640746117,
+          "academic": 0.28523168712854385,
+          "corporate": 0.0015789266326464713,
+          "genz_slang": 0.1974140964448452,
+          "legal_formal": 0.2954075410962105,
+          "marketing_hype": 0.0027027426986023784,
+          "technical": 0.0002260206383652985
+        },
+        "decent": {
+          "reddit_casual": 0.21425972506403923,
+          "academic": 0.23460299149155617,
+          "corporate": 0.0005585578473983333,
+          "genz_slang": 0.21328552439808846,
+          "legal_formal": 0.25931457430124283,
+          "marketing_hype": 0.0018600952462293208,
+          "technical": 4.825402857022709e-05
+        }
+      },
+      "z": {
+        "good": {
+          "reddit_casual": 1.0226395825235985,
+          "academic": -1.9155859468097918,
+          "corporate": -1.2085369155674437,
+          "genz_slang": 1.2895163793470565,
+          "legal_formal": -2.046001946803803,
+          "marketing_hype": -1.4857192617463175,
+          "technical": -0.970832263115443
+        },
+        "great": {
+          "reddit_casual": 0.3227944038123343,
+          "academic": 0.058119141586945006,
+          "corporate": -0.47376195158407525,
+          "genz_slang": 0.2978499278139605,
+          "legal_formal": 0.037884218944736855,
+          "marketing_hype": 0.04987735317115453,
+          "technical": -0.3220406979882134
+        },
+        "excellent": {
+          "reddit_casual": -0.44471390315148246,
+          "academic": -0.11885763265188598,
+          "corporate": -0.09046570532982212,
+          "genz_slang": -0.4323491560457234,
+          "legal_formal": -0.233987174325564,
+          "marketing_hype": -0.09670924193067532,
+          "technical": 0.091325286814544
+        },
+        "awesome": {
+          "reddit_casual": 1.0441678996881913,
+          "academic": -0.014345614730359136,
+          "corporate": 0.9153320260446741,
+          "genz_slang": 1.0069041864913333,
+          "legal_formal": -0.01948690359854833,
+          "marketing_hype": 0.9928190950796394,
+          "technical": 0.034525446497193885
+        },
+        "fire": {
+          "reddit_casual": -2.0267571976624827,
+          "academic": 1.1805614688728363,
+          "corporate": -0.06390721949100965,
+          "genz_slang": -1.9114239498711232,
+          "legal_formal": 1.1291415834232705,
+          "marketing_hype": 0.2819056681704102,
+          "technical": -0.3278822634554508
+        },
+        "superb": {
+          "reddit_casual": -0.43385954604743887,
+          "academic": 1.296950129887277,
+          "corporate": 1.8820167372459315,
+          "genz_slang": -0.5511213905844872,
+          "legal_formal": 1.214734407178154,
+          "marketing_hype": 1.4858214556629104,
+          "technical": 2.283578167155083
+        },
+        "decent": {
+          "reddit_casual": 0.5157287608372784,
+          "academic": -0.4868415461550225,
+          "corporate": -0.9606769713182542,
+          "genz_slang": 0.300624002848988,
+          "legal_formal": -0.08228418481824833,
+          "marketing_hype": -1.2279950684071173,
+          "technical": -0.788673675907714
+        }
+      },
+      "dominant": {
+        "good": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "great": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "excellent": {
+          "register": "neutral",
+          "fingerprint_hits": 1,
+          "mass_z": 0.0
+        },
+        "awesome": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "fire": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "superb": {
+          "register": "marketing hype",
+          "fingerprint_hits": 2,
+          "mass_z": 1.49
+        },
+        "decent": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        }
+      },
+      "boosts": {
+        "good": [],
+        "great": [
+          "lots",
+          "tomorrow",
+          "celebrate",
+          "room",
+          "celebrating",
+          "jenny",
+          "datasize",
+          "alice"
+        ],
+        "excellent": [
+          "delighted",
+          "congratulate",
+          "congrat",
+          "unparalleled",
+          "outstanding",
+          "enthusiastically",
+          "qu\u00fd",
+          "sincerely"
+        ],
+        "awesome": [
+          "pics"
+        ],
+        "fire": [
+          "flames",
+          "arson",
+          "burns",
+          "flame",
+          "poison",
+          "\u0627\u0644\u0646\u0627\u0631",
+          "burned",
+          "burning",
+          "burnt",
+          "burn",
+          "deaths",
+          "l\u1eeda",
+          "combustion",
+          "catastrophic",
+          "terror",
+          "cursed",
+          "blaze",
+          "hazard",
+          "fatal",
+          "fatalities"
+        ],
+        "superb": [
+          "stunning",
+          "maver",
+          "jacqu",
+          "juda",
+          "sax",
+          "exceptional",
+          "impeccable",
+          "impecc",
+          "unparalleled",
+          "graz",
+          "fab",
+          "aston",
+          "toro",
+          "giov",
+          "paolo",
+          "highly",
+          "suffolk",
+          "elegant",
+          "magnus",
+          "sapphire"
+        ],
+        "decent": [
+          "average",
+          "neither",
+          "moderately",
+          "fair",
+          "midpoint",
+          "somewhat",
+          "still",
+          "reasonably",
+          "moderate",
+          "mediocre",
+          "reasonable",
+          "averages",
+          "median",
+          "fairly",
+          "medium",
+          "alright",
+          "basic",
+          "acceptable",
+          "sort",
+          "halfway"
+        ]
+      }
+    },
+    {
+      "name": "investigate_verb",
+      "gloss": "to examine something",
+      "notes": {
+        "dig into": "casual",
+        "check out": "casual",
+        "audit": "corporate/legal",
+        "probe": "journalistic/formal"
+      },
+      "mass": {
+        "investigate": {
+          "reddit_casual": 0.3156224638223648,
+          "academic": 0.10554784536361694,
+          "corporate": 0.0008308532414957881,
+          "genz_slang": 0.3197706788778305,
+          "legal_formal": 0.12259481474757195,
+          "marketing_hype": 0.00026876494666794315,
+          "technical": 7.77820259827422e-05
+        },
+        "look into": {
+          "reddit_casual": 0.2853863686323166,
+          "academic": 0.12392196990549564,
+          "corporate": 0.000642409264401067,
+          "genz_slang": 0.28557026386260986,
+          "legal_formal": 0.1448492519557476,
+          "marketing_hype": 0.00025362850647070445,
+          "technical": 2.996127659571357e-05
+        },
+        "dig into": {
+          "reddit_casual": 0.24996191263198853,
+          "academic": 0.10369535908102989,
+          "corporate": 0.0008265678334282711,
+          "genz_slang": 0.24519426375627518,
+          "legal_formal": 0.13200430572032928,
+          "marketing_hype": 0.00025907050076057203,
+          "technical": 7.133006147341803e-05
+        },
+        "check out": {
+          "reddit_casual": 0.3412471413612366,
+          "academic": 0.06428607180714607,
+          "corporate": 0.0006758850795449689,
+          "genz_slang": 0.3427126631140709,
+          "legal_formal": 0.08341209962964058,
+          "marketing_hype": 0.000263597619778011,
+          "technical": 4.190886284050066e-05
+        },
+        "probe": {
+          "reddit_casual": 0.19078756123781204,
+          "academic": 0.08898179605603218,
+          "corporate": 0.0009232130832970142,
+          "genz_slang": 0.19301847368478775,
+          "legal_formal": 0.108072429895401,
+          "marketing_hype": 0.0004288088530302048,
+          "technical": 0.0001820796969695948
+        },
+        "audit": {
+          "reddit_casual": 0.2329994961619377,
+          "academic": 0.1130717545747757,
+          "corporate": 0.002682092832401395,
+          "genz_slang": 0.23855512589216232,
+          "legal_formal": 0.1331675797700882,
+          "marketing_hype": 0.0004442685894900933,
+          "technical": 0.00016271700224024244
+        }
+      },
+      "z": {
+        "investigate": {
+          "reddit_casual": 0.9125738823818633,
+          "academic": 0.295084342294056,
+          "corporate": -0.37180338550851594,
+          "genz_slang": 0.962390567044683,
+          "legal_formal": 0.09517734874507955,
+          "marketing_hype": -0.6145102443567381,
+          "technical": -0.285533026396426
+        },
+        "look into": {
+          "reddit_casual": 0.31646931832630004,
+          "academic": 1.2580597000810592,
+          "corporate": -0.6352184837484869,
+          "genz_slang": 0.29022177733340093,
+          "legal_formal": 1.2033269153162167,
+          "marketing_hype": -0.7971615506292474,
+          "technical": -1.1123479443921955
+        },
+        "dig into": {
+          "reddit_casual": -0.3819237700752505,
+          "academic": 0.1979967974315032,
+          "corporate": -0.3777937132680279,
+          "genz_slang": -0.5033208481809196,
+          "legal_formal": 0.5637186668461475,
+          "marketing_hype": -0.7314930478095963,
+          "technical": -0.3970867049787923
+        },
+        "check out": {
+          "reddit_casual": 1.417764355469178,
+          "academic": -1.8674171180017034,
+          "corporate": -0.5884245491757643,
+          "genz_slang": 1.4132881883392217,
+          "legal_formal": -1.85590810755505,
+          "marketing_hype": -0.6768643377951247,
+          "technical": -0.9057756370182224
+        },
+        "probe": {
+          "reddit_casual": -1.5485460048374382,
+          "academic": -0.5731310234355514,
+          "corporate": -0.2426988252217776,
+          "genz_slang": -1.528774417939461,
+          "legal_formal": -0.6279581917753687,
+          "marketing_hype": 1.3167383304141658,
+          "technical": 1.5177609702370833
+        },
+        "audit": {
+          "reddit_casual": -0.7163377812646504,
+          "academic": 0.689407301630638,
+          "corporate": 2.215938956922573,
+          "genz_slang": -0.6338052665969249,
+          "legal_formal": 0.6216433684229735,
+          "marketing_hype": 1.5032908501765407,
+          "technical": 1.1829823425485524
+        }
+      },
+      "dominant": {
+        "investigate": {
+          "register": "neutral",
+          "fingerprint_hits": 1,
+          "mass_z": 0.0
+        },
+        "look into": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "dig into": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "check out": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "probe": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "audit": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        }
+      },
+      "boosts": {
+        "investigate": [
+          "investigation",
+          "investigations",
+          "investigating",
+          "investigaci\u00f3n",
+          "investigative",
+          "investigators",
+          "\u0438\u0441\u0441\u043b\u0435\u0434",
+          "emerge",
+          "phenomenon",
+          "investigator",
+          "emerged",
+          "rumours",
+          "emerging",
+          "murdoch",
+          "however",
+          "research",
+          "enquiries",
+          "phenomena",
+          "mild",
+          "immer"
+        ],
+        "look into": [
+          "noticed",
+          "dated",
+          "staff",
+          "xpar",
+          "recently",
+          "sma",
+          "occasionally",
+          "dates",
+          "selecteditem",
+          "gridcolumn",
+          "nam",
+          "ischecked",
+          "letz",
+          "lastindex",
+          "numberofrows",
+          "restarted",
+          "cancelled",
+          "tib",
+          "prices",
+          "lately"
+        ],
+        "dig into": [
+          "first",
+          "essentially",
+          "santos",
+          "nation",
+          "nuggets",
+          "clearly",
+          "firstly",
+          "particularly",
+          "fig",
+          "\u043f\u0435\u0440\u0432\u0443\u044e",
+          "breakup",
+          "histor",
+          "taco",
+          "dating",
+          "similar",
+          "princip",
+          "fundamental",
+          "sequential",
+          "nations",
+          "bender"
+        ],
+        "check out": [
+          "http",
+          "cin\u00e9",
+          "tys",
+          "swiper",
+          "gif",
+          "mec",
+          "geb",
+          "\u0627\u0644\u0631\u0627\u0628",
+          "oss",
+          "kar",
+          "chees",
+          "roy",
+          "terr",
+          "crossorigin",
+          "booth",
+          "springfox",
+          "trav",
+          "uigraphics",
+          "litt",
+          "textsize"
+        ],
+        "probe": [
+          "probing",
+          "craft",
+          "exploit",
+          "exploiting",
+          "provoke",
+          "manip",
+          "manipulate",
+          "attack",
+          "illicit",
+          "predators",
+          "provoc",
+          "assail",
+          "abuse",
+          "attacker",
+          "penetrate",
+          "deception",
+          "explo",
+          "threats",
+          "blackmail",
+          "\u0437\u043b\u043e"
+        ],
+        "audit": [
+          "defects",
+          "audrey",
+          "ris",
+          "csv",
+          "flaws",
+          "func",
+          "functions",
+          "completeness",
+          "plagiarism",
+          "dangers",
+          "liable",
+          "risks",
+          "plagiar",
+          "abuses",
+          "defect",
+          "functional",
+          "diffs",
+          "sald\u0131r",
+          "approval",
+          "vulnerabilities"
+        ]
+      }
+    },
+    {
+      "name": "people_noun",
+      "gloss": "a group of persons",
+      "notes": {
+        "folks": "casual/Reddit",
+        "guys": "casual",
+        "individuals": "formal/academic",
+        "stakeholders": "corporate"
+      },
+      "mass": {
+        "people": {
+          "reddit_casual": 0.39230507612228394,
+          "academic": 0.026610431261360645,
+          "corporate": 0.0002887016162276268,
+          "genz_slang": 0.39086034893989563,
+          "legal_formal": 0.24174269288778305,
+          "marketing_hype": 0.00021908860799157992,
+          "technical": 4.4120743382336514e-05
+        },
+        "folks": {
+          "reddit_casual": 0.35771164298057556,
+          "academic": 0.02772110141813755,
+          "corporate": 0.0003032205640920438,
+          "genz_slang": 0.356834352016449,
+          "legal_formal": 0.25499408319592476,
+          "marketing_hype": 0.0002505071897758171,
+          "technical": 3.678803409457032e-05
+        },
+        "guys": {
+          "reddit_casual": 0.39969346672296524,
+          "academic": 0.031392084900289774,
+          "corporate": 0.0005910091640544124,
+          "genz_slang": 0.397754542529583,
+          "legal_formal": 0.19397273659706116,
+          "marketing_hype": 0.0003835748921119375,
+          "technical": 4.898979102563317e-05
+        },
+        "individuals": {
+          "reddit_casual": 0.36324121057987213,
+          "academic": 0.03301015356555581,
+          "corporate": 0.0003353434585733339,
+          "genz_slang": 0.3612724095582962,
+          "legal_formal": 0.20999550074338913,
+          "marketing_hype": 0.00023144306396716274,
+          "technical": 8.109714110560162e-05
+        },
+        "stakeholders": {
+          "reddit_casual": 0.3778323084115982,
+          "academic": 0.03839491493999958,
+          "corporate": 0.0006011827063048258,
+          "genz_slang": 0.3764446973800659,
+          "legal_formal": 0.12762651592493057,
+          "marketing_hype": 0.0002594475809019059,
+          "technical": 0.0001271826020001754
+        },
+        "everyone": {
+          "reddit_casual": 0.33219844102859497,
+          "academic": 0.026205961126834154,
+          "corporate": 0.00035772866976913065,
+          "genz_slang": 0.32623253762722015,
+          "legal_formal": 0.2690396048128605,
+          "marketing_hype": 0.00032112785629578866,
+          "technical": 5.0547643581921875e-05
+        }
+      },
+      "z": {
+        "people": {
+          "reddit_casual": 0.9649322171987472,
+          "academic": -0.9185261464743839,
+          "corporate": -0.944506342929087,
+          "genz_slang": 0.9514609435989484,
+          "legal_formal": 0.5413610428491193,
+          "marketing_hype": -1.018830843047067,
+          "technical": -0.6634276896688669
+        },
+        "folks": {
+          "reddit_casual": -0.5657096955072497,
+          "academic": -0.6599479928747124,
+          "corporate": -0.8340606682941829,
+          "genz_slang": -0.47931289528445525,
+          "legal_formal": 0.8225297552983807,
+          "marketing_hype": -0.47111320576358795,
+          "technical": -0.898814644601995
+        },
+        "guys": {
+          "reddit_casual": 1.2918434050684156,
+          "academic": 0.19470370089586486,
+          "corporate": 1.355147969404488,
+          "genz_slang": 1.2413578671340588,
+          "legal_formal": -0.472224459629624,
+          "marketing_hype": 1.8486454651655726,
+          "technical": -0.507126620964005
+        },
+        "individuals": {
+          "reddit_casual": -0.3210451115686337,
+          "academic": 0.5714106874922628,
+          "corporate": -0.5897017253912364,
+          "genz_slang": -0.29269509711617764,
+          "legal_formal": -0.13225258798885953,
+          "marketing_hype": -0.8034565946695069,
+          "technical": 0.523549909319938
+        },
+        "stakeholders": {
+          "reddit_casual": 0.3245614057765998,
+          "academic": 1.8250516944849267,
+          "corporate": 1.4325381320916473,
+          "genz_slang": 0.34529098570859124,
+          "legal_formal": -1.8799621391088956,
+          "marketing_hype": -0.3152560783604571,
+          "technical": 2.0029371154596944
+        },
+        "everyone": {
+          "reddit_casual": -1.6945822209678842,
+          "academic": -1.0126919435239563,
+          "corporate": -0.41941736488162895,
+          "genz_slang": -1.7661018040409655,
+          "legal_formal": 1.120548388579879,
+          "marketing_hype": 0.7600112566750482,
+          "technical": -0.45711806954476575
+        }
+      },
+      "dominant": {
+        "people": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "folks": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "guys": {
+          "register": "Reddit / casual",
+          "fingerprint_hits": 2,
+          "mass_z": 1.29
+        },
+        "individuals": {
+          "register": "neutral",
+          "fingerprint_hits": 1,
+          "mass_z": 0.0
+        },
+        "stakeholders": {
+          "register": "corporate",
+          "fingerprint_hits": 4,
+          "mass_z": 1.43
+        },
+        "everyone": {
+          "register": "Reddit / casual",
+          "fingerprint_hits": 2,
+          "mass_z": -1.69
+        }
+      },
+      "boosts": {
+        "people": [
+          "young",
+          "study",
+          "activism",
+          "t\u0142um",
+          "shouting",
+          "shout",
+          "tumblr",
+          "network",
+          "lecture",
+          "website",
+          "hello",
+          "classrooms",
+          "poems",
+          "textbooks",
+          "sc\u00e8ne",
+          "classes",
+          "books",
+          "getclass",
+          "famously",
+          "bibli"
+        ],
+        "folks": [
+          "normalized",
+          "datasets",
+          "gardening",
+          "soak",
+          "sez",
+          "bicy",
+          "riff",
+          "woodworking",
+          "carniv",
+          "gardens",
+          "paging",
+          "fodder",
+          "yer",
+          "booze",
+          "staples",
+          "optimize",
+          "crank",
+          "barbecue",
+          "terrific",
+          "occupy"
+        ],
+        "guys": [
+          "squad",
+          "coach",
+          "played",
+          "player",
+          "workout",
+          "fucked",
+          "coaches",
+          "coached",
+          "teammate",
+          "squirt",
+          "scout",
+          "sucks",
+          "dude",
+          "outfield",
+          "workouts",
+          "clubhouse",
+          "shit",
+          "players",
+          "basketball",
+          "colt"
+        ],
+        "individuals": [
+          "physicians",
+          "legisl",
+          "examinations",
+          "commencement",
+          "establishments",
+          "representatives",
+          "congressman",
+          "study",
+          "legislators",
+          "registr",
+          "physician",
+          "senators",
+          "constituents",
+          "telephone",
+          "senator",
+          "beginning",
+          "citizens",
+          "\ud1b5\ud558\uc5ec",
+          "attorney",
+          "instances"
+        ],
+        "stakeholders": [
+          "regulatory",
+          "contractors",
+          "regulators",
+          "audit",
+          "governance",
+          "telecom",
+          "infrastructure",
+          "governments",
+          "suppliers",
+          "investors",
+          "procurement",
+          "supplier",
+          "epa",
+          "securities",
+          "agencies",
+          "sme",
+          "industry",
+          "engineers",
+          "sap",
+          "investor"
+        ],
+        "everyone": [
+          "haha",
+          "lol",
+          "its",
+          "thats",
+          "ima",
+          "theres",
+          "didnt",
+          "whats",
+          "ive",
+          "yer",
+          "soo",
+          "dont",
+          "isnt",
+          "doesnt",
+          "witch",
+          "clases",
+          "iam",
+          "study",
+          "ill",
+          "english"
+        ]
+      }
+    },
+    {
+      "name": "discuss_verb",
+      "gloss": "to talk about",
+      "notes": {
+        "chat about": "casual",
+        "touch base on": "corporate",
+        "deliberate on": "formal/legal"
+      },
+      "mass": {
+        "discuss": {
+          "reddit_casual": 0.07737982552498579,
+          "academic": 0.10588754713535309,
+          "corporate": 0.0003835361421806738,
+          "genz_slang": 0.09452242963016033,
+          "legal_formal": 0.12124380841851234,
+          "marketing_hype": 0.0001967986609088257,
+          "technical": 8.063807581493165e-05
+        },
+        "talk about": {
+          "reddit_casual": 0.07696410547941923,
+          "academic": 0.10416338592767715,
+          "corporate": 0.000409962420235388,
+          "genz_slang": 0.10178934410214424,
+          "legal_formal": 0.11695118248462677,
+          "marketing_hype": 0.0002007753573707305,
+          "technical": 5.532355589821236e-05
+        },
+        "chat about": {
+          "reddit_casual": 0.18297607451677322,
+          "academic": 0.0757258627563715,
+          "corporate": 0.000913484807824716,
+          "genz_slang": 0.1941835805773735,
+          "legal_formal": 0.09616787545382977,
+          "marketing_hype": 0.0003136250743409619,
+          "technical": 8.478163726977073e-05
+        },
+        "touch base on": {
+          "reddit_casual": 0.1115107536315918,
+          "academic": 0.09512149170041084,
+          "corporate": 0.0012449792411644012,
+          "genz_slang": 0.13887730985879898,
+          "legal_formal": 0.11509440094232559,
+          "marketing_hype": 0.0002241271358798258,
+          "technical": 0.00010379557897977065
+        },
+        "deliberate on": {
+          "reddit_casual": 0.08509026607498527,
+          "academic": 0.11401064693927765,
+          "corporate": 0.0006659282662440091,
+          "genz_slang": 0.09947879798710346,
+          "legal_formal": 0.13200391829013824,
+          "marketing_hype": 0.00033040528069250286,
+          "technical": 0.00035876131369150244
+        }
+      },
+      "z": {
+        "discuss": {
+          "reddit_casual": -0.732730869962113,
+          "academic": 0.5277434266482033,
+          "corporate": -1.0491621680235055,
+          "genz_slang": -0.8295284441060552,
+          "legal_formal": 0.4251461797456517,
+          "marketing_hype": -0.9842771993894649,
+          "technical": -0.49966057288108134
+        },
+        "talk about": {
+          "reddit_casual": -0.7430902421241963,
+          "academic": 0.39598172167377466,
+          "corporate": -0.967626803399313,
+          "genz_slang": -0.6366156585566957,
+          "legal_formal": 0.056577617148580596,
+          "marketing_hype": -0.9148125050072107,
+          "technical": -0.7254411116276397
+        },
+        "chat about": {
+          "reddit_casual": 1.8986333230613652,
+          "academic": -1.777235331128239,
+          "corporate": 0.5859359564996766,
+          "genz_slang": 1.8161487981958349,
+          "legal_formal": -1.7278950381290603,
+          "marketing_hype": 1.0564395569885372,
+          "technical": -0.4627040933317633
+        },
+        "touch base on": {
+          "reddit_casual": 0.11778136841641641,
+          "academic": -0.29500668142859865,
+          "corporate": 1.608725447977827,
+          "genz_slang": 0.34794839707642916,
+          "legal_formal": -0.10284724647638958,
+          "marketing_hype": -0.5069050438882344,
+          "technical": -0.293118495141371
+        },
+        "deliberate on": {
+          "reddit_casual": -0.5405935793914716,
+          "academic": 1.1485168642348575,
+          "corporate": -0.1778724330546854,
+          "genz_slang": -0.6979530926095117,
+          "legal_formal": 1.3490184877112188,
+          "marketing_hype": 1.3495551912963748,
+          "technical": 1.9809242729818557
+        }
+      },
+      "dominant": {
+        "discuss": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "talk about": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "chat about": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "touch base on": {
+          "register": "neutral",
+          "fingerprint_hits": 1,
+          "mass_z": 0.0
+        },
+        "deliberate on": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        }
+      },
+      "boosts": {
+        "discuss": [
+          "belongs",
+          "judge",
+          "belong",
+          "improperly",
+          "belonging",
+          "hollow",
+          "among",
+          "unfit",
+          "translate",
+          "addaction",
+          "pud",
+          "express",
+          "corresponds",
+          "correspond",
+          "which",
+          "trous",
+          "english",
+          "translation",
+          "fit",
+          "translator"
+        ],
+        "talk about": [],
+        "chat about": [
+          "alf",
+          "angeles",
+          "melania",
+          "linkedin",
+          "afs",
+          "faqs",
+          "absolutely",
+          "whatsapp",
+          "egt",
+          "clients",
+          "valent",
+          "message",
+          "chicago",
+          "readme",
+          "messaging",
+          "sure",
+          "gig",
+          "union",
+          "created",
+          "anyways"
+        ],
+        "touch base on": [
+          "recap",
+          "collateral",
+          "audit",
+          "vendor",
+          "triple",
+          "billed",
+          "touches",
+          "documentation",
+          "verizon",
+          "gateway",
+          "marketing",
+          "kemp",
+          "billing",
+          "credential",
+          "servicing",
+          "duplex",
+          "dup",
+          "routing",
+          "invoice",
+          "rep"
+        ],
+        "deliberate on": [
+          "devoid",
+          "painstaking",
+          "ponder",
+          "contemplate",
+          "meticulously",
+          "populace",
+          "futile",
+          "contemplating",
+          "scrutin",
+          "whence",
+          "deprived",
+          "langu",
+          "retard",
+          "cherish",
+          "resultant",
+          "consequ",
+          "ende",
+          "deeds",
+          "incapable",
+          "revered"
+        ]
+      }
+    },
+    {
+      "name": "intensifier",
+      "gloss": "degree amplifier",
+      "notes": {
+        "super": "casual",
+        "hella": "Gen-Z/West-coast slang",
+        "extremely": "formal",
+        "incredibly": "marketing"
+      },
+      "mass": {
+        "very": {
+          "reddit_casual": 0.07490121852606535,
+          "academic": 0.003566162078641355,
+          "corporate": 0.00047537234786432236,
+          "genz_slang": 0.07324358238838613,
+          "legal_formal": 0.08219575881958008,
+          "marketing_hype": 0.00013430633043753915,
+          "technical": 2.3474396584788337e-05
+        },
+        "really": {
+          "reddit_casual": 0.08921005204319954,
+          "academic": 0.003163040499202907,
+          "corporate": 0.0004379253805382177,
+          "genz_slang": 0.08555089170113206,
+          "legal_formal": 0.08424071595072746,
+          "marketing_hype": 0.00014047282093088143,
+          "technical": 3.32177792188304e-05
+        },
+        "extremely": {
+          "reddit_casual": 0.07676187390461564,
+          "academic": 0.003254795796237886,
+          "corporate": 0.00045403442345559597,
+          "genz_slang": 0.07376934215426445,
+          "legal_formal": 0.08774140663444996,
+          "marketing_hype": 0.00016972136290860362,
+          "technical": 2.8241547170182457e-05
+        },
+        "super": {
+          "reddit_casual": 0.07378276437520981,
+          "academic": 0.0033802696270868182,
+          "corporate": 0.0005068761092843488,
+          "genz_slang": 0.06751595204696059,
+          "legal_formal": 0.09739981964230537,
+          "marketing_hype": 0.0015170312035479583,
+          "technical": 5.0509703669376904e-05
+        },
+        "incredibly": {
+          "reddit_casual": 0.08676034957170486,
+          "academic": 0.003908281214535236,
+          "corporate": 0.0005397543718572706,
+          "genz_slang": 0.08024690602906048,
+          "legal_formal": 0.08345764875411987,
+          "marketing_hype": 0.00029009394347667694,
+          "technical": 3.0021159545867704e-05
+        },
+        "hella": {
+          "reddit_casual": 0.1540650986135006,
+          "academic": 0.004850760800763965,
+          "corporate": 0.0010119598009623587,
+          "genz_slang": 0.13085713936015964,
+          "legal_formal": 0.09958482906222343,
+          "marketing_hype": 0.002295518417668063,
+          "technical": 0.0001311132582486607
+        }
+      },
+      "z": {
+        "very": {
+          "reddit_casual": -0.6288760638904053,
+          "academic": -0.21108807923302508,
+          "corporate": -0.4780057543029294,
+          "genz_slang": -0.5639664010229178,
+          "legal_formal": -1.0044097223248794,
+          "marketing_hype": -0.7386821176894336,
+          "technical": -0.6922217460976761
+        },
+        "really": {
+          "reddit_casual": -0.11988352985567251,
+          "academic": -0.9140187802383821,
+          "corporate": -0.6652140108100669,
+          "genz_slang": 0.016682050030222714,
+          "legal_formal": -0.7070599136466095,
+          "marketing_hype": -0.7313770598208174,
+          "technical": -0.4323674638724238
+        },
+        "extremely": {
+          "reddit_casual": -0.5626889987491689,
+          "academic": -0.7540233382786681,
+          "corporate": -0.5846802305362575,
+          "genz_slang": -0.5391614996488094,
+          "legal_formal": -0.19803716241532016,
+          "marketing_hype": -0.6967281307499636,
+          "technical": -0.5650826877075021
+        },
+        "super": {
+          "reddit_casual": -0.6686616139678406,
+          "academic": -0.5352322529705331,
+          "corporate": -0.32050930879641754,
+          "genz_slang": -0.834191159452402,
+          "legal_formal": 1.206357685906092,
+          "marketing_hype": 0.8993460646862824,
+          "technical": 0.02880508627363999
+        },
+        "incredibly": {
+          "reddit_casual": -0.20702412500650286,
+          "academic": 0.385471510447667,
+          "corporate": -0.15614133315610987,
+          "genz_slang": -0.23355551096996285,
+          "legal_formal": -0.8209228780809061,
+          "marketing_hype": -0.5541302190538673,
+          "technical": -0.5176207421089415
+        },
+        "hella": {
+          "reddit_casual": 2.187134331469589,
+          "academic": 2.028890940272943,
+          "corporate": 2.20455063760178,
+          "genz_slang": 2.1541925210638695,
+          "legal_formal": 1.5240719905616191,
+          "marketing_hype": 1.8215714626278,
+          "technical": 2.1784875535129036
+        }
+      },
+      "dominant": {
+        "very": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "really": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "extremely": {
+          "register": "academic",
+          "fingerprint_hits": 5,
+          "mass_z": -0.75
+        },
+        "super": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "incredibly": {
+          "register": "neutral",
+          "fingerprint_hits": 1,
+          "mass_z": 0.0
+        },
+        "hella": {
+          "register": "Reddit / casual",
+          "fingerprint_hits": 7,
+          "mass_z": 2.19
+        }
+      },
+      "boosts": {
+        "very": [
+          "thailand",
+          "duke",
+          "beijing",
+          "huawei",
+          "qin",
+          "associated",
+          "guang",
+          "regarded",
+          "evans",
+          "chairman",
+          "china",
+          "lind",
+          "houston",
+          "qing"
+        ],
+        "really": [
+          "geile"
+        ],
+        "extremely": [
+          "macedonia",
+          "extensive",
+          "substantial",
+          "numerous",
+          "evans",
+          "significant",
+          "vast",
+          "thailand",
+          "considerable",
+          "decisive",
+          "obtaining",
+          "stringent",
+          "subsequent",
+          "abundant",
+          "garg",
+          "defensive",
+          "precise",
+          "ample",
+          "democrat",
+          "conclusive"
+        ],
+        "super": [
+          "seks",
+          "garg",
+          "si\u00eau",
+          "mysql",
+          "spa",
+          "fitting",
+          "thoroughly",
+          "circuit",
+          "batching",
+          "hex",
+          "website",
+          "soda",
+          "son",
+          "critics",
+          "democrat",
+          "symfony",
+          "bcrypt",
+          "awesome",
+          "docs",
+          "togg"
+        ],
+        "incredibly": [
+          "democrat",
+          "garg",
+          "transparency",
+          "map",
+          "staggering",
+          "thoroughly",
+          "astounding",
+          "signal",
+          "macedonia",
+          "fitting",
+          "immense",
+          "myriad",
+          "startling",
+          "abund",
+          "enormous",
+          "stunning",
+          "astonishing",
+          "stark",
+          "breathtaking",
+          "remarkably"
+        ],
+        "hella": [
+          "dang",
+          "kinda",
+          "fuck",
+          "banda",
+          "fucking",
+          "dope",
+          "damn",
+          "hac",
+          "dude",
+          "derp",
+          "lol",
+          "ima",
+          "hilar",
+          "kidd",
+          "freaking",
+          "dudes",
+          "lil",
+          "funk",
+          "sucker",
+          "hak"
+        ]
+      }
+    },
+    {
+      "name": "money_noun",
+      "gloss": "financial resources",
+      "notes": {
+        "cash": "casual",
+        "bucks": "casual",
+        "dough": "slang",
+        "capital": "corporate/finance",
+        "funds": "formal"
+      },
+      "mass": {
+        "money": {
+          "reddit_casual": 0.1376432254910469,
+          "academic": 0.02549705235287547,
+          "corporate": 0.0015222795482259244,
+          "genz_slang": 0.1373947598040104,
+          "legal_formal": 0.07649345695972443,
+          "marketing_hype": 0.0006743561534676701,
+          "technical": 8.775150672590826e-05
+        },
+        "funds": {
+          "reddit_casual": 0.13687174767255783,
+          "academic": 0.028298049001023173,
+          "corporate": 0.001616653084056452,
+          "genz_slang": 0.13502372801303864,
+          "legal_formal": 0.07451030425727367,
+          "marketing_hype": 0.0007826983492122963,
+          "technical": 0.0001272911167689017
+        },
+        "cash": {
+          "reddit_casual": 0.07063508254941553,
+          "academic": 0.030278698075562716,
+          "corporate": 0.0023897900246083736,
+          "genz_slang": 0.07202738989144564,
+          "legal_formal": 0.07927170023322105,
+          "marketing_hype": 0.0008599024877185002,
+          "technical": 0.00011834743690997129
+        },
+        "capital": {
+          "reddit_casual": 0.17364060878753662,
+          "academic": 0.03177972976118326,
+          "corporate": 0.002886819769628346,
+          "genz_slang": 0.17266345024108887,
+          "legal_formal": 0.08344265446066856,
+          "marketing_hype": 0.000697797309840098,
+          "technical": 0.00017953350288735237
+        },
+        "bucks": {
+          "reddit_casual": 0.1298956647515297,
+          "academic": 0.025632769102230668,
+          "corporate": 0.0023054031480569392,
+          "genz_slang": 0.13096130266785622,
+          "legal_formal": 0.0695903655141592,
+          "marketing_hype": 0.0014308566460385919,
+          "technical": 0.00022093240295362193
+        },
+        "dough": {
+          "reddit_casual": 0.17998558282852173,
+          "academic": 0.022698685061186552,
+          "corporate": 0.001149887204519473,
+          "genz_slang": 0.1715041548013687,
+          "legal_formal": 0.07963230088353157,
+          "marketing_hype": 0.0009611672430764884,
+          "technical": 0.00015418624298035866
+        }
+      },
+      "z": {
+        "money": {
+          "reddit_casual": -0.013138141943332758,
+          "academic": -0.6051639970782349,
+          "corporate": -0.7662433257161213,
+          "genz_slang": 0.023867516052451843,
+          "legal_formal": -0.15164434999696486,
+          "marketing_hype": -0.8864034090873512,
+          "technical": -1.3890880879076204
+        },
+        "funds": {
+          "reddit_casual": -0.03476069549977832,
+          "academic": 0.3026887431381454,
+          "corporate": -0.6077289287983717,
+          "genz_slang": -0.04696266453539621,
+          "legal_formal": -0.6050074231299913,
+          "marketing_hype": -0.46291974498290134,
+          "technical": -0.47757004131505537
+        },
+        "cash": {
+          "reddit_casual": -1.8912053069993586,
+          "academic": 0.944652270983446,
+          "corporate": 0.6908696114375121,
+          "genz_slang": -1.9288615165524001,
+          "legal_formal": 0.48348218707053026,
+          "marketing_hype": -0.16114728011889354,
+          "technical": -0.6837512754116252
+        },
+        "capital": {
+          "reddit_casual": 0.9957766052682493,
+          "academic": 1.4311632883541339,
+          "corporate": 1.5257050299546842,
+          "genz_slang": 1.0774542803747256,
+          "legal_formal": 1.436992536584198,
+          "marketing_hype": -0.7947775497145173,
+          "technical": 0.7267887698175066
+        },
+        "bucks": {
+          "reddit_casual": -0.23028248881530733,
+          "academic": -0.5611757892105623,
+          "corporate": 0.5491292948688472,
+          "genz_slang": -0.16832009294254205,
+          "legal_formal": -1.7297410583403174,
+          "marketing_hype": 2.0705756173105443,
+          "technical": 1.6811695661494563
+        },
+        "dough": {
+          "reddit_casual": 1.1736100279895276,
+          "academic": -1.5121645161869282,
+          "corporate": -1.3917316817465506,
+          "genz_slang": 1.0428224776031594,
+          "legal_formal": 0.5659181078125455,
+          "marketing_hype": 0.234672366593118,
+          "technical": 0.14245106866733687
+        }
+      },
+      "dominant": {
+        "money": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "funds": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "cash": {
+          "register": "neutral",
+          "fingerprint_hits": 1,
+          "mass_z": 0.0
+        },
+        "capital": {
+          "register": "corporate",
+          "fingerprint_hits": 3,
+          "mass_z": 1.53
+        },
+        "bucks": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        },
+        "dough": {
+          "register": "neutral",
+          "fingerprint_hits": 0,
+          "mass_z": 0.0
+        }
+      },
+      "boosts": {
+        "money": [
+          "lithuania",
+          "britain",
+          "tuition",
+          "obamacare",
+          "taxes",
+          "poverty",
+          "medicare",
+          "medicaid",
+          "tax",
+          "childcare",
+          "barack",
+          "taxation",
+          "charging",
+          "schools",
+          "republicans",
+          "finland",
+          "telecommunications",
+          "healthcare",
+          "scholarships",
+          "taxpayers"
+        ],
+        "funds": [
+          "telecommunications",
+          "railway",
+          "scholarships",
+          "xiao",
+          "tele",
+          "provincial",
+          "xia",
+          "expenditures",
+          "confidentiality",
+          "taxi",
+          "expenses",
+          "huawei",
+          "urgently",
+          "members",
+          "solemn",
+          "minister",
+          "scholar",
+          "advocate",
+          "reforms",
+          "telecom"
+        ],
+        "cash": [
+          "cfo",
+          "barclays",
+          "liquidity",
+          "investors",
+          "salesforce",
+          "asset",
+          "vmware",
+          "marriott",
+          "lenders",
+          "blackberry",
+          "firms",
+          "banks",
+          "executives",
+          "airbnb",
+          "goldman",
+          "oci",
+          "equity",
+          "creditors",
+          "banco",
+          "emirates"
+        ],
+        "capital": [
+          "equity",
+          "asset",
+          "investors",
+          "debt",
+          "investment",
+          "ipo",
+          "treasury",
+          "liquidity",
+          "securities",
+          "financing",
+          "basel",
+          "investor",
+          "investments",
+          "concess",
+          "portfolio",
+          "barclays",
+          "shareholders",
+          "alibaba",
+          "issuance",
+          "issu"
+        ],
+        "bucks": [
+          "deer",
+          "hunters",
+          "hunter",
+          "mating",
+          "hunts",
+          "nymph",
+          "elk",
+          "shooters",
+          "hunted",
+          "hunting",
+          "bait",
+          "hunt",
+          "herd",
+          "shooter",
+          "horn",
+          "breed",
+          "predator",
+          "bred",
+          "creek",
+          "muzzle"
+        ],
+        "dough": [
+          "gluten",
+          "bake",
+          "baking",
+          "baked",
+          "bread",
+          "flour",
+          "bakery",
+          "pastry",
+          "baker",
+          "crust",
+          "cake",
+          "cakes",
+          "pasta",
+          "oven",
+          "b\u00e1nh",
+          "masa",
+          "toppings",
+          "kne",
+          "noodles",
+          "fermentation"
+        ]
+      }
+    }
+  ]
+}
