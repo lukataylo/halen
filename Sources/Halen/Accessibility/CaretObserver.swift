@@ -186,7 +186,10 @@ final class CaretObserver {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
 
-        let safeDeletes = max(0, min(deleteCount, 256))   // safety cap
+        // Safety cap on synthesized backspaces. 4096 is high enough to clear a
+        // typed paragraph (keystroke-buffer `replacesPrior` AI snippets) yet
+        // still bounds a runaway `deleteCount` from wedging the keyboard.
+        let safeDeletes = max(0, min(deleteCount, 4096))
         for _ in 0..<safeDeletes {
             synthesizeKey(virtualKey: CGKeyCode(kVK_Delete), flags: [])
         }

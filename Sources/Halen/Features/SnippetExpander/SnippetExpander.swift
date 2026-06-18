@@ -3,6 +3,7 @@ import SwiftUI
 import AppKit
 import ApplicationServices
 import IOKit.hid
+import UserNotifications
 
 /// Type `;tag` followed by a separator (space / punctuation) and Halen swaps it
 /// for the snippet's content. Static snippets are instant; AI snippets show a
@@ -31,6 +32,11 @@ final class SnippetExpander: HalenPlugin {
         let timestamp: Date
     }
     private var recentWrites: [PendingWrite] = []
+
+    /// Reconstructs typed text from the global keystroke stream so snippets
+    /// expand even in text boxes the Accessibility API can't read — Chromium
+    /// web fields, Electron apps — with no browser extension required.
+    private let keystrokeBuffer = KeystrokeBuffer()
 
     /// NSEvent monitor handles for the ⌃⌥R rephrase-selection hotkey.
     private var globalHotkeyMonitor: Any?
@@ -66,19 +72,36 @@ final class SnippetExpander: HalenPlugin {
         task = Task { @MainActor [services, weak self] in
             for await event in services.eventBus.subscribe() {
                 guard let self else { return }
-                if case .textPaused(let payload) = event {
+                switch event {
+                case .textPaused(let payload):
                     self.handle(text: payload.text, caretOffset: payload.caretOffset)
+                case .appFocused:
+                    // The caret is now in a different app — any half-typed
+                    // trigger in the keystroke buffer is no longer valid.
+                    self.keystrokeBuffer.noteAppSwitch()
+                default:
+                    break
                 }
             }
         }
         installRephraseHotkey()
         installEmailReplyHotkey()
+
+        // The keystroke buffer is the path that makes snippets work in text
+        // boxes the Accessibility API can't see (Chromium web fields, Electron
+        // apps): no `text.pause` event ever arrives for those, so trigger
+        // detection is reconstructed from the global keystroke stream instead.
+        keystrokeBuffer.onTrigger = { [weak self] token, delimiter, preceding in
+            self?.handleKeystrokeTrigger(token: token, delimiter: delimiter, preceding: preceding)
+        }
+        keystrokeBuffer.start()
     }
 
     func stop() {
         task?.cancel()
         task = nil
         recentWrites.removeAll()
+        keystrokeBuffer.stop()
         if let m = globalHotkeyMonitor { NSEvent.removeMonitor(m); globalHotkeyMonitor = nil }
         if let m = localHotkeyMonitor  { NSEvent.removeMonitor(m); localHotkeyMonitor  = nil }
         if let m = emailReplyGlobalMonitor { NSEvent.removeMonitor(m); emailReplyGlobalMonitor = nil }
@@ -504,5 +527,192 @@ final class SnippetExpander: HalenPlugin {
         }
         return caretObserver?.replaceRange(range, with: replacement,
                                            describedAs: announce) ?? false
+    }
+
+    // MARK: - Keystroke-buffer expansion (works without Accessibility)
+
+    /// A `;trigger` was reconstructed from the global keystroke stream — the
+    /// path that covers browser web fields, Electron apps, and anything else
+    /// the AX tree can't read. `delimiter` is the separator the user typed to
+    /// close the trigger; `preceding` is the text typed before it this session.
+    private func handleKeystrokeTrigger(token: String, delimiter: String, preceding: String) {
+        // Self-edit guard — shared with the AX `text.pause` path so the two
+        // detectors never both act on the same trigger.
+        let now = Date()
+        recentWrites.removeAll { now.timeIntervalSince($0.timestamp) > 3 }
+        if recentWrites.contains(where: { $0.trigger == token }) { return }
+
+        guard let snippet = store.snippet(for: token) else { return }
+
+        switch snippet.kind {
+        case .staticText:
+            writeFromKeystroke(snippet.value, token: token, delimiter: delimiter)
+        case .dynamic:
+            writeFromKeystroke(dynamicValue(for: snippet.value), token: token, delimiter: delimiter)
+        case .ai:
+            expandAIFromKeystroke(snippet: snippet, token: token,
+                                  delimiter: delimiter, preceding: preceding)
+        }
+    }
+
+    /// Universal write for static / dynamic snippets detected via the
+    /// keystroke buffer. Backspaces the typed `;trigger` plus its closing
+    /// separator and pastes the snippet value (re-appending the separator the
+    /// user typed). Goes through the clipboard fallback, so it lands in *any*
+    /// text box regardless of AX support.
+    private func writeFromKeystroke(_ value: String, token: String, delimiter: String) {
+        recentWrites.append(PendingWrite(trigger: token, timestamp: Date()))
+        keystrokeBuffer.reset()
+
+        let deleteCount = (token as NSString).length + (delimiter as NSString).length
+        let replacement = value + delimiter
+        // Suppress the buffer's view of our own synthesized keystrokes, then
+        // give the focused app a beat to commit the separator that triggered
+        // us before we backspace over it.
+        keystrokeBuffer.suppress()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+            _ = CaretObserver.pasteFallback(text: replacement, deleteCount: deleteCount)
+        }
+        Log.info("SnippetExpander: keystroke-expanded \(token) (delete=\(deleteCount))")
+    }
+
+    /// AI snippet detected via the keystroke buffer. The write always goes
+    /// through the keystroke/paste path: AX *writes* are unreliable in browser
+    /// web fields — they highlight the trigger but the replacement never lands
+    /// — so we do *not* defer to the AX `text.pause` path the way an earlier
+    /// version did (that bug left `;summary` highlighting the word and then
+    /// doing nothing in Dia). Prior context comes from what the user typed
+    /// this session, falling back to an AX *read* — which is reliable — of the
+    /// field. The result is written blind, but only if the user stayed still
+    /// during the model call; otherwise it lands on the clipboard with a
+    /// notification, so a multi-second response is never dropped in the wrong
+    /// place. The one case still handed to the AX path: a `replacesPrior`
+    /// snippet whose paragraph predates this typing session, since that can't
+    /// be deleted by counting keystrokes.
+    private func expandAIFromKeystroke(snippet: Snippet, token: String,
+                                       delimiter: String, preceding: String) {
+        let replacesPrior = snippet.replacesPrior == true
+        let typed = preceding.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Prior context: what the user typed this session, or — when that's
+        // empty (they clicked into text that was already there) — an AX read
+        // of the field up to the trigger.
+        var priorText = typed
+        if priorText.isEmpty,
+           let element = caretObserver?.currentElement,
+           let axText = axReadString(element, kAXValueAttribute),
+           let r = axText.range(of: token) {
+            priorText = String(axText[..<r.lowerBound])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        // Bound the prompt — a long email shouldn't be sent whole.
+        if priorText.count > 4000 {
+            priorText = String(priorText.suffix(4000))
+        }
+        guard !priorText.isEmpty else {
+            Log.info("SnippetExpander: \(token) — no context to work from, leaving trigger")
+            return
+        }
+
+        // A replacesPrior snippet (;rephrase, ;formal, ;casual) must *delete*
+        // the paragraph it rewrites. The keystroke path can only delete what
+        // was typed contiguously this session — so when the paragraph predates
+        // that, hand off to the AX `text.pause` path, the only one that can
+        // select and replace pre-existing text.
+        if replacesPrior && typed.isEmpty {
+            Log.info("SnippetExpander: \(token) — prior paragraph predates this session, deferring to text.pause path")
+            return
+        }
+
+        // Claim the trigger so the AX path skips it if it also detects it.
+        recentWrites.append(PendingWrite(trigger: token, timestamp: Date()))
+        keystrokeBuffer.reset()
+
+        let placeholder = "[…]"
+        let tokenLen = (token as NSString).length + (delimiter as NSString).length
+        // replacesPrior snippets (;rephrase, ;formal, ;casual) swallow the
+        // typed paragraph too; ;summary keeps it and appends after.
+        let deleteCount = replacesPrior
+            ? (preceding as NSString).length + tokenLen
+            : tokenLen
+        let pasteText = replacesPrior ? placeholder : placeholder + delimiter
+        let placeholderLen = (placeholder as NSString).length
+
+        keystrokeBuffer.suppress(forMillis: 300)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+            _ = CaretObserver.pasteFallback(text: pasteText, deleteCount: deleteCount)
+        }
+
+        let prompt = """
+        \(snippet.value)
+
+        Paragraph:
+        \(priorText)
+        """
+        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 500,
+                                       temperature: 0.4, taskKind: .generation)
+        Log.info("SnippetExpander: \(token) — keystroke AI expand (replacesPrior=\(replacesPrior), priorChars=\(priorText.count))")
+
+        Task { @MainActor [services, weak self] in
+            // Let the placeholder write settle before baselining activity so
+            // our own synthesized keystrokes aren't counted as the user typing.
+            try? await Task.sleep(for: .milliseconds(120))
+            guard let self else { return }
+            let activityBaseline = self.keystrokeBuffer.activityCount
+
+            services.eventBus.publish(.inferenceActivity(.init(
+                phase: .started, source: "snippet-expander", timestamp: Date())))
+            defer {
+                services.eventBus.publish(.inferenceActivity(.init(
+                    phase: .finished, source: "snippet-expander", timestamp: Date())))
+            }
+            do {
+                let response = try await services.inference.complete(request)
+                let cleaned = response.text.unwrappedModelText
+                guard !cleaned.isEmpty else {
+                    Log.warn("SnippetExpander: \(token) keystroke AI returned empty — leaving placeholder")
+                    return
+                }
+                if self.keystrokeBuffer.activityCount == activityBaseline {
+                    // The user sat still — the placeholder is still right
+                    // before the caret, so backspace it and paste the result.
+                    self.recentWrites.append(PendingWrite(trigger: token, timestamp: Date()))
+                    self.keystrokeBuffer.suppress(forMillis: 300)
+                    _ = CaretObserver.pasteFallback(text: cleaned, deleteCount: placeholderLen)
+                    Log.info("SnippetExpander: \(token) keystroke AI wrote \(cleaned.count) chars")
+                } else {
+                    // The user typed or clicked during the call — a blind
+                    // write would land in the wrong place. Hand off via the
+                    // clipboard so the response isn't lost.
+                    self.copyWithNotification(
+                        cleaned,
+                        reason: "you kept working while Halen was thinking")
+                    Log.info("SnippetExpander: \(token) keystroke AI — field changed, copied to clipboard")
+                }
+            } catch {
+                Log.warn("SnippetExpander: \(token) keystroke AI failed: \(error)")
+            }
+        }
+    }
+
+    /// Put `text` on the clipboard and post a system notification — the
+    /// graceful fallback when a blind AI write can't be placed. Without the
+    /// toast the user would just see the palette-less response vanish.
+    private func copyWithNotification(_ text: String, reason: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        let content = UNMutableNotificationContent()
+        content.title = "Snippet result copied"
+        content.body = "Halen couldn't insert it (\(reason)). Press ⌘V to paste — you may need to delete the […] placeholder."
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+        )
+        Task {
+            let center = UNUserNotificationCenter.current()
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+            try? await center.add(request)
+        }
     }
 }
