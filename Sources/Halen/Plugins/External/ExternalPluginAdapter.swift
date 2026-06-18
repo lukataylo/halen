@@ -40,12 +40,36 @@ final class ExternalPluginAdapter: HalenPlugin {
         let dir = pluginDir
         let m = manifest
         Task { @MainActor in await host.spawn(at: dir, manifest: m) }
+        installClaudeCodeIntegrationIfNeeded()
     }
 
     func stop() {
         guard let host else { return }
         let id = manifest.id
         Task { @MainActor in await host.terminate(id: id) }
+        removeClaudeCodeIntegrationIfNeeded()
+    }
+
+    /// If the manifest opts into the Claude Code integration, install the
+    /// bundled Claude Code plugin off the main actor (pure file/JSON I/O).
+    /// `start()` runs on every launch while the plugin is enabled, so this is
+    /// written to be idempotent and to preserve the user's edited config.
+    private func installClaudeCodeIntegrationIfNeeded() {
+        guard let subdir = manifest.claudeCodePluginDir else { return }
+        let source = pluginDir.appending(path: subdir)
+        Task.detached(priority: .utility) {
+            ClaudeCodeIntegration.install(fromSource: source)
+        }
+    }
+
+    /// Only reached when the user explicitly disables the plugin (app-quit
+    /// shutdown terminates instances directly, not through the adapter), so
+    /// removing the Claude Code integration here matches the toggle's intent.
+    private func removeClaudeCodeIntegrationIfNeeded() {
+        guard manifest.claudeCodePluginDir != nil else { return }
+        Task.detached(priority: .utility) {
+            ClaudeCodeIntegration.uninstall()
+        }
     }
 
     func makeDetailView() -> AnyView {
@@ -68,10 +92,33 @@ private struct ExternalPluginDetailView: View {
         ScrollView {
             VStack(spacing: 10) {
                 identityCard
+                if manifest.claudeCodePluginDir != nil {
+                    claudeCodeCard
+                }
                 permissionsCard
                 aboutCard
             }
             .padding(12)
+        }
+    }
+
+    /// Shown only for a plugin that ships a Claude Code integration (Reasoning
+    /// Compactor). Tells the user that enabling the plugin wires up Claude Code
+    /// to compact on-device, and how to tune it.
+    private var claudeCodeCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                cardLabel("Claude Code")
+                Text("Enabling this plugin installs a Claude Code plugin (\(ClaudeCodeIntegration.pluginName)) that compacts Claude Code's context using Halen's on-device model — your conversation never goes to the cloud for the summary. Disabling it removes the plugin again.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Configure frequency, type and tradeoffs in Claude Code with /\(ClaudeCodeIntegration.pluginName):configure. Requires Halen to be running.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
         }
     }
 

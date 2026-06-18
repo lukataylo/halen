@@ -84,7 +84,8 @@ final class PluginManifestValidateTests: XCTestCase {
             halenApiVersion: "0.1",
             executable: "../../../../bin/sh",   // path traversal
             args: nil, env: nil, events: nil,
-            permissions: nil, icon: nil, category: nil
+            permissions: nil, icon: nil, category: nil,
+            claudeCodePluginDir: nil
         )
 
         XCTAssertThrowsError(try manifest.validate(at: tmp)) { err in
@@ -107,7 +108,8 @@ final class PluginManifestValidateTests: XCTestCase {
             halenApiVersion: "0.1",
             executable: "run.sh",
             args: nil, env: nil, events: nil,
-            permissions: nil, icon: nil, category: nil
+            permissions: nil, icon: nil, category: nil,
+            claudeCodePluginDir: nil
         )
 
         XCTAssertThrowsError(try manifest.validate(at: tmp)) { err in
@@ -128,7 +130,8 @@ final class PluginManifestValidateTests: XCTestCase {
             halenApiVersion: "9.99",
             executable: "run.sh",
             args: nil, env: nil, events: nil,
-            permissions: nil, icon: nil, category: nil
+            permissions: nil, icon: nil, category: nil,
+            claudeCodePluginDir: nil
         )
 
         XCTAssertThrowsError(try manifest.validate(at: tmp)) { err in
@@ -159,7 +162,8 @@ final class PluginManifestValidateTests: XCTestCase {
             halenApiVersion: "0.1",
             executable: "bin/run.sh",
             args: nil, env: nil, events: nil,
-            permissions: nil, icon: nil, category: nil
+            permissions: nil, icon: nil, category: nil,
+            claudeCodePluginDir: nil
         )
 
         XCTAssertNoThrow(try manifest.validate(at: tmp))

@@ -44,6 +44,14 @@ struct PluginManifest: Codable, Equatable {
     /// falls back to "productivity" if unrecognised.
     let category: String?
 
+    /// Opt-in Claude Code integration. When set, the plugin ships a Claude
+    /// Code plugin under `<pluginDir>/<claudeCodePluginDir>`; enabling this
+    /// Halen plugin installs it into a local Claude Code marketplace and
+    /// enables it in `~/.claude/settings.json`, disabling removes it
+    /// (`ClaudeCodeIntegration`). Reasoning Compactor sets this to
+    /// `"claude-code"`; every other plugin leaves it nil.
+    let claudeCodePluginDir: String?
+
     static let supportedApiVersions: Set<String> = ["0.1"]
 
     /// Discover all plugins under the canonical install directory:

@@ -1,0 +1,9 @@
+{
+  "name": "halen-local-compaction",
+  "description": "Compacts Claude Code's context on-device with Halen's local model — your conversation is never sent to the cloud for the summary step. Configure frequency, type (extractive/abstractive) and the major tradeoffs.",
+  "version": "1.0.0",
+  "author": { "name": "Halen Labs" },
+  "homepage": "https://halen.dev",
+  "repository": "https://github.com/lukataylo/halen",
+  "license": "MIT"
+}

@@ -35,6 +35,27 @@ rewrites anything on its own — it only points at the opportunity.
 On shutdown it logs how many traces it compacted and the approximate total
 tokens saved for the session.
 
+## Claude Code integration
+
+Enabling Reasoning Compactor also wires up **Claude Code** to compact its
+context on-device. When you toggle the plugin on, Halen installs a bundled
+Claude Code plugin — `halen-local-compaction` (see [`claude-code/`](claude-code/)) —
+into a local Claude Code marketplace and enables it in `~/.claude/settings.json`;
+toggling Reasoning Compactor off removes it again.
+
+That Claude Code plugin hooks **PreCompact** (when Claude Code is about to
+compact your context) and runs the compaction through the *running Halen app's*
+local model over Halen's loopback bridge (`127.0.0.1:50765`, authenticated with
+the on-disk bridge token) — so your conversation is never sent to the cloud for
+the summary. On **SessionStart** it re-injects that local summary when you
+resume the session. You configure frequency, type (extractive/abstractive) and
+the major tradeoffs from inside Claude Code with
+`/halen-local-compaction:configure`. Full details in
+[`claude-code/README.md`](claude-code/README.md).
+
+It degrades safely: if Halen isn't running, the hook does nothing and never
+blocks Claude Code's own `/compact`.
+
 ## How the compaction works
 
 The prompt follows the 2025 chain-of-thought-compression literature. The core

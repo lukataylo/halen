@@ -1,0 +1,19 @@
+{
+  "_comment": "Halen local-compaction settings. Edit with the /halen-local-compaction:configure command, or by hand. All keys are optional; omitted keys fall back to the defaults documented in README.md. Changes take effect on the next compaction — no restart needed.",
+
+  "frequency": "auto",
+  "min_tokens": 6000,
+
+  "type": "extractive",
+
+  "target_keep_ratio": 0.4,
+  "target_tokens": 0,
+
+  "preserve": ["code", "decisions", "final_answers"],
+
+  "inject_on_resume": true,
+
+  "model_tier": "medium",
+  "bridge_port": 50765,
+  "max_prompt_chars": 160000
+}

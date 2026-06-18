@@ -9,5 +9,6 @@
   "events": ["text.pause", "hotkey.fired"],
   "permissions": ["inference", "ax.read", "notifications"],
   "icon": "rectangle.compress.vertical",
-  "category": "productivity"
+  "category": "productivity",
+  "claudeCodePluginDir": "claude-code"
 }

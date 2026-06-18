@@ -1,0 +1,4 @@
+# Runtime state written by the hooks (saved on-device summaries). Never source.
+state/
+__pycache__/
+*.pyc

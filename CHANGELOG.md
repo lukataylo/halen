@@ -4,6 +4,12 @@ All notable changes to Halen are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning is [semver](https://semver.org/).
 
+## [Unreleased]
+
+### Reasoning Compactor → Claude Code
+- **Reasoning Compactor now installs a Claude Code plugin.** Toggling Reasoning Compactor on installs `halen-local-compaction` into a local Claude Code marketplace and enables it in `~/.claude/settings.json`; toggling off removes it. The plugin compacts Claude Code's context **on-device** — its PreCompact hook routes the transcript through the running Halen app's local model over the loopback bridge (`127.0.0.1:50765`), so nothing is sent to the cloud for the summary, and its SessionStart hook re-injects that local summary on resume.
+- Configure frequency, type (extractive/abstractive) and the major tradeoffs from inside Claude Code with `/halen-local-compaction:configure`. Degrades safely when Halen isn't running — it never blocks Claude Code's own `/compact`.
+
 ## [0.3.0] — 2026-05-25
 
 Six plugins, down from ten. Same features, simpler marketplace.
