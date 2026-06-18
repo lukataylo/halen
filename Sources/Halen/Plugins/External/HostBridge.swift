@@ -134,15 +134,30 @@ final class HostBridge {
         guard let element = services.caretObserver.currentElement else {
             return .object([
                 "text": RPCValue.null,
-                "appBundleId": RPCValue.null
+                "appBundleId": RPCValue.null,
+                "location": RPCValue.null,
+                "length": RPCValue.null
             ])
         }
         let selection = axReadString(element, kAXSelectedTextAttribute) ?? ""
         let appBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        return .object([
+        // Expose the selection range so a plugin that wants to rewrite the
+        // selection in place can pass (location, length) straight to
+        // `ax/replaceRange`. Without this, (0, 0) means "insert at the start
+        // of the field" — surprising for callers that expect "replace what's
+        // selected". Added for the Desktop Buddy plugin's rewrite mode.
+        let range = axReadSelectedRange(element)
+        var result: [String: Any?] = [
             "text": selection,
-            "appBundleId": appBundleId
-        ] as [String: Any?])
+            "appBundleId": appBundleId,
+            "location": nil,
+            "length": nil
+        ]
+        if let range {
+            result["location"] = range.location
+            result["length"] = range.length
+        }
+        return .object(result)
     }
 
     private func uiToast(params: RPCValue?) -> RPCValue {

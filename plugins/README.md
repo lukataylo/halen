@@ -123,7 +123,7 @@ its manifest's `events` array.
 |---|---|---|
 | `inference/complete`      | `prompt`, `tier`, `maxTokens?`, `temperature?`, `stop?`, `taskKind?` | `text`, `modelId`, `latencyMs` |
 | `ax/replaceRange`         | `location`, `length`, `text`               | `ok: true` |
-| `ax/readSelection`        | —                                          | `text`, `appBundleId` |
+| `ax/readSelection`        | —                                          | `text`, `appBundleId`, `location?`, `length?` — the selected UTF-16 range in the focused element. Pass `location` / `length` back to `ax/replaceRange` to rewrite the selection in place. Both are `null` when there's no focused element. |
 | `ui/toast`                | `title`, `body`                            | `ok: true` — posts a system notification |
 | `ui/prompt`               | `title?`, `body`, `actions: [String]`      | `action` — the chosen action string, or `null` on dismiss / timeout. **Blocks** until the user responds |
 | `calendar/upcomingEvents` | `withinHours?` (default 24), `max?` (default 20) | `events: [{ id, title, start, end, attendees, notes }]` — `start`/`end` are epoch seconds |

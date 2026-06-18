@@ -1,0 +1,13 @@
+{
+  "id": "com.halen.desktop-buddy",
+  "name": "Desktop Buddy",
+  "summary": "A friendly Gemma-powered character that lives on your desktop. Ask anything, rewrite the selection, react to your typing tone, nudge before meetings.",
+  "version": "0.1.0",
+  "halenApiVersion": "0.1",
+  "executable": "/usr/bin/python3",
+  "args": ["plugin.py"],
+  "events": ["text.pause", "hotkey.fired"],
+  "permissions": ["calendar", "inference", "ax.write", "ax.read", "notifications"],
+  "icon": "face.smiling",
+  "category": "productivity"
+}
