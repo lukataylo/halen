@@ -178,7 +178,9 @@ def load_config():
     def _num(key, cast, lo=None, hi=None):
         try:
             v = cast(cfg[key])
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
+            # OverflowError: int(float('inf')) — reachable via standard JSON
+            # like {"target_tokens": 1e999}, which json.load parses to inf.
             v = DEFAULTS[key]
         if lo is not None:
             v = max(lo, v)
