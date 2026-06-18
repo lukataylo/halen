@@ -464,10 +464,10 @@ final class AskHalenState: ObservableObject {
 @MainActor
 private struct AskHalenDetailView: View {
     @AppStorage(AskHalen.tierKey) private var tierRaw: String = ModelTier.medium.rawValue
-    // SwiftUI's `@AppStorage` stores `Double` values, falling back to 0.0
-    // when unset — which is why `UserSettings.current` reads via
-    // `object(forKey:) as? Double` instead. Here the binding controls the
-    // Slider so the absent → 0.4 default needs to be primed in `.onAppear`.
+    // The `= 0.4` is the @AppStorage default the Slider shows when the key is
+    // unset. `UserSettings.current` can't use @AppStorage's default mechanism
+    // (it reads UserDefaults directly), so it independently defaults to 0.4 via
+    // `object(forKey:) as? Double ?? 0.4` — the two paths are kept in agreement.
     @AppStorage(AskHalen.temperatureKey) private var temperature: Double = 0.4
     @AppStorage(AskHalen.clipboardKey) private var includeClipboard: Bool = true
     @AppStorage(AskHalen.paragraphKey) private var includeParagraph: Bool = true

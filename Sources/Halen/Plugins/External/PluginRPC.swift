@@ -134,6 +134,16 @@ indirect enum RPCValue: Codable, Equatable {
 
     var stringValue: String? { if case .string(let s) = self { return s } else { return nil } }
     var intValue: Int?       { if case .int(let i) = self { return i } else { return nil } }
+    /// Numeric accessor that accepts either a JSON integer or float — `45`
+    /// decodes to `.int`, `45.0` to `.double`, and callers usually don't care
+    /// which the plugin sent.
+    var doubleValue: Double? {
+        switch self {
+        case .int(let i):    return Double(i)
+        case .double(let d): return d
+        default:             return nil
+        }
+    }
     var objectValue: [String: RPCValue]? { if case .object(let o) = self { return o } else { return nil } }
     var arrayValue: [RPCValue]?         { if case .array(let a) = self { return a } else { return nil } }
 

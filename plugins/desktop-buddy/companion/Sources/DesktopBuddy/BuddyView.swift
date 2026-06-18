@@ -10,7 +10,6 @@ final class BuddyModel: ObservableObject {
 /// changes with `expression`. Has a subtle bob to feel alive.
 struct BuddyView: View {
     @ObservedObject var model: BuddyModel
-    let onClick: () -> Void
 
     @State private var bob: CGFloat = 0
 

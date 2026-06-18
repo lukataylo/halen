@@ -15,6 +15,11 @@ final class SnippetStore {
         ensureBuiltins()
     }
 
+    /// The built-in email-reply action's trigger. Lives here (the model layer)
+    /// so the expander's detection path and the settings UI share one source of
+    /// truth rather than each hard-coding ";reply".
+    static let emailReplyTrigger = ";reply"
+
     static let builtins: [Snippet] = [
         Snippet(trigger: ";sig",      kind: .staticText, value: "— Sent via Halen, my local writing agent",
                 displayName: "Signature", builtin: true),
@@ -119,7 +124,7 @@ final class SnippetStore {
     /// Edit an existing snippet's value / name / kind. Editing a builtin
     /// converts it to a custom override — the original prompt-engineered
     /// builtin is suppressed at load time as long as the override exists.
-    /// Resetting the snippet (via reset) restores the builtin.
+    /// `resetToBuiltin(trigger:)` restores the original.
     func update(trigger: String, kind: Snippet.Kind, value: String, displayName: String) {
         addCustom(trigger: trigger, kind: kind, value: value, displayName: displayName)
     }
@@ -131,6 +136,28 @@ final class SnippetStore {
         save()
     }
 
+    /// True when `snippet` is a user override of a shipped builtin (same
+    /// trigger, `builtin == false`). Such a snippet can be reset to its
+    /// original via `resetToBuiltin`; a genuinely custom snippet cannot.
+    func isOverriddenBuiltin(_ snippet: Snippet) -> Bool {
+        !snippet.builtin && Self.builtins.contains {
+            $0.trigger.lowercased() == snippet.trigger.lowercased()
+        }
+    }
+
+    /// Drop a user's override of a builtin so the shipped definition comes
+    /// back. No-op for a trigger that was never a builtin (use `remove` for a
+    /// genuinely custom snippet).
+    func resetToBuiltin(trigger: String) {
+        let t = trigger.lowercased()
+        guard Self.builtins.contains(where: { $0.trigger.lowercased() == t }) else { return }
+        snippets.removeAll { $0.trigger.lowercased() == t && !$0.builtin }
+        // Re-adds the now-unsuppressed builtin and persists.
+        ensureBuiltins()
+        Log.info("SnippetStore: reset \(t) to builtin")
+    }
+
+    /// Wipe everything and restore the shipped builtins.
     func reset() {
         snippets.removeAll()
         ensureBuiltins()

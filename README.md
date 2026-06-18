@@ -46,11 +46,12 @@ Halen updates itself. You'll never need to come back to this page.
 | 💬 **Snippet Expander** | Type `;sig`, `;today`, `;summary`, `;reply`. Or ⌃⌥R to rewrite a selection. |
 | 🎙️ **Voice Dictation** | Press ⌃⌥Space. Speak. Press again. Apple's on-device transcription. |
 | ⌨️ **Autocomplete** | Tab to accept the next few words. |
+| 🪄 **Prompt Polish** | Press ⌃⌥P. Rewrites the selected prompt in place with word-level edits for modern LLMs. |
 
-Plus add-ons you can install from the Plugin Store: **Burnout Copilot** (focus suggestions from your calendar and tone history), **Meeting Prep** (a one-page brief 15 minutes before each meeting), and **Mother** (hardcore, local discipline that keeps you off the apps and sites you blocked — and means it).
+Plus add-ons you can install from the Plugin Store: **Burnout Copilot** (focus suggestions from your calendar and tone history), **Meeting Prep** (a one-page brief 15 minutes before each meeting), **Reasoning Compactor** (compacts verbose LLM chain-of-thought on-device to save tokens, ⌃⌥K), and **Mother** (hardcore, local discipline that keeps you off the apps and sites you blocked — and means it).
 
 <p align="center">
-  <img src="assets/screenshot-plugins.png" alt="Halen's menubar dropdown showing the six bundled plugins with toggles — Ask Halen, Word Replacements, Writing Coach, Voice Dictation, and Snippet Expander all enabled." width="500"/>
+  <img src="assets/screenshot-plugins.png" alt="Halen's menubar dropdown showing the seven bundled plugins with toggles — Ask Halen, Word Replacements, Writing Coach, Voice Dictation, and Snippet Expander all enabled." width="500"/>
 </p>
 
 ## Why local
@@ -80,6 +81,7 @@ Nothing to configure. The model picker in Settings is there if you want to.
 | **⌃H** | Ask Halen |
 | **⌃⌥R** | Rewrite the selected text |
 | **⌃⌥E** | Draft a reply to the focused email |
+| **⌃⌥P** | Polish the selected prompt in place |
 | **⌃⌥Space** | Start dictation |
 
 ## Privacy

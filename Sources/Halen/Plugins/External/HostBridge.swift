@@ -198,7 +198,13 @@ final class HostBridge {
         let title = obj?["title"]?.stringValue ?? "Halen"
         let body = obj?["body"]?.stringValue ?? ""
         let actions = obj?["actions"]?.arrayValue?.compactMap { $0.stringValue } ?? ["OK"]
-        let choice = await promptPresenter.prompt(title: title, body: body, actions: actions)
+        // Optional: let the plugin cap the popup's lifetime so it expires in
+        // step with the plugin's own RPC timeout (e.g. Mother's confront window)
+        // instead of lingering for the full 300s default after the plugin acts.
+        let timeoutSeconds = obj?["timeoutSeconds"]?.doubleValue
+        let choice = await promptPresenter.prompt(title: title, body: body,
+                                                  actions: actions,
+                                                  timeoutSeconds: timeoutSeconds)
         // `action` is the chosen string, or null on dismiss / timeout.
         return .object(["action": choice] as [String: Any?])
     }

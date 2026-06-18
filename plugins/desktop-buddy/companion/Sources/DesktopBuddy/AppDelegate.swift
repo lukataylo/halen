@@ -43,8 +43,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             applyExpression(message)
         case "say":
             applySay(message)
-        case "hideBubble":
-            hideBubble(notifyPlugin: false)
         case "focus":
             openInputBubble(message)
         case "showReply":

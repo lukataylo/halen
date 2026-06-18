@@ -7,7 +7,7 @@
   "executable": "/usr/bin/python3",
   "args": ["plugin.py"],
   "events": ["text.pause", "hotkey.fired"],
-  "permissions": ["calendar", "inference", "ax.write", "ax.read", "notifications"],
+  "permissions": ["calendar", "inference", "ax.write", "ax.read"],
   "icon": "face.smiling",
   "category": "productivity"
 }

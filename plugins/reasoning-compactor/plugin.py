@@ -233,11 +233,17 @@ def usd_saved(tokens):
     return tokens / 1_000_000 * CFG["usd_per_million_tokens"]
 
 
-def target_tokens_for(input_tokens):
+def target_tokens_for(input_tokens, absolute=None):
     """Output budget for an input of this size — absolute if configured, else
-    the keep-ratio. Never asks for more tokens than the input has."""
-    if CFG["target_tokens"] > 0:
-        return max(1, min(CFG["target_tokens"], input_tokens))
+    the keep-ratio. Never asks for more tokens than the input has.
+
+    `absolute` (when not None) is an explicit per-passage token budget; the
+    multi-pass path passes each chunk its proportional slice of the global
+    `target_tokens` so the *total* output honors the budget rather than each
+    chunk independently claiming the whole thing."""
+    abs_budget = absolute if absolute is not None else CFG["target_tokens"]
+    if abs_budget > 0:
+        return max(1, min(abs_budget, input_tokens))
     return max(1, round(input_tokens * CFG["target_keep_ratio"]))
 
 
@@ -384,19 +390,41 @@ def _extractive_pass(prose, target):
         _log(f"reasoning-compactor: extractive inference failed: {exc}")
         return _PARSE_FAILED
     raw = (result or {}).get("text") or ""
-    model_idxs = sorted({int(n) - 1 for n in re.findall(r"\d+", raw)
-                         if 1 <= int(n) <= len(steps)})
+    idxs = select_kept_steps(raw, steps)
+    if idxs is _PARSE_FAILED:
+        return _PARSE_FAILED
+    if not idxs or len(idxs) >= len(steps):
+        return None
+    kept = " ".join(steps[i] for i in idxs)
+    return kept if len(kept) < len(prose) else None
+
+
+def select_kept_steps(raw, steps):
+    """Pure: turn the model's "which steps to keep" reply into a sorted list of
+    0-based indices into `steps`. Returns `_PARSE_FAILED` if the reply has no
+    usable indices (caller falls back to abstractive), else the index list with
+    the conclusion forced in.
+
+    The model is told to output ONLY the step numbers, comma/space separated.
+    We parse standalone numeric tokens — NOT a bare \\d+ scan, which would grab a
+    number embedded in echoed step text (e.g. "x=42 matters" → step 42) and
+    silently corrupt the selection. A token counts only if it is *entirely*
+    digits after splitting on the separators the model was asked to use."""
+    tokens = [t for t in re.split(r"[,\s]+", raw.strip()) if t]
+    nums = [int(t) for t in tokens if t.isdigit()]
+    non_numeric = [t for t in tokens if not t.isdigit()]
+    # If the reply is mostly prose (model ignored the format), don't trust the
+    # stray digits in it — fall back to abstractive compaction.
+    if len(non_numeric) > len(nums):
+        return _PARSE_FAILED
+    model_idxs = {n - 1 for n in nums if 1 <= n <= len(steps)}
     if not model_idxs:
         return _PARSE_FAILED
     # Guarantee the conclusion survives: always keep the final step and any
     # step that states an answer, even if the model dropped it.
     forced = {len(steps) - 1}
     forced |= {i for i, s in enumerate(steps) if _ANSWER_RE.search(s)}
-    idxs = sorted(set(model_idxs) | forced)
-    if len(idxs) >= len(steps):
-        return None
-    kept = " ".join(steps[i] for i in idxs)
-    return kept if len(kept) < len(prose) else None
+    return sorted(model_idxs | forced)
 
 
 def _abstractive_prompt(text, target):
@@ -489,6 +517,12 @@ def compact(text):
     out_parts = []
     changed = False
     budget = CFG["max_single_pass_tokens"]
+    # Total prose tokens, so an absolute target_tokens budget can be split
+    # across chunks in proportion to size (else each chunk takes the full
+    # budget and a multi-chunk trace blows past it N×).
+    prose_total = sum(estimate_tokens(c) for k, c in segs
+                      if k != "code" and c.strip()) or 1
+    abs_total = CFG["target_tokens"]
     for kind, content in segs:
         if kind == "code" or not content.strip():
             out_parts.append(content)
@@ -496,7 +530,9 @@ def compact(text):
         passages = ([content] if estimate_tokens(content) <= budget
                     else chunk_prose(content, budget))
         for passage in passages:
-            res = _compact_passage(passage, target_tokens_for(estimate_tokens(passage)))
+            ptok = estimate_tokens(passage)
+            per_abs = max(1, round(abs_total * ptok / prose_total)) if abs_total > 0 else None
+            res = _compact_passage(passage, target_tokens_for(ptok, per_abs))
             if res:
                 out_parts.append(res)
                 changed = True

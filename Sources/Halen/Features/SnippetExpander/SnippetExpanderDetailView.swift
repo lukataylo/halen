@@ -164,7 +164,10 @@ struct SnippetExpanderDetailView: View {
                                     value:       updated.value,
                                     displayName: updated.displayName
                                 )
-                            }
+                            },
+                            onReset: store.isOverriddenBuiltin(snippet)
+                                ? { store.resetToBuiltin(trigger: snippet.trigger) }
+                                : nil
                         )
                         if snippet.id != store.sorted.last?.id {
                             Divider().padding(.leading, 8)
@@ -319,16 +322,30 @@ struct SnippetExpanderDetailView: View {
 
 /// Row with inline edit-on-double-click. Builtins can be edited too — the
 /// store converts the edit into a custom override that survives the launch-time
-/// `ensureBuiltins` refresh, and Reset restores the original prompt.
+/// `ensureBuiltins` refresh, and the Reset button (shown only on an overridden
+/// builtin, when `onReset` is non-nil) restores the shipped prompt.
 @MainActor
 private struct SnippetRow: View {
     let snippet: Snippet
     let onDelete: () -> Void
     /// Called with the user's edited copy when they hit Save / press Enter.
     let onSave: (Snippet) -> Void
+    /// Non-nil only when this row is a user override of a builtin — invoking it
+    /// drops the override and restores the shipped definition. nil ⇒ no Reset.
+    let onReset: (() -> Void)?
 
     @State private var hovering = false
     @State private var isEditing = false
+
+    /// `;reply` is a built-in *action* whose stored value is documentation only
+    /// (the email drafter is fired directly, the value is never written), and
+    /// dynamic builtins (`;today`/`;time`) carry a sentinel value, not template
+    /// text. For both, only the display name is meaningfully editable — exposing
+    /// the value/kind fields would be controls that change nothing.
+    private var isNameOnly: Bool {
+        snippet.kind == .dynamic
+            || snippet.trigger.lowercased() == SnippetStore.emailReplyTrigger
+    }
 
     // Edit-mode drafts. Initialised from the snippet whenever editing begins.
     @State private var draftValue = ""
@@ -389,6 +406,19 @@ private struct SnippetRow: View {
                 .accessibilityHint("Opens the inline editor for this snippet.")
             }
 
+            // Reset-to-builtin: only for an overridden builtin (onReset != nil).
+            if hovering, let onReset {
+                Button(action: onReset) {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Reset to the built-in default")
+                .accessibilityLabel("Reset snippet \(snippet.trigger) to built-in")
+                .accessibilityHint("Discards your changes and restores the shipped snippet.")
+            }
+
             if !snippet.builtin {
                 Button(action: onDelete) {
                     Image(systemName: "trash")
@@ -437,11 +467,12 @@ private struct SnippetRow: View {
                 .accessibilityLabel("Display name")
                 .accessibilityHint("Name shown in the snippets list.")
 
-            // Dynamic builtins (`;today`, `;time`) don't expose a useful
-            // value to edit — the value is a sentinel string consumed by the
-            // expander, not template text. Hide the kind picker and value
-            // field for that case to avoid confusing the user.
-            if snippet.kind != .dynamic {
+            // Dynamic builtins (`;today`, `;time`) and the `;reply` action
+            // don't expose a useful value to edit — the value is a sentinel /
+            // documentation string consumed by the expander, not template
+            // text. Hide the kind picker and value field for those (see
+            // `isNameOnly`) so we never show a control that changes nothing.
+            if !isNameOnly {
                 Picker("", selection: $draftKind) {
                     Text("Static text").tag(Snippet.Kind.staticText)
                     Text("AI (Gemma prompt)").tag(Snippet.Kind.ai)
@@ -466,7 +497,9 @@ private struct SnippetRow: View {
                 .onSubmit(commit)
                 .accessibilityLabel(draftKind == .staticText ? "Snippet text" : "AI prompt")
             } else {
-                Text("Built-in dynamic snippet. Only the name is editable.")
+                Text(snippet.trigger.lowercased() == SnippetStore.emailReplyTrigger
+                     ? "Built-in email-reply action. Only the name is editable."
+                     : "Built-in dynamic snippet. Only the name is editable.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -522,10 +555,11 @@ private struct SnippetRow: View {
     private func commit() {
         let trimmedName = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
-        // For dynamic builtins, keep the original value/kind — only the
-        // display name can change. For everything else we send the drafts.
-        let kind = snippet.kind == .dynamic ? snippet.kind : draftKind
-        let value = snippet.kind == .dynamic ? snippet.value : draftValue
+        // For name-only snippets (dynamic builtins, `;reply`), keep the
+        // original value/kind — only the display name can change. For
+        // everything else we send the drafts.
+        let kind = isNameOnly ? snippet.kind : draftKind
+        let value = isNameOnly ? snippet.value : draftValue
         onSave(
             Snippet(
                 trigger: snippet.trigger,

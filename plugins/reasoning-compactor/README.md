@@ -155,24 +155,23 @@ involved. Declared permissions: `inference`, `ax.read`, `notifications`.
 
 ## Verification
 
-The logic is covered by a unit suite (token estimation, reasoning detection,
-code-aware segmentation incl. unclosed fences, paragraph chunking, ratio vs
-absolute-budget targeting, step splitting, forced answer-keep, extractive
-parse-failure → abstractive fallback, config/env overrides) and an end-to-end
-harness that runs `plugin.py` as a subprocess and plays the host over JSON-RPC
-stdio — executed **once per mode**: handshake, hotkey registration, the
-segmentation + code-preservation path (asserting **code is never sent to the
-model**), the short-selection guard, chunking of a long trace into multiple
-passes, the background nudge plus cooldown suppression, and clean shutdown. In
-extractive mode it additionally asserts the output is a **verbatim subset** of
-the input and that the **answer-bearing step survives**.
+The pure logic is covered by a committed unit suite, `test_plugin.py` (stdlib
+`unittest`, no model/network/host — run `python3 test_plugin.py`). It exercises
+token estimation, reasoning detection, code-aware segmentation (including
+unclosed fences), paragraph chunking against the budget, ratio-vs-absolute
+targeting including the per-passage budget split, step splitting, the extractive
+keep-index parser (standalone-number parsing, rejection of numbers embedded in
+echoed step text, prose-reply → parse-failure → abstractive fallback, and the
+forced answer/conclusion keep), and `load_config` robustness against malformed
+`config.json` values (wrong types, `null`, `1e999`/overflow, out-of-range
+clamping, bad `clipboard_cmd`).
 
-It has also been run true end-to-end against a **real local model**
-(Qwen2.5-0.5B-Instruct GGUF via llama.cpp — the same model family as Halen's
-`classifier` tier) serving `inference/complete`, on a serious reasoning trace
-(Kadane's maximum-subarray, with a brute-force dead-end and a numeric trace).
-Extractive compacted it 2.3× (−57%) with the answer preserved and every kept
-sentence verbatim. The same trace under `abstractive` on that small model
-compressed less and *dropped the answer* (it ran out of tokens mid-rewrite) —
-which is exactly why extractive (faithful, answer-force-kept) is the default:
-the guarantees hold regardless of how capable the local model is.
+The end-to-end path — spawning `plugin.py` as a subprocess and driving the
+JSON-RPC stdio handshake — is exercised by the repo's plugin smoke harness (it
+asserts a clean `initialize` handshake and shutdown for every bundled plugin).
+The model-dependent compaction quality (verbatim-subset guarantee, answer
+survival, extractive vs abstractive on a small local model) is validated
+manually against a real local model rather than in CI, since it needs the GGUF
+weights and llama.cpp; extractive is the default precisely because its
+verbatim/answer-force-kept guarantees are structural and hold regardless of how
+capable the local model is.

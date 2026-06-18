@@ -30,7 +30,7 @@ final class BuddyWindow: NSPanel {
         self.isReleasedWhenClosed = false
         self.hidesOnDeactivate = false
 
-        let host = NSHostingView(rootView: BuddyView(model: model, onClick: onClick))
+        let host = NSHostingView(rootView: BuddyView(model: model))
         host.frame = rect
         host.autoresizingMask = [.width, .height]
 

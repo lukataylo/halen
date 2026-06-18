@@ -16,14 +16,23 @@ final class PluginPromptPresenter {
 
     /// Auto-dismiss after this long if the user neither picks nor closes it —
     /// so a plugin's `ui/prompt` call can't hang forever on an ignored popup.
+    /// Also the hard ceiling for a caller-supplied `timeoutSeconds`.
     private static let timeout: Duration = .seconds(300)
 
     /// Show the prompt and suspend until the user picks an `action`, dismisses
     /// it, or it times out. Returns the chosen action string, or `nil` for
-    /// dismiss / timeout.
-    func prompt(title: String, body: String, actions: [String]) async -> String? {
+    /// dismiss / timeout. `timeoutSeconds`, when given, lets the caller align
+    /// the popup's on-screen lifetime with its own RPC timeout so the two
+    /// expire together (clamped to (0, 300]); absent ⇒ the 300s default.
+    func prompt(title: String, body: String, actions: [String],
+                timeoutSeconds: Double? = nil) async -> String? {
         // Clear any prompt still up — its caller gets a dismiss result.
         dismiss(resolvingWith: nil)
+
+        let timeout: Duration = {
+            if let t = timeoutSeconds, t > 0 { return .seconds(min(t, 300)) }
+            return Self.timeout
+        }()
 
         return await withCheckedContinuation { continuation in
             self.pending = continuation
@@ -49,7 +58,7 @@ final class PluginPromptPresenter {
             Log.info("ui/prompt shown: \(title) — \(actions.count) action(s)")
 
             self.timeoutTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: Self.timeout)
+                try? await Task.sleep(for: timeout)
                 guard !Task.isCancelled else { return }
                 self?.dismiss(resolvingWith: nil)
             }

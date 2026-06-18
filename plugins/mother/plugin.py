@@ -495,11 +495,16 @@ def enforce_app(bundle_id, name):
         body = (f"{name} is on your blocklist. You're outside focus hours, so "
                 f"Mother will let you decide — once.")
         try:
+            confront = cfg("confrontTimeoutSeconds") or 45
             result = call("ui/prompt", {
                 "title": "Mother",
                 "body": body,
                 "actions": ["Close it", "Override (logged)"],
-            }, timeout=(cfg("confrontTimeoutSeconds") or 45) + 5)
+                # Dismiss the popup when the confront window elapses so it
+                # doesn't linger on screen after Mother has already quit the
+                # app; the +5 keeps our RPC wait just longer than that.
+                "timeoutSeconds": confront,
+            }, timeout=confront + 5)
             action = (result or {}).get("action")
         except Exception as exc:
             _log(f"mother: prompt failed, defaulting to enforce ({exc})")
@@ -529,6 +534,7 @@ def confirm_override(target):
                      f"Still want {cfg('overrideMinutes') or 5} minutes on "
                      f"{target}?"),
             "actions": ["No — close it", "Yes, I accept the cost"],
+            "timeoutSeconds": 35,
         }, timeout=40)
         return (result or {}).get("action") == "Yes, I accept the cost"
     except Exception:
@@ -610,6 +616,16 @@ def enforce_site(app_name, tab_phrase, host, rule):
         record("site", host, "warned")
         return
 
+    # Re-read the front tab right before closing it. The match that brought us
+    # here came from an earlier poll; between then and now the user may have
+    # switched tabs/windows, and `close current tab` acts on whatever is front
+    # *now*. Only close if the front tab is still this blocked host — so we
+    # never nuke a tab the user just navigated to. (TOCTOU guard.)
+    fresh = read_front_tab(app_name, tab_phrase)
+    if not fresh or host_of(fresh) != host:
+        _log(f"mother: front tab changed before close ({host} no longer front), skipping")
+        return
+
     # Sites are cheaper to undo than apps, so Mother closes the tab first and
     # explains after — even outside focus hours. An override re-opens nothing;
     # it just stops her nagging the same host for a few minutes.
@@ -634,6 +650,7 @@ def enforce_site(app_name, tab_phrase, host, rule):
             "body": (f"Closed {host} — it's on your blocklist. Outside focus "
                      f"hours you can buy {cfg('overrideMinutes') or 5} min."),
             "actions": ["Keep it blocked", "Override (logged)"],
+            "timeoutSeconds": 35,
         }, timeout=40)
         if (result or {}).get("action") == "Override (logged)":
             grant_pass(_site_pass, host)

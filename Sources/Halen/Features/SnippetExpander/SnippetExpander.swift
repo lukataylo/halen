@@ -52,8 +52,9 @@ final class SnippetExpander: HalenPlugin {
     private var emailReplyInflight: Task<Void, Never>?
     /// Built-in trigger that fires the email-reply drafter instead of
     /// expanding a snippet. Special-cased in `handle(text:caretOffset:)`
-    /// so it bypasses the normal expansion path.
-    private static let emailReplyTrigger = ";reply"
+    /// so it bypasses the normal expansion path. Single source of truth lives
+    /// in `SnippetStore` so the settings UI agrees with this detection path.
+    private static let emailReplyTrigger = SnippetStore.emailReplyTrigger
 
     /// Sentinel passed to `applyReplacement` for hotkey-driven writes — keeps
     /// the self-edit suppression list happy without colliding with any real
@@ -536,6 +537,18 @@ final class SnippetExpander: HalenPlugin {
     /// the AX tree can't read. `delimiter` is the separator the user typed to
     /// close the trigger; `preceding` is the text typed before it this session.
     private func handleKeystrokeTrigger(token: String, delimiter: String, preceding: String) {
+        // Defense-in-depth for passwords: if the Accessibility tree IS readable
+        // and reports a secure text field, never expand or read context here —
+        // even if process-wide secure input (IsSecureEventInputEnabled, checked
+        // in KeystrokeBuffer) didn't engage. A web password field the AX tree
+        // can't see at all is undetectable from the keystroke stream; the buffer
+        // mitigates that case by never logging it and resetting on navigation.
+        if let element = caretObserver?.currentElement,
+           axReadString(element, kAXSubroleAttribute as String) == (kAXSecureTextFieldSubrole as String) {
+            keystrokeBuffer.reset()
+            return
+        }
+
         // Built-in `;reply` drafts a reply to the *focused email*, which only
         // exists in a mail client the Accessibility tree can read. It is not a
         // store snippet (its store entry is a doc-string placeholder), so the
