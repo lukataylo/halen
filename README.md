@@ -68,7 +68,7 @@ Cloud writing tools see everything you type. Halen doesn't. Three reasons that m
 Halen picks the best available model on your Mac, automatically:
 
 - **Apple Intelligence** if you have it (macOS 26+, supported Macs).
-- A small bundled model (Gemma 4 E4B + Qwen 2.5 for classification) if you don't.
+- A small local model — Gemma 4 E4B, plus Qwen 2.5 for classification — downloaded once on first use, if you don't.
 - Your own [Ollama](https://ollama.com) daemon, if you've installed one.
 
 Nothing to configure. The model picker in Settings is there if you want to.

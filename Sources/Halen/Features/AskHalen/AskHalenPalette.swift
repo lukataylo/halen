@@ -108,6 +108,7 @@ struct AskHalenPalette: View {
                 .buttonStyle(.plain)
                 .disabled(state.question.isEmpty)
                 .keyboardShortcut(.return, modifiers: [])
+                .help("Send (⏎)")
                 .accessibilityLabel("Send")
                 .accessibilityHint("Sends your question to Halen.")
             }

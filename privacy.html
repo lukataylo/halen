@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Privacy | Halen</title>
-<meta name="description" content="What Halen sees, what stays on your Mac, and the exact set of outbound connections (all loopback)." />
+<meta name="description" content="What Halen sees, what stays on your Mac, and the only connection that leaves it — a signed, content-free software-update check." />
 <meta name="theme-color" content="#1635D6" />
 <meta name="author" content="Halen Labs" />
 <link rel="canonical" href="https://halen.dev/privacy.html" />
@@ -80,7 +80,11 @@ h1 {
   line-height: 1.08; margin: 0 0 8px;
 }
 .subtitle {
-  color: var(--muted); font-size: 16px; margin: 0 0 48px;
+  color: var(--muted); font-size: 16px; margin: 0 0 8px;
+}
+.updated {
+  color: var(--muted); font-size: 13px; margin: 0 0 44px;
+  font-family: var(--mono);
 }
 h2 {
   font-size: 22px; font-weight: 700; letter-spacing: -0.015em;
@@ -181,10 +185,11 @@ footer.foot .links a:hover { color: var(--accent); }
 
 <main>
   <h1>Privacy</h1>
-  <p class="subtitle">What Halen sees, what stays on your Mac, and the exact set of outbound connections (all loopback).</p>
+  <p class="subtitle">What Halen sees, what stays on your Mac, and the only connection that ever leaves it.</p>
+  <p class="updated">Last updated 9 June 2026 · applies to Halen v0.3.0</p>
 
   <div class="callout">
-    Halen is built around one constraint: <strong>nothing leaves the machine.</strong> This page documents what data the app sees, where it&rsquo;s processed, and the few egress points that do exist (all to localhost).
+    Halen is built around one constraint: <strong>nothing you write leaves the machine.</strong> Every model runs on-device. The single outbound connection is the signed software-update check documented below &mdash; never your text.
   </div>
 
   <h2>What Halen sees</h2>
@@ -217,14 +222,23 @@ footer.foot .links a:hover { color: var(--accent); }
   </ul>
 
   <h2>Network traffic</h2>
-  <p>Halen makes <strong>only loopback connections</strong>. Three possible paths, all to <code>127.0.0.1</code>:</p>
+  <p>No inference ever leaves your Mac. The text-processing paths are <strong>loopback only</strong> &mdash; three of them, all to <code>127.0.0.1</code>:</p>
   <ul>
     <li><strong>Apple Foundation Models</strong>: runs in-process via Apple&rsquo;s on-device API (macOS 26+). No socket at all.</li>
     <li><strong>Bundled llama.cpp + Gemma 4 E4B</strong>: also in-process. No socket.</li>
     <li><strong>Ollama (optional)</strong>: HTTP POST to <code>http://localhost:11434/api/chat</code>. The base URL is set in code; there is no setting that would let a process change it to a remote host. Ollama itself binds to <code>127.0.0.1</code> by default.</li>
   </ul>
   <p>That traffic does not leave the loopback interface unless you have separately configured Ollama to bind to a non-localhost address.</p>
-  <p>There is <strong>no other outbound network code</strong> in the project. No analytics SDK, no remote logging endpoint, no auto-updater, no crash reporter. The optional WebSocket bridge on <code>127.0.0.1:50765</code> only <em>accepts</em> inbound connections from the local browser extension; it never dials out.</p>
+  <p>Aside from the software-update check described next, there is <strong>no other outbound network code</strong> in the project. No analytics SDK, no remote logging endpoint, no crash reporter. The optional WebSocket bridge on <code>127.0.0.1:50765</code> only <em>accepts</em> inbound connections from the local browser extension; it never dials out.</p>
+
+  <h2>Software updates</h2>
+  <p>Halen keeps itself up to date with <a class="inline" href="https://sparkle-project.org" rel="noopener" target="_blank">Sparkle</a>, the standard open-source updater for Mac apps. This is the <strong>one connection that does leave your Mac</strong>, and it carries none of your content:</p>
+  <ul>
+    <li><strong>The check</strong>: a plain HTTPS <code>GET</code> of <code>https://halen.dev/appcast.xml</code> &mdash; a static, public file listing the latest version. It runs once a day and whenever you click <em>Check for Updates</em> in Settings.</li>
+    <li><strong>The download</strong>: if a newer version exists, the signed <code>.dmg</code> is fetched from GitHub Releases (<code>github.com</code>). Every update is verified against a pinned <strong>EdDSA public key</strong> before it&rsquo;s installed, so a tampered or man-in-the-middle payload is rejected.</li>
+    <li><strong>What&rsquo;s sent</strong>: nothing beyond an ordinary web request. No account, no device identifier, no usage data &mdash; just the standard headers (including your IP, as with any HTTPS request) needed to fetch a file. The request body is empty.</li>
+  </ul>
+  <p>Automatic checks are on by default. You can turn them off from the &ldquo;Automatically check for updates&rdquo; toggle in Sparkle&rsquo;s update dialog, after which Halen makes <strong>zero</strong> non-loopback connections.</p>
 
   <h2>Apple on-device speech recognition</h2>
   <p>Voice Dictation uses <code>SFSpeechRecognizer</code> with:</p>

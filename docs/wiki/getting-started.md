@@ -149,11 +149,13 @@ Usage strings (`NSCalendarsUsageDescription`, `NSCalendarsFullAccessUsageDescrip
 Burnout Copilot also writes a single 10-minute "🌿 Halen break" event when
 you accept its suggestion — that requires the full-access scope.
 
-### 5. Notifications (Meeting Prep only)
+### 5. Notifications (Meeting Prep, Ask Halen, Email Reply)
 
 `UNUserNotificationCenter.requestAuthorization(options: [.alert, .sound])`.
 Meeting Prep posts one notification 1 second after a briefing lands on your
-clipboard. If you deny, the clipboard part still works.
+clipboard; Ask Halen and the `;reply` email drafter post one when a result
+falls back to the clipboard because the caret target couldn't be written. If
+you deny, the clipboard copy still happens silently.
 
 ### 6. Input Monitoring (Ask Halen + Snippet Expander rephrase)
 

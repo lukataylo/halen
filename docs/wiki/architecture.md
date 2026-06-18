@@ -4,8 +4,8 @@ One AX pipeline. One event bus. One inference router. Many plugins.
 
 That's the whole shape. A single Swift Package menubar app
 (`LSUIElement = true`) hosts the first-party plugins in-process and
-spawns third-party plugins as JSON-RPC subprocesses over stdio. ~13k
-lines of Swift, 168 unit tests under `Tests/HalenTests/`. Everything
+spawns third-party plugins as JSON-RPC subprocesses over stdio. ~20k
+lines of Swift, 169 unit tests under `Tests/HalenTests/`. Everything
 flows through three seams: AX → events → inference. Plugins plug into
 the middle one.
 
@@ -101,6 +101,13 @@ Ten in-process plugins ship as Swift classes wired into
 `UserDefaults` under the key `plugin.<id>.enabled` and calls `start()` /
 `stop()` on toggle. Default-off plugins (Voice, Autocomplete, StyleGuide,
 EmailReply, ToneProfiles) opt in via onboarding.
+
+These ten classes back the **six** entries you see in the marketplace —
+the v0.3 merges fold `TypoFixer` + `StyleGuide` into Word Replacements,
+`SentimentGuard` + `ClarityChecker` into Writing Coach, and `EmailReply`
+into Snippet Expander; `ToneProfiles` moved out of the marketplace into
+Settings. The class names (and the on-disk plugin ids) keep their
+pre-merge form so existing user data carries over without migration.
 
 Out-of-process plugins — `BurnoutCopilot` and `MeetingPrep` ship in this
 repo under `plugins/`; users can also drop their own into
