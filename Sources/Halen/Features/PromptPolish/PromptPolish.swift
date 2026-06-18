@@ -151,6 +151,10 @@ final class PromptPolish: HalenPlugin {
     /// fires regardless of the focused app. Needs Input Monitoring;
     /// `IOHIDRequestAccess` is idempotent if another plugin already asked.
     private func installHotkey() {
+        // Idempotent: never install a second pair of monitors over a live one
+        // (which would leak the first and double-fire ⌃⌥P). Matches the guard
+        // SnippetExpander applies to its own start().
+        guard globalHotkeyMonitor == nil else { return }
         _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
 
         // ⌃⌥P: Control+Option held (and nothing else), key "p".
@@ -197,6 +201,14 @@ final class PromptPolish: HalenPlugin {
         let selected = axReadSelectedText(element)
         guard !selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             notify(body: "Select the prompt you want to polish, then press ⌃⌥P.")
+            return nil
+        }
+        // The rewrite is capped at `maxTokens` below (~600 tokens ≈ a couple
+        // thousand characters). A selection longer than the model can return
+        // would come back truncated and then silently overwrite the user's
+        // original prompt — so refuse it rather than destroy text.
+        guard selected.count <= 2000 else {
+            notify(body: "That selection is long. Select a shorter prompt (under ~2000 characters) to polish.")
             return nil
         }
         let selRange = NSRange(location: cfRange.location, length: cfRange.length)

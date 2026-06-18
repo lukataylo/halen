@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 /// NDJSON-over-stdio bridge to `plugin.py`. One JSON object per line.
 /// Reads on a background queue, dispatches handlers on the main thread so

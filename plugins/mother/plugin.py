@@ -118,7 +118,8 @@ BROWSERS = {
 DEFAULT_CONFIG = {
     "_comment": (
         "Mother's local rulebook. Edit freely; she reloads it whenever the "
-        "file changes. enforcement: 'soft' | 'hardcore' | 'lockdown'. "
+        "file changes. enforcement: 'off' | 'soft' | 'hardcore' | 'lockdown' "
+        "(an unrecognized value is treated as 'soft', never escalated). "
         "focusHours.days use 0=Mon ... 6=Sun. Times are local 24h 'HH:MM'."
     ),
     "enforcement": "hardcore",
@@ -135,9 +136,11 @@ DEFAULT_CONFIG = {
     "focusHours": [
         {"days": [0, 1, 2, 3, 4], "start": "09:00", "end": "18:00"}
     ],
+    # Default blocklist is pure-distraction apps only. Work-critical chat apps
+    # (Slack, Discord) are deliberately NOT here: quitting an Electron chat app
+    # can discard a half-typed message, and a fresh install must never lose the
+    # user's data before they've opted in. Add them yourself if you want them.
     "blockedApps": [
-        {"bundleId": "com.hnc.Discord", "name": "Discord"},
-        {"bundleId": "com.tinyspeck.slackmacgap", "name": "Slack"},
         {"bundleId": "ru.keepcoder.Telegram", "name": "Telegram"},
         {"bundleId": "com.zhiliaoapp.musically", "name": "TikTok"},
         {"bundleId": "com.netflix.Netflix", "name": "Netflix"},
@@ -278,16 +281,32 @@ def current_mode():
 
     Returns one of: 'off', 'warn', 'enforce-no-override', 'enforce-override'.
     """
-    enforcement = (cfg("enforcement") or "hardcore").lower()
+    enforcement = (cfg("enforcement") or "hardcore").strip().lower()
+    if enforcement in ("off", "disabled", "none"):
+        return "off"
     if enforcement == "soft":
         return "warn"
     if enforcement == "lockdown":
         return "enforce-no-override"
-    # hardcore: relentless during focus hours, negotiable (with friction) outside
-    return "enforce-no-override" if in_focus_hours() else "enforce-override"
+    if enforcement == "hardcore":
+        # relentless during focus hours, negotiable (with friction) outside
+        return "enforce-no-override" if in_focus_hours() else "enforce-override"
+    # Unrecognized value (typo, unexpected string). Fail SAFE — to the least
+    # destructive mode — never silently escalate to hardcore and start quitting
+    # apps the user never opted into blocking. A config mistake must not be a
+    # data-loss event.
+    _log(f"mother: unknown enforcement {enforcement!r}; falling back to 'warn'")
+    return "warn"
 
 
 # --- AppleScript helpers (Mother's own subprocess; no host capability) -------
+
+def _as(s):
+    """Escape a Python string for safe embedding inside an AppleScript "..."
+    string literal. App names come from the user's config.json; a stray quote
+    would otherwise break out of the literal (and at worst inject script)."""
+    return str(s).replace("\\", "\\\\").replace('"', '\\"')
+
 
 def _osascript(script, timeout=10):
     try:
@@ -314,15 +333,15 @@ def front_app_bundle():
 
 def quit_app(bundle_id, app_name):
     """Ask the app to quit gracefully (it may still prompt to save work)."""
-    out, err = _osascript(f'tell application id "{bundle_id}" to quit')
+    out, err = _osascript(f'tell application id "{_as(bundle_id)}" to quit')
     if err:
         # Fall back to name-based quit for apps that dislike id addressing.
-        _osascript(f'tell application "{app_name}" to quit')
+        _osascript(f'tell application "{_as(app_name)}" to quit')
     _log(f"mother: quit {app_name} ({bundle_id})")
 
 
 def read_front_tab(app_name, tab_phrase):
-    script = f'tell application "{app_name}" to get URL of {tab_phrase} of front window'
+    script = f'tell application "{_as(app_name)}" to get URL of {tab_phrase} of front window'
     out, err = _osascript(script, timeout=6)
     if err or not out:
         return None
@@ -330,7 +349,7 @@ def read_front_tab(app_name, tab_phrase):
 
 
 def close_front_tab(app_name, tab_phrase):
-    script = f'tell application "{app_name}" to close {tab_phrase} of front window'
+    script = f'tell application "{_as(app_name)}" to close {tab_phrase} of front window'
     _osascript(script, timeout=6)
 
 
@@ -398,6 +417,11 @@ _current_bundle = None
 _current_lock = threading.Lock()
 _app_timers = {}   # bundle_id -> Timer (one pending grace check per app)
 _app_busy = set()  # bundle ids currently being confronted, to avoid stacking
+# Only one ui/prompt confrontation on screen at a time. The host presenter is
+# single-slot: opening a second prompt dismisses the first and resolves it with
+# a null action — which on the app path means an *unintended quit*. The app and
+# site enforcement threads can fire concurrently, so they share this lock.
+_confront_lock = threading.Lock()
 
 
 def on_app_focused(bundle_id, app_name):
@@ -444,6 +468,8 @@ def _grace_elapsed(bundle_id, name):
 
 def enforce_app(bundle_id, name):
     mode = current_mode()
+    if mode == "off":
+        return
     if mode == "warn":
         toast(f"{name} is on your blocklist",
               "Mother sees you. Logged — but she's letting it slide this time.")
@@ -458,31 +484,40 @@ def enforce_app(bundle_id, name):
               "Back to work.")
         return
 
-    # enforce-override: confront, give one friction-laden way out.
-    body = (f"{name} is on your blocklist. You're outside focus hours, so "
-            f"Mother will let you decide — once.")
+    # enforce-override: confront, give one friction-laden way out. Serialize so
+    # a concurrent site confrontation can't dismiss this prompt out from under
+    # the user (a null action here = an unintended quit). If another prompt is
+    # already up, skip leniently this cycle rather than quit blind.
+    if not _confront_lock.acquire(blocking=False):
+        _log(f"mother: a confrontation is already on screen; skipping {name} this cycle")
+        return
     try:
-        result = call("ui/prompt", {
-            "title": "Mother",
-            "body": body,
-            "actions": ["Close it", "Override (logged)"],
-        }, timeout=(cfg("confrontTimeoutSeconds") or 45) + 5)
-        action = (result or {}).get("action")
-    except Exception as exc:
-        _log(f"mother: prompt failed, defaulting to enforce ({exc})")
-        action = None
+        body = (f"{name} is on your blocklist. You're outside focus hours, so "
+                f"Mother will let you decide — once.")
+        try:
+            result = call("ui/prompt", {
+                "title": "Mother",
+                "body": body,
+                "actions": ["Close it", "Override (logged)"],
+            }, timeout=(cfg("confrontTimeoutSeconds") or 45) + 5)
+            action = (result or {}).get("action")
+        except Exception as exc:
+            _log(f"mother: prompt failed, defaulting to enforce ({exc})")
+            action = None
 
-    if action == "Override (logged)":
-        if confirm_override(name):
-            grant_pass(_app_pass, bundle_id)
-            record("app", name, "override")
-            toast("Override granted",
-                  f"{cfg('overrideMinutes') or 5} minutes on {name}. "
-                  f"Mother wrote it down.")
-            return
-    # "Close it", dismissed, timed out, or override declined → enforce.
-    quit_app(bundle_id, name)
-    record("app", name, "quit")
+        if action == "Override (logged)":
+            if confirm_override(name):
+                grant_pass(_app_pass, bundle_id)
+                record("app", name, "override")
+                toast("Override granted",
+                      f"{cfg('overrideMinutes') or 5} minutes on {name}. "
+                      f"Mother wrote it down.")
+                return
+        # "Close it", dismissed, timed out, or override declined → enforce.
+        quit_app(bundle_id, name)
+        record("app", name, "quit")
+    finally:
+        _confront_lock.release()
 
 
 def confirm_override(target):
@@ -505,6 +540,13 @@ def confirm_override(target):
 _browser_app = None          # (app_name, tab_phrase) currently front, or None
 _browser_lock = threading.Lock()
 _site_busy = set()
+_site_last_enforced = {}     # host -> monotonic time Mother last acted on it
+# A pinned or session-restored blocked tab would otherwise be closed *and*
+# toasted every `sitePollSeconds` (default 3s) forever. Act on a given host at
+# most once per this window so Mother doesn't spam Notification Center or fight
+# the browser in a tight loop. She still re-closes it after the window if it's
+# still there — she just doesn't do it three times a second.
+_SITE_ENFORCE_COOLDOWN = 30.0
 
 
 def browser_focus_changed(bundle_id):
@@ -541,10 +583,16 @@ def check_front_tab(app_name, tab_phrase):
     host = host_of(url)
     if has_pass(_site_pass, host):
         return
+    now = time.monotonic()
     with _browser_lock:
         if host in _site_busy:
             return
+        # Per-host backoff so a persistent blocked tab isn't nuked + toasted
+        # every poll. (The warn path also toasts, so this covers all modes.)
+        if now - _site_last_enforced.get(host, 0.0) < _SITE_ENFORCE_COOLDOWN:
+            return
         _site_busy.add(host)
+        _site_last_enforced[host] = now
     try:
         enforce_site(app_name, tab_phrase, host, rule)
     finally:
@@ -554,6 +602,8 @@ def check_front_tab(app_name, tab_phrase):
 
 def enforce_site(app_name, tab_phrase, host, rule):
     mode = current_mode()
+    if mode == "off":
+        return
     if mode == "warn":
         toast(f"{rule} is on your blocklist",
               f"Mother sees the tab open in {app_name}. Logged.")
@@ -572,7 +622,12 @@ def enforce_site(app_name, tab_phrase, host, rule):
         return
 
     # enforce-override (outside focus hours): offer a quiet pass so re-opening
-    # it on purpose doesn't get the tab nuked again instantly.
+    # it on purpose doesn't get the tab nuked again instantly. The tab is
+    # already closed above; serialize only the override negotiation so it can't
+    # collide with an app confrontation (single-slot host presenter). If one is
+    # already up, just skip the offer this cycle.
+    if not _confront_lock.acquire(blocking=False):
+        return
     try:
         result = call("ui/prompt", {
             "title": "Mother",
@@ -588,6 +643,8 @@ def enforce_site(app_name, tab_phrase, host, rule):
                   "Re-open the tab yourself.")
     except Exception as exc:
         _log(f"mother: site prompt failed ({exc})")
+    finally:
+        _confront_lock.release()
 
 
 # --- ui helpers --------------------------------------------------------------

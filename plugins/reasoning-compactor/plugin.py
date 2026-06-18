@@ -169,8 +169,34 @@ def load_config():
 
     mode = os.environ.get("HALEN_RC_MODE", cfg["mode"])
     cfg["mode"] = mode if mode in ("extractive", "abstractive") else "extractive"
-    cfg["target_keep_ratio"] = min(0.95, max(0.1, float(cfg["target_keep_ratio"])))
-    cfg["target_tokens"] = max(0, int(cfg["target_tokens"]))
+
+    # Coerce every numeric key defensively. A malformed value in config.json
+    # (e.g. "high" where a float is expected) must fall back to its default,
+    # never raise at import — an uncaught exception here kills the plugin
+    # process before the JSON-RPC handshake, so the host just sees a startup
+    # timeout. This is what config.json's "_comment" and the README promise.
+    def _num(key, cast, lo=None, hi=None):
+        try:
+            v = cast(cfg[key])
+        except (TypeError, ValueError):
+            v = DEFAULTS[key]
+        if lo is not None:
+            v = max(lo, v)
+        if hi is not None:
+            v = min(hi, v)
+        cfg[key] = v
+
+    _num("target_keep_ratio", float, 0.1, 0.95)
+    _num("target_tokens", int, 0)
+    _num("usd_per_million_tokens", float, 0.0)
+    _num("min_chars", int, 0)
+    _num("nudge_min_chars", int, 0)
+    _num("nudge_min_saved_tokens", int, 0)
+    _num("nudge_cooldown_seconds", int, 0)
+    _num("max_single_pass_tokens", int, 1)
+    _num("hotkey_keycode", int, 0)
+    _num("hotkey_modifiers", int, 0)
+
     if not isinstance(cfg["clipboard_cmd"], list) or not cfg["clipboard_cmd"]:
         cfg["clipboard_cmd"] = list(DEFAULTS["clipboard_cmd"])
     return cfg

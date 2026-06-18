@@ -90,10 +90,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let modeStr = (msg["mode"] as? String) ?? "chat"
         let mode = InputMode(rawValue: modeStr) ?? .chat
         showBubble(mode: .input(mode), autoHideMs: nil)
-        // Grab focus so the user can start typing immediately. We have to
-        // activate first because nonactivating panels otherwise can't host
-        // the key view chain.
-        NSApp.activate(ignoringOtherApps: true)
+        // Make the bubble key so its text field receives keystrokes, but do
+        // NOT activate the companion app: it's a `.nonactivatingPanel` with
+        // `canBecomeKey == true`, so it can host the key view chain while the
+        // user's app stays frontmost. Activating here would steal focus, which
+        // makes the host's CaretObserver rebind AX to this companion and the
+        // ⌃⌥B "rewrite the selection" path then reads/writes the wrong field.
         bubbleWindow.makeKeyAndOrderFront(nil)
         DispatchQueue.main.async { [weak self] in
             self?.bubbleModel.focusInput = true

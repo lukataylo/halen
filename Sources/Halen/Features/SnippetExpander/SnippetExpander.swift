@@ -536,6 +536,14 @@ final class SnippetExpander: HalenPlugin {
     /// the AX tree can't read. `delimiter` is the separator the user typed to
     /// close the trigger; `preceding` is the text typed before it this session.
     private func handleKeystrokeTrigger(token: String, delimiter: String, preceding: String) {
+        // Built-in `;reply` drafts a reply to the *focused email*, which only
+        // exists in a mail client the Accessibility tree can read. It is not a
+        // store snippet (its store entry is a doc-string placeholder), so the
+        // keystroke path must NOT paste that value. Leave the trigger in place
+        // and don't claim it — the AX `text.pause` path owns `;reply` and will
+        // fire `fireEmailReply()` for it.
+        if token.lowercased() == Self.emailReplyTrigger { return }
+
         // Self-edit guard — shared with the AX `text.pause` path so the two
         // detectors never both act on the same trigger.
         let now = Date()
@@ -564,7 +572,11 @@ final class SnippetExpander: HalenPlugin {
         recentWrites.append(PendingWrite(trigger: token, timestamp: Date()))
         keystrokeBuffer.reset()
 
-        let deleteCount = (token as NSString).length + (delimiter as NSString).length
+        // Count in grapheme clusters, not UTF-16 units: each synthesized
+        // backspace deletes one user-perceived character, so an emoji/flag in
+        // the trigger would over-delete and eat a character to its left if we
+        // counted NSString.length here.
+        let deleteCount = token.count + delimiter.count
         let replacement = value + delimiter
         // Suppress the buffer's view of our own synthesized keystrokes, then
         // give the focused app a beat to commit the separator that triggered
@@ -629,14 +641,18 @@ final class SnippetExpander: HalenPlugin {
         keystrokeBuffer.reset()
 
         let placeholder = "[…]"
-        let tokenLen = (token as NSString).length + (delimiter as NSString).length
+        // Grapheme-cluster counts, not UTF-16 units — each backspace deletes
+        // one user-perceived character (see writeFromKeystroke). `preceding`
+        // can hold emoji, so counting NSString.length here would over-delete
+        // past the start of the typed paragraph.
+        let tokenLen = token.count + delimiter.count
         // replacesPrior snippets (;rephrase, ;formal, ;casual) swallow the
         // typed paragraph too; ;summary keeps it and appends after.
         let deleteCount = replacesPrior
-            ? (preceding as NSString).length + tokenLen
+            ? preceding.count + tokenLen
             : tokenLen
         let pasteText = replacesPrior ? placeholder : placeholder + delimiter
-        let placeholderLen = (placeholder as NSString).length
+        let placeholderLen = placeholder.count
 
         keystrokeBuffer.suppress(forMillis: 300)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
