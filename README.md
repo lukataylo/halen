@@ -41,17 +41,15 @@ Halen updates itself. You'll never need to come back to this page.
 | Plugin | What it does |
 |---|---|
 | ✨ **Ask Halen** | Press ⌃H. Ask anything. Halen knows what's on screen. |
-| ✏️ **Word Replacements** | Fixes your typos. Swaps in your preferred terms. |
-| 🔍 **Writing Coach** | Catches hostile tone, passive voice, and run-ons. One tap to rewrite. |
+| ✍️ **Writing Assistant** | Fixes typos, flags tone & clarity, and finishes your sentences as you type (Tab to accept). |
 | 💬 **Snippet Expander** | Type `;sig`, `;today`, `;summary`, `;reply`. Or ⌃⌥R to rewrite a selection. |
 | 🎙️ **Voice Dictation** | Press ⌃⌥Space. Speak. Press again. Apple's on-device transcription. |
-| ⌨️ **Autocomplete** | Tab to accept the next few words. |
 | 🪄 **Prompt Polish** | Press ⌃⌥P. Rewrites the selected prompt in place with word-level edits for modern LLMs. |
 
 Plus add-ons you can install from the Plugin Store: **Burnout Copilot** (focus suggestions from your calendar and tone history), **Meeting Prep** (a one-page brief 15 minutes before each meeting), **Reasoning Compactor** (compacts verbose LLM chain-of-thought on-device to save tokens, ⌃⌥K), and **Mother** (hardcore, local discipline that keeps you off the apps and sites you blocked — and means it).
 
 <p align="center">
-  <img src="assets/screenshot-plugins.png" alt="Halen's menubar dropdown showing the seven bundled plugins with toggles — Ask Halen, Word Replacements, Writing Coach, Voice Dictation, and Snippet Expander all enabled." width="500"/>
+  <img src="assets/screenshot-plugins.png" alt="Halen's menubar dropdown showing the five bundled plugins with toggles — Ask Halen, Writing Assistant, Voice Dictation, and Snippet Expander all enabled." width="500"/>
 </p>
 
 ## Why local

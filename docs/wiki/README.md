@@ -40,17 +40,15 @@ Your text never leaves your Mac.
 
 ## Bundled plugins (in-process)
 
-Seven plugins ship inside the menubar binary. The marketplace dropdown
+Five plugins ship inside the menubar binary. The marketplace dropdown
 toggles them on or off and opens their detail panel.
 
 | Plugin | Category | Default | What it does |
 |---|---|---|---|
 | Ask Halen | Productivity | On | ⌃H opens a floating palette. One question, with your focused app + selection + clipboard as context. |
-| [Word Replacements](plugins/word-replacements.md) | Writing | On | Fixes your typos. Swaps in your preferred terms. |
-| [Writing Coach](plugins/writing-coach.md) | Writing | On | Catches hostile tone and clarity issues. One tap to rewrite. |
+| [Writing Assistant](plugins/writing-assistant.md) | Writing | On | Fixes typos, flags tone & clarity, and finishes your sentences as you type. Tab to accept a completion. |
 | [Snippet Expander](plugins/snippet-expander.md) | Productivity | On | `;tag` expands. `;reply` or ⌃⌥E drafts an email. ⌃⌥R rewrites a selection. |
 | [Voice Dictation](plugins/voice-dictation.md) | Voice | Off | ⌃⌥Space opens a listening pill. Apple's on-device transcription writes at your caret. |
-| [Autocomplete](plugins/autocomplete.md) | Writing | Off | Suggests the next few words as ghost text. Tab to accept. |
 | [Prompt Polish](plugins/prompt-polish.md) | Productivity | On | ⌃⌥P rewrites the selected prompt in place with word-level edits for modern LLMs. |
 
 ## External plugins (out-of-process, JSON-RPC over stdio)

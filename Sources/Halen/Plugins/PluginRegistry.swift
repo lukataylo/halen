@@ -95,6 +95,14 @@ final class PluginRegistry {
                                             "com.halen.style-guide"],
             "com.halen.writing-coach":     ["com.halen.sentiment-guard",
                                             "com.halen.clarity-checker"],
+            // Writing Assistant rolls up the three writing plugins. Any one of
+            // them previously enabled → Writing Assistant on; all three stored
+            // off → off (preserve "I opted out of writing help"). Autocomplete
+            // was default-off, but a nil (never-touched) value doesn't count as
+            // an opt-out here — only an explicit stored value does.
+            "com.halen.writing-assistant": ["com.halen.word-replacements",
+                                            "com.halen.writing-coach",
+                                            "com.halen.autocomplete"],
         ]
         if let legacy = strictMigrations[id],
            let migrated = Self.migratedFromLegacy(anyOf: legacy, defaults: defaults) {
@@ -123,21 +131,30 @@ final class PluginRegistry {
     }
 
     /// Returns `true` if any of `anyOf` was persisted as enabled, `false`
-    /// if any was persisted as disabled (with no enabled siblings), or
-    /// `nil` if none of them were ever stored (= fresh install, fall
-    /// through to defaultDisabled logic).
+    /// if *all* of them were stored as disabled (the user explicitly opted
+    /// out of every sub-feature), or `nil` when any of them were never
+    /// stored (= not an explicit opt-out — fall through to defaultDisabled).
+    ///
+    /// Why the "all stored" requirement: a partial opt-out — e.g. the user
+    /// disabled Corrections but never touched Clarity & Tone — should not
+    /// suppress the new Writing Assistant, because the user never opted out
+    /// of the engines they never saw.
     private static func migratedFromLegacy(anyOf legacyIds: [String],
                                            defaults: UserDefaults) -> Bool? {
-        var anyStored = false
-        var anyEnabled = false
+        var storedValues: [Bool] = []
         for id in legacyIds {
             let key = "plugin.\(id).enabled"
-            guard let value = defaults.object(forKey: key) as? Bool else { continue }
-            anyStored = true
-            if value { anyEnabled = true }
+            if let value = defaults.object(forKey: key) as? Bool {
+                storedValues.append(value)
+            }
         }
-        guard anyStored else { return nil }
-        return anyEnabled
+        guard !storedValues.isEmpty else { return nil }
+        if storedValues.contains(true) { return true }
+        // Only return false when EVERY legacy ID was explicitly stored as false
+        // (user actively disabled all sub-features). Un-stored IDs are not
+        // opt-outs, so if any were never written, fall through to defaults.
+        guard storedValues.count == legacyIds.count else { return nil }
+        return false
     }
 
     private func defaultsKey(for id: String) -> String { "plugin.\(id).enabled" }
@@ -145,14 +162,14 @@ final class PluginRegistry {
     /// Plugins that start **off** for a fresh install — the "Pick what's
     /// on" step of onboarding flips them on if the user opts in.
     /// Everything not in this set defaults to on. Picked to match the
-    /// immediate-value threshold: a brand-new user gets Ask Halen, Word
-    /// Replacements, Writing Coach, and Snippet Expander (which carries
-    /// the folded-in email-reply action). Voice Dictation and Inline
-    /// Autocomplete stay opt-in — Voice needs mic/speech permission
-    /// prompts the user shouldn't get on first launch, Autocomplete's
-    /// ghost-text is continuously interrupting and deserves consent.
+    /// immediate-value threshold: a brand-new user gets Ask Halen, the
+    /// Writing Assistant, Snippet Expander (which carries the folded-in
+    /// email-reply action), and Prompt Polish. Voice Dictation stays
+    /// opt-in because it needs mic/speech permission prompts the user
+    /// shouldn't get on first launch. (Autocomplete used to be opt-in for
+    /// its interrupting ghost-text, but it now rides inside the default-on
+    /// Writing Assistant — its old id is no longer a registered plugin.)
     static let defaultDisabledPluginIds: Set<String> = [
         "com.halen.voice-dictation",
-        "com.halen.autocomplete",
     ]
 }

@@ -177,14 +177,14 @@ instead and needs no permission beyond Accessibility.)
 
 ```
 ~/Library/Application Support/Halen/
-  typos.json                                  # Word Replacements: auto-typo dictionary
+  typos.json                                  # Writing Assistant: auto-typo dictionary
   com.halen.style-guide/
-    rules.json                                # Word Replacements: your preferred terms
+    rules.json                                # Writing Assistant: your preferred terms
   com.halen.sentiment-guard/
-    rules.json                                # Writing Coach: tone rules
-    approved.json                             # Writing Coach: SHA-256 hashes of "Looks fine" drafts
+    rules.json                                # Writing Assistant: tone rules
+    approved.json                             # Writing Assistant: SHA-256 hashes of "Looks fine" drafts
   com.halen.clarity-checker/
-    rules.json                                # Writing Coach: clarity rules
+    rules.json                                # Writing Assistant: clarity rules
   com.halen.tone-profiles/
     profiles.json                             # Settings → App tone profiles
   com.halen.snippet-expander/
@@ -206,7 +206,7 @@ overwriting user changes — see each plugin's "Storage" section.
 | Any permission stuck — granted but not working, and System Settings won't let you toggle it | The code signature changed (ad-hoc / failed `codesign` / new identity) and TCC's grant is orphaned on the old signature. Run `scripts/reset-permissions.sh` (`tccutil reset` for every service Halen uses), then relaunch and re-grant. |
 | ⌃⌥Space does nothing | Another app owns the shortcut. Logs show `HotkeyRegistrar: RegisterEventHotKey failed`. |
 | ⌃H / ⌃⌥R fire only when Halen is frontmost | Input Monitoring not granted. Add Halen under System Settings → Privacy & Security → Input Monitoring. (⌃H is also consumed as backspace inside Terminal / iTerm by design.) |
-| Word Replacements never fires | Focused text field is non-AX (Electron / web / terminal). Logs show `replaceRange: failed to set selection range`. |
-| Writing Coach never fires | No inference backend available. Check Settings → Inference for backend status; if relying on Ollama, confirm it's running with `curl http://localhost:11434/api/tags`. |
+| Writing Assistant never fires | Focused text field is non-AX (Electron / web / terminal). Logs show `replaceRange: failed to set selection range`. |
+| Writing Assistant never fires | No inference backend available. Check Settings → Inference for backend status; if relying on Ollama, confirm it's running with `curl http://localhost:11434/api/tags`. |
 | Voice Dictation says "recogniser unavailable" | On-device speech model not installed. System Settings → Keyboard → Dictation. |
 | Meeting Prep never fires | Calendar access denied, or no event 13–17 min away. Use the "Generate now" button in the plugin detail view. |

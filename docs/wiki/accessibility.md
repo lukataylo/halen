@@ -24,7 +24,7 @@ smoke test we run before every release.
 
 Posts an `NSAccessibility` announcement so VoiceOver speaks an inline
 edit out loud. Used by TypoFixer, SnippetExpander, SentimentGuard,
-AskHalen, StyleGuide, Autocomplete, and VoiceDictation — every
+AskHalen, StyleGuide, Writing Assistant, and VoiceDictation — every
 plugin that writes text via AX. New plugins that write text MUST call
 this helper or the change is silent to assistive tech.
 
@@ -161,7 +161,7 @@ release. Failures here are release blockers.
    `teh quick brown fox `. Listen for "Fixed 'teh' to 'the'." If
    silent, TypoFixer's announcement path regressed.
 4. **Switch Control popover.** Turn Switch Control on, set auto-scan.
-   Trigger Writing Coach with a hostile sentence. The popover
+   Trigger Writing Assistant with a hostile sentence. The popover
    should auto-focus the primary action ("Rephrase") — auto-scan
    should reach the buttons without manual intervention.
 5. **Menu-equivalent reach.** With hotkeys *disabled* in Settings, open

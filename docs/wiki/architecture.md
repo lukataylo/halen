@@ -43,7 +43,7 @@ Sources/Halen/
        │    │             │             │             │               │
        │    ▼             ▼             ▼             ▼               │
        │  AskHalen  TypoFixer  SentimentGuard  SnippetExpander        │
-       │  ClarityChecker  VoiceDictation  Autocomplete  StyleGuide    │
+       │  ClarityChecker  VoiceDictation  WritingAssistant            │
        │  EmailReply  ToneProfiles                                    │
        │                       │            BurnoutCopilot ─┐         │
        │                       │            MeetingPrep    ─┤ stdio   │
@@ -99,14 +99,15 @@ Ten in-process plugins ship as Swift classes wired into
 `Autocomplete`, `StyleGuide`, `EmailReply`, `ToneProfiles`. The
 `PluginRegistry` (`@Observable`) persists each plugin's enabled state in
 `UserDefaults` under the key `plugin.<id>.enabled` and calls `start()` /
-`stop()` on toggle. Default-off plugins (Voice, Autocomplete, StyleGuide,
-EmailReply, ToneProfiles) opt in via onboarding.
+`stop()` on toggle. Default-off plugins (Voice, EmailReply, ToneProfiles) opt in via onboarding.
 
-These ten classes back the **six** entries you see in the marketplace —
+These ten classes back the **five** entries you see in the marketplace —
 the v0.3 merges fold `TypoFixer` + `StyleGuide` into Word Replacements,
 `SentimentGuard` + `ClarityChecker` into Writing Coach, and `EmailReply`
 into Snippet Expander; `ToneProfiles` moved out of the marketplace into
-Settings. The class names (and the on-disk plugin ids) keep their
+Settings. The Writing Assistant consolidation then folds Word Replacements,
+Writing Coach, and `Autocomplete` into a single Writing Assistant plugin.
+The class names (and the on-disk plugin ids) keep their
 pre-merge form so existing user data carries over without migration.
 
 Out-of-process plugins — `BurnoutCopilot` and `MeetingPrep` ship in this

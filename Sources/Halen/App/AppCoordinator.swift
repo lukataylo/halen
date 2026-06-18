@@ -218,21 +218,20 @@ final class AppCoordinator {
         // the Plugin Store, with their privileged work (calendar, the break
         // prompt) behind the JSON-RPC boundary like any third-party plugin.
         registry.register(AskHalen(services: services))
-        // Word Replacements merges the previous Typo Fixer + Style Guide
-        // plugins. Both engines live underneath as separate objects so
-        // their distinct UX patterns (silent inline vs popover) survive
-        // the merge — the wrapper just starts/stops them together and
-        // hosts a tabbed detail view.
-        registry.register(WordReplacements(services: services, typoStore: typoStore))
-        // Writing Coach merges the previous Sentiment Guard + Clarity
-        // Checker plugins. Same wrapper pattern as Word Replacements.
-        registry.register(WritingCoach(services: services))
+        // Writing Assistant is the single "Grammarly-esque" writing surface —
+        // it merges Word Replacements (typo fixes + term swaps), Writing Coach
+        // (tone + clarity), and Autocomplete (ghost-text) into one plugin with
+        // one on/off switch. Each engine stays a distinct internal object so
+        // its UX model (silent inline / popover / ghost-text) survives; the
+        // wrapper starts/stops them together and hosts a tabbed detail view.
+        // (Halen's focus moved to model orchestration; writing help is now one
+        // consolidated feature rather than three independent toggles.)
+        registry.register(WritingAssistant(services: services, typoStore: typoStore))
         registry.register(VoiceDictation(services: services))
         // Snippet Expander now also handles the email-reply action — see
         // EmailReplyDrafter + the ;reply built-in trigger + the ⌃⌥E
         // hotkey installed in SnippetExpander.start().
         registry.register(SnippetExpander(services: services))
-        registry.register(Autocomplete(services: services))
         // Prompt Polish — ⌃⌥P rewrites the selected prompt in place with
         // word-level edits tuned for modern LLMs (improve / set-tone /
         // summarise / coding). Hotkey-only; no text-event subscription.
