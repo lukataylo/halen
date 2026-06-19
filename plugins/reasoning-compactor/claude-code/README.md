@@ -36,6 +36,11 @@ already runs.
 If Halen isn't running (or the bridge is off), the hook exits cleanly and does
 nothing — it never blocks or breaks Claude Code's own `/compact`.
 
+The hook tags its inference request with the `compaction` task kind, so Halen's
+router prefers the **dedicated on-device compaction model** (Qwen3 4B Instruct
+2507) when you've downloaded it (Settings → Inference → Compaction model). Until
+then it transparently falls back to Halen's built-in Gemma model.
+
 ## Compaction strategy
 
 Same approach as Halen's Reasoning Compactor and the 2025 CoT-compression

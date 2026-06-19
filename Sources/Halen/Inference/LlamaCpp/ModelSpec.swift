@@ -109,4 +109,38 @@ extension ModelSpec {
         },
         extraStopTokens: ["<|im_end|>", "<|im_start|>"]
     )
+
+    /// Dedicated on-device **compaction** model — Qwen3-4B-Instruct-2507.
+    /// A non-thinking instruct model (never emits `<think>` blocks, so output
+    /// stays terse), 256K native context for ingesting long transcripts, strong
+    /// instruction-following (IFEval ~83), Apache-2.0. Routed to **only** for the
+    /// `.compaction` task kind via `strongAt`, so generation/rewrite traffic
+    /// stays on Gemma; its higher `basePriority` (6 vs Gemma's 5) keeps Gemma the
+    /// winner for `.generation` even though both serve `.medium`.
+    ///
+    /// Opt-in (~2.5 GB) — unlike Gemma/Qwen-0.5B it is NOT auto-downloaded at
+    /// launch (`AppCoordinator.compactionDownloader` is created but not started;
+    /// the user triggers it from Settings → Inference). Until it's present,
+    /// `.compaction` requests fall back to Gemma. Source is the unsloth GGUF
+    /// mirror — the same publisher Halen already trusts for the bundled Gemma.
+    /// `expectedSize` / `expectedSHA256` are the file's HuggingFace
+    /// `x-linked-size` / `x-linked-etag`.
+    static let qwen3_4B_2507_Q4_K_M = ModelSpec(
+        id: "bundled/qwen3-4b-2507",
+        filename: "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+        bundleResourceName: "Qwen3-4B-Instruct-2507-Q4_K_M",
+        displayName: "Qwen3 4B Instruct 2507 (Q4_K_M)",
+        sourceURL: URL(string:
+            "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
+        )!,
+        expectedSize: 2_497_281_120,   // ~2.50 GB
+        expectedSHA256: "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+        servesTiers: [.medium, .large],
+        strongAt: [.compaction],
+        basePriority: 6,
+        chatTemplate: { p in
+            "<|im_start|>user\n\(p)<|im_end|>\n<|im_start|>assistant\n"
+        },
+        extraStopTokens: ["<|im_end|>", "<|im_start|>"]
+    )
 }

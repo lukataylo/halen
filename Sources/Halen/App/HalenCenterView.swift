@@ -17,6 +17,9 @@ struct HalenCenterView: View {
     @Bindable var inferenceSettings: InferenceSettings
     let router: RouterInferenceClient
     @Bindable var modelDownloader: ModelDownloader
+    /// Opt-in downloader for the dedicated compaction model (Qwen3-4B-2507).
+    /// Threaded straight through to SettingsView's Inference card.
+    @Bindable var compactionDownloader: ModelDownloader
     /// Optional — only present once `AppCoordinator.startObservers()` has run
     /// (which happens after Accessibility is granted). The Settings card hides
     /// the WS section while it's nil to avoid a half-rendered control.
@@ -66,6 +69,7 @@ struct HalenCenterView: View {
                     inferenceSettings: inferenceSettings,
                     router: router,
                     modelDownloader: modelDownloader,
+                    compactionDownloader: compactionDownloader,
                     webSocketBridge: webSocketBridge,
                     launchAtLogin: launchAtLogin,
                     toneProfileStore: toneProfileStore,

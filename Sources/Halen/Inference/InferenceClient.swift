@@ -6,6 +6,8 @@ import Foundation
 enum InferenceTaskKind: String, Sendable, Codable {
     case classification   // short extractive output: a tone label, a yes/no
     case generation       // rewrites, summaries, briefings — needs a capable model
+    case compaction       // context / chain-of-thought compaction — prefers the
+                          // dedicated Qwen3 compactor when it's downloaded
 }
 
 struct InferenceRequest: Sendable {

@@ -10,6 +10,9 @@ versioning is [semver](https://semver.org/).
 - **Reasoning Compactor now installs a Claude Code plugin.** Toggling Reasoning Compactor on installs `halen-local-compaction` into a local Claude Code marketplace and enables it in `~/.claude/settings.json`; toggling off removes it. The plugin compacts Claude Code's context **on-device** — its PreCompact hook routes the transcript through the running Halen app's local model over the loopback bridge (`127.0.0.1:50765`), so nothing is sent to the cloud for the summary, and its SessionStart hook re-injects that local summary on resume.
 - Configure frequency, type (extractive/abstractive) and the major tradeoffs from inside Claude Code with `/halen-local-compaction:configure`. Degrades safely when Halen isn't running — it never blocks Claude Code's own `/compact`.
 
+### Compaction model
+- **New dedicated compaction model — Qwen3 4B Instruct 2507** (Apache-2.0, 256K context, non-thinking; ~2.5 GB). Added to the model manager with a new `.compaction` inference task kind: the router sends compaction work to it when it's downloaded, while writing/rewrite traffic stays on Gemma. It's an **opt-in download** from Settings → Inference (not auto-fetched); until then, compaction falls back to the built-in Gemma model.
+
 ## [0.3.0] — 2026-05-25
 
 Six plugins, down from ten. Same features, simpler marketplace.

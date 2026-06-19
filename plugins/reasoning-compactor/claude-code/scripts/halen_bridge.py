@@ -208,9 +208,14 @@ def request(method: str, params: dict, *, port: int = DEFAULT_PORT,
 
 
 def complete(prompt: str, *, tier: str = "medium", max_tokens: int = 1024,
-             temperature: float = 0.3, port: int = DEFAULT_PORT,
-             timeout: float = 45.0, token_path: str = _TOKEN_PATH) -> str:
-    """Run one on-device completion through Halen and return the text."""
+             temperature: float = 0.3, task_kind: str = "compaction",
+             port: int = DEFAULT_PORT, timeout: float = 45.0,
+             token_path: str = _TOKEN_PATH) -> str:
+    """Run one on-device completion through Halen and return the text.
+
+    `task_kind` defaults to ``"compaction"`` so Halen's router prefers the
+    dedicated on-device compaction model (Qwen3-4B) when it's installed, and
+    falls back to the general model otherwise."""
     result = request(
         "inference/complete",
         {
@@ -218,7 +223,7 @@ def complete(prompt: str, *, tier: str = "medium", max_tokens: int = 1024,
             "tier": tier,
             "maxTokens": max_tokens,
             "temperature": temperature,
-            "taskKind": "generation",
+            "taskKind": task_kind,
         },
         port=port, timeout=timeout, token_path=token_path,
     )

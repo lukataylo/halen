@@ -27,6 +27,18 @@ enum InferenceBackends {
             LlamaCppBackend(spec: .gemma4E4B_IQ4_XS),
             OllamaBackend(),
         ]
+        // Dedicated compaction model (Qwen3-4B-Instruct-2507) — registered ONLY
+        // when its GGUF is already downloaded. It must not enter the router as an
+        // unavailable backend: the router caches availability by `BackendKind`,
+        // and every LlamaCppBackend shares `.bundledLlama`, so probing an
+        // un-downloaded compaction model would cache the whole bundled-llama kind
+        // as unavailable and starve Gemma of `.medium` traffic. Gating on the
+        // file's presence keeps it out until the opt-in download completes (the
+        // backend is picked up on the next launch); until then `.compaction`
+        // requests fall back to Gemma.
+        if ModelLocation.isAvailable(for: .qwen3_4B_2507_Q4_K_M) {
+            backends.append(LlamaCppBackend(spec: .qwen3_4B_2507_Q4_K_M))
+        }
         #if canImport(FoundationModels)
         if #available(macOS 26, *) {
             backends.append(AppleFMBackend())

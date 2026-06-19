@@ -24,6 +24,14 @@ final class AppCoordinator {
     /// smaller than Gemma, so the first text.paused → popover stays in the
     /// sub-second range. Same SwiftUI-observable shape as `modelDownloader`.
     let classifierDownloader = ModelDownloader(spec: .qwen25_05B_Q4_K_M)
+    /// Downloader for the dedicated on-device compaction model (Qwen3-4B-Instruct-
+    /// 2507, ~2.5 GB). **Opt-in** — unlike `modelDownloader` / `classifierDownloader`
+    /// it is deliberately NOT auto-started at launch (it's large and only the
+    /// Reasoning Compactor's Claude Code compaction path needs it). The user
+    /// starts it from Settings → Inference; once downloaded, the next launch
+    /// registers it as a backend (`InferenceBackends.makeAll`) and the router
+    /// sends `.compaction` work to it. Until then compaction falls back to Gemma.
+    let compactionDownloader = ModelDownloader(spec: .qwen3_4B_2507_Q4_K_M)
     let inference: RouterInferenceClient
     let typoStore = TypoStore()
     /// Per-app tone profiles — a host service (passed into `HalenServices`),

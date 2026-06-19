@@ -11,6 +11,9 @@ struct SettingsView: View {
     @Bindable var inferenceSettings: InferenceSettings
     let router: RouterInferenceClient
     @Bindable var modelDownloader: ModelDownloader
+    /// Opt-in downloader for the dedicated compaction model (Qwen3-4B-2507).
+    /// Surfaced as its own Inference card; not started until the user asks.
+    @Bindable var compactionDownloader: ModelDownloader
     let webSocketBridge: WebSocketBridge?
     @Bindable var launchAtLogin: LaunchAtLoginController
     /// Per-app tone profile store + the in-memory recently-focused-apps
@@ -35,6 +38,7 @@ struct SettingsView: View {
 
     @State private var pollTask: Task<Void, Never>?
     @State private var confirmingModelRemove = false
+    @State private var confirmingCompactionRemove = false
     @State private var confirmingTokenRotate = false
     @State private var tokenCopied = false
     /// Owned at view scope — the data is cheap to re-query and shouldn't
@@ -67,6 +71,7 @@ struct SettingsView: View {
                     aiCard
                     ollamaCard
                     builtInModelCard
+                    compactionModelCard
                     if webSocketBridge != nil { webSocketCard }
                     hotkeyConflictCard
                     aboutCard
@@ -717,6 +722,111 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    /// Opt-in card for the dedicated compaction model (Qwen3-4B-Instruct-2507).
+    /// Mirrors `builtInModelCard` but is never auto-downloaded — it powers the
+    /// Reasoning Compactor's on-device Claude Code compaction. Until it's
+    /// downloaded, compaction falls back to the built-in Gemma model.
+    private var compactionModelCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                cardLabel("Compaction model")
+
+                HStack(spacing: 10) {
+                    statusDot(compactionStatusKind)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(compactionStatusTitle)
+                            .font(.system(.callout, weight: .medium))
+                        Text(compactionDownloader.displayName)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
+                    Spacer(minLength: 6)
+                    compactionActionButton
+                }
+
+                if case let .downloading(fraction, bytes, total) = compactionDownloader.state {
+                    ProgressView(value: fraction)
+                        .progressViewStyle(.linear)
+                        .controlSize(.small)
+                        .accessibilityLabel("Compaction model download progress")
+                        .accessibilityValue("\(Int(fraction * 100)) percent")
+                    Text("\(formatBytes(bytes)) of \(formatBytes(total)) (\(Int(fraction * 100))%)")
+                        .font(.caption2)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("Optional ~2.5 GB model that compacts Claude Code context on-device for the Reasoning Compactor. Until it's downloaded, compaction uses the built-in model.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var compactionActionButton: some View {
+        switch compactionDownloader.state {
+        case .notDownloaded:
+            Button("Download") { compactionDownloader.start() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .accessibilityHint("Downloads the Qwen3 4B compaction model (about 2.5 gigabytes).")
+        case .downloading:
+            Button("Cancel") { compactionDownloader.cancel() }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityHint("Stops the in-progress download.")
+        case .verifying, .installing:
+            ProgressView()
+                .controlSize(.small)
+                .accessibilityLabel("Preparing compaction model")
+        case .ready:
+            Button("Remove") { confirmingCompactionRemove = true }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityHint("Deletes the locally stored compaction model. You can re-download it later.")
+                .confirmationDialog("Delete the downloaded Qwen3 4B compaction model?",
+                                    isPresented: $confirmingCompactionRemove,
+                                    titleVisibility: .visible) {
+                    Button("Delete (\(formatBytes(compactionDownloader.expectedSize)))",
+                           role: .destructive) {
+                        compactionDownloader.removeDownloaded()
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Compaction will fall back to the built-in model until you re-download it. Takes effect on the next launch.")
+                }
+        case .failed:
+            Button("Retry") { compactionDownloader.start() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .accessibilityHint("Retries the failed compaction model download.")
+        }
+    }
+
+    private var compactionStatusKind: StatusKind {
+        switch compactionDownloader.state {
+        case .ready:                                return .ok
+        case .downloading, .verifying, .installing: return .warning
+        case .notDownloaded:                        return .neutral
+        case .failed:                               return .error
+        }
+    }
+
+    private var compactionStatusTitle: String {
+        switch compactionDownloader.state {
+        case .notDownloaded: return "Not downloaded"
+        case .downloading:   return "Downloading…"
+        case .verifying:     return "Verifying…"
+        case .installing:    return "Installing…"
+        case .ready:         return "Ready"
+        case .failed:        return "Download failed"
         }
     }
 

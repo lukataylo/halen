@@ -13,6 +13,7 @@ struct HalenApp: App {
                 inferenceSettings: appDelegate.coordinator.inferenceSettings,
                 router: appDelegate.coordinator.inference,
                 modelDownloader: appDelegate.coordinator.modelDownloader,
+                compactionDownloader: appDelegate.coordinator.compactionDownloader,
                 webSocketBridge: appDelegate.coordinator.webSocketBridge,
                 launchAtLogin: appDelegate.coordinator.launchAtLogin,
                 hotkeyConflicts: appDelegate.coordinator.hotkeyConflicts,
