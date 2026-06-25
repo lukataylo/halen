@@ -46,15 +46,12 @@ daemon) — never off-device. Plugins that downstream the text further:
 
 - **Writing Assistant (tone & clarity engines)** re-windows to ~800 chars around the caret before
   hashing and sending for tone + clarity classification.
-- **Burnout Copilot** re-windows to ~800 chars before its yes/no tone call.
 - **Snippet Expander (AI snippets)** sends the 500 chars *immediately
   preceding* the trigger as prior context; the ⌃⌥R rephrase hotkey sends only
   the currently selected text.
 - **Ask Halen** sends your typed question plus the context you can see in the
   palette — the focused app name, the current selection, and the most recent
   clipboard entry.
-- **Meeting Prep** sends EventKit event titles, attendee names, and notes
-  — never anything from focused text fields.
 - **Writing Assistant (corrections engine)** auto-typo path does string diffs locally; it never
   sends text to a model. The preferences path is pure rule-matching too.
 - **Snippet Expander's `;reply` / ⌃⌥E** sends the focused email's body
@@ -70,7 +67,7 @@ Everything by default. Concretely:
 - **Sentiment rules** — `~/Library/Application Support/Halen/com.halen.sentiment-guard/rules.json`. Local file.
 - **Approved-draft fingerprints** — `~/Library/Application Support/Halen/com.halen.sentiment-guard/approved.json`. **SHA-256 hex digests** of windowed drafts the user marked "Looks fine". The plaintext is *not* persisted — only the hash.
 - **Snippets** — `~/Library/Application Support/Halen/com.halen.snippet-expander/snippets.json`. Local file.
-- **Briefed-event ids** — `~/Library/Application Support/Halen/com.halen.meeting-prep/processed.json`. Local file. Contains only EventKit event identifiers, not titles or contents.
+- **Per-app tone profiles** — `~/Library/Application Support/Halen/com.halen.tone-profiles/profiles.json`. Local file. Maps bundle ids to the register Sentiment Guard holds your writing to.
 - **Mother rulebook & ledger** — `~/Library/Application Support/Halen/com.halen.mother/config.json` (your app/site blocklist and schedule) and `state.json` (a local log of blocks and overrides — app name or site host, timestamp, action). Local files. Nothing is sent anywhere; Mother makes no network requests at all.
 
 ## Network traffic
@@ -150,16 +147,17 @@ installed, recognition runs entirely on the Neural Engine.
 
 ## EventKit
 
-Burnout Copilot and Meeting Prep ask for **full Calendars access** via
-`EKEventStore.requestFullAccessToEvents()`. Both plugins:
+No built-in feature uses the calendar. A plugin that declares the `calendar`
+permission (e.g. Desktop Buddy's pre-meeting nudges) triggers **full Calendars
+access** via `EKEventStore.requestFullAccessToEvents()` when it starts. Such a
+plugin can:
 
-- Read events (titles, start/end, attendees, notes) from the system
-  calendar database.
-- Burnout Copilot also **writes** a single `🌿 Halen break` event when
-  the user accepts the break suggestion. No other writes.
+- Read events (titles, start/end, attendees, notes) via the host's
+  `calendar/upcomingEvents` JSON-RPC method.
+- Write an event via `calendar/createEvent` (the host brokers it).
 
 Calendar data flows through the same pipeline as everything else: read
-into memory, sent to the local inference backend if needed (Meeting Prep),
+into memory, sent to the local inference backend only if the plugin needs it,
 never persisted outside macOS's own EventKit store.
 
 ## Telemetry
@@ -177,8 +175,8 @@ Nothing is uploaded.
 | Accessibility           | host (CaretObserver) | Read focused text, write back corrections / dictation / snippets |
 | Microphone              | Voice Dictation      | Capture audio for SFSpeechRecognizer |
 | Speech Recognition      | Voice Dictation      | Convert audio to text **on-device** |
-| Calendars (full access) | Burnout Copilot, Meeting Prep | Read events; Burnout writes the `🌿 Halen break` event |
-| Notifications           | Meeting Prep, Ask Halen | Briefing-ready alerts, and clipboard-fallback notices when a result can't be inserted at the caret |
+| Calendars (full access) | Optional plugins (e.g. Desktop Buddy) | Read/write events via the host's `calendar/*` methods — no built-in needs it |
+| Notifications           | Ask Halen, Snippet Expander, plugins | Clipboard-fallback notices when a result can't be inserted at the caret |
 | Input Monitoring        | Ask Halen, Snippet Expander | Match the ⌃H and ⌃⌥R hotkeys system-wide — only those hotkeys, no other keystrokes |
 
 You can deny any of these and the host continues to run. The dependent

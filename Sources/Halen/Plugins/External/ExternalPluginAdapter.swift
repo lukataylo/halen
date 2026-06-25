@@ -64,14 +64,62 @@ private struct ExternalPluginDetailView: View {
     let manifest: PluginManifest
     let pluginDir: URL
 
+    @State private var configEntries: [(String, String)] = []
+
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
                 identityCard
                 permissionsCard
+                if !configEntries.isEmpty { configCard }
                 aboutCard
             }
             .padding(12)
+        }
+        .onAppear { loadConfigEntries() }
+    }
+
+    private func loadConfigEntries() {
+        let url = pluginDir.appendingPathComponent("config.json")
+        guard let data = try? Data(contentsOf: url),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return }
+        configEntries = obj
+            .filter { !$0.key.hasPrefix("_") }
+            .sorted { $0.key < $1.key }
+            .map { key, val -> (String, String) in
+                switch val {
+                case let b as Bool:   return (key, b ? "true" : "false")
+                case let n as NSNumber: return (key, n.stringValue)
+                case let s as String: return (key, s)
+                case let a as [Any]:  return (key, a.map { "\($0)" }.joined(separator: ", "))
+                default:              return (key, "\(val)")
+                }
+            }
+    }
+
+    private var configCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    cardLabel("Settings")
+                    Spacer()
+                    Button {
+                        NSWorkspace.shared.open(pluginDir.appendingPathComponent("config.json"))
+                    } label: {
+                        Label("Edit…", systemImage: "pencil")
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                }
+                ForEach(configEntries, id: \.0) { key, value in
+                    infoRow(key, value, mono: true)
+                }
+                Text("Restart the plugin after editing (toggle off → on).")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 2)
+            }
         }
     }
 

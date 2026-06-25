@@ -135,27 +135,28 @@ your locale (System Settings → Keyboard → Dictation → Languages — toggle
 language and tick "Enhanced"). Until then the recogniser reports unavailable
 and dictation logs `Speech recogniser is unavailable (no on-device model?)`.
 
-### 4. Calendar (Burnout Copilot + Meeting Prep)
+### 4. Calendar (optional, plugin-driven)
 
-Triggered when either plugin starts.
-`EKEventStore.requestFullAccessToEvents()` on macOS 14+.
+Only requested by a plugin that declares the `calendar` permission and reads
+your schedule (e.g. **Desktop Buddy**'s pre-meeting nudges). No built-in
+feature needs it, so a default install never asks. When a plugin does,
+`EKEventStore.requestFullAccessToEvents()` runs on macOS 14+.
 
 Usage strings (`NSCalendarsUsageDescription`, `NSCalendarsFullAccessUsageDescription`):
 
-> Halen reads your upcoming events to suggest breaks (Burnout Copilot) and
-> prepare briefings before meetings (Meeting Prep). Calendar data is read
-> locally only.
+> Halen reads your upcoming events on behalf of plugins you install. Calendar
+> data is read locally only.
 
-Burnout Copilot also writes a single 10-minute "🌿 Halen break" event when
-you accept its suggestion — that requires the full-access scope.
+Full access (not write-only) is requested because the capability *reads*
+events via the host's `calendar/upcomingEvents` JSON-RPC method.
 
-### 5. Notifications (Meeting Prep, Ask Halen, Email Reply)
+### 5. Notifications (clipboard fallbacks + plugins)
 
 `UNUserNotificationCenter.requestAuthorization(options: [.alert, .sound])`.
-Meeting Prep posts one notification 1 second after a briefing lands on your
-clipboard; Ask Halen and the `;reply` email drafter post one when a result
-falls back to the clipboard because the caret target couldn't be written. If
-you deny, the clipboard copy still happens silently.
+Ask Halen, the `;reply` email drafter, and the Snippet Expander rewrites post
+one notification when a result falls back to the clipboard because the caret
+target couldn't be written; installed plugins may post their own. If you deny,
+the clipboard copy still happens silently.
 
 ### 6. Input Monitoring (Ask Halen + Snippet Expander rephrase)
 
@@ -186,11 +187,9 @@ instead and needs no permission beyond Accessibility.)
   com.halen.clarity-checker/
     rules.json                                # Writing Assistant: clarity rules
   com.halen.tone-profiles/
-    profiles.json                             # Settings → App tone profiles
+    profiles.json                             # Writing Assistant → Tone tab: per-app target tones
   com.halen.snippet-expander/
     snippets.json                             # Snippet Expander
-  com.halen.meeting-prep/
-    processed.json                            # event ids already briefed (external plugin)
 ```
 
 All hand-editable JSON. The on-disk paths still use legacy plugin ids
@@ -209,4 +208,3 @@ overwriting user changes — see each plugin's "Storage" section.
 | Writing Assistant never fires | Focused text field is non-AX (Electron / web / terminal). Logs show `replaceRange: failed to set selection range`. |
 | Writing Assistant never fires | No inference backend available. Check Settings → Inference for backend status; if relying on Ollama, confirm it's running with `curl http://localhost:11434/api/tags`. |
 | Voice Dictation says "recogniser unavailable" | On-device speech model not installed. System Settings → Keyboard → Dictation. |
-| Meeting Prep never fires | Calendar access denied, or no event 13–17 min away. Use the "Generate now" button in the plugin detail view. |

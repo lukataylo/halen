@@ -205,7 +205,7 @@ enum RouterError: Error, LocalizedError, CustomStringConvertible {
     case backendUnavailable(BackendKind)
     case allBackendsFailed(Error?)
 
-    /// User-facing — surfaced in plugin UIs (e.g. Meeting Prep) via
+    /// User-facing — surfaced in plugin UIs (e.g. Ask Halen) via
     /// `error.localizedDescription`. Kept actionable, never a raw error dump.
     var errorDescription: String? {
         switch self {

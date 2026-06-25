@@ -18,9 +18,7 @@ struct HalenApp: App {
                 hotkeyConflicts: appDelegate.coordinator.hotkeyConflicts,
                 onOpenStore: { appDelegate.coordinator.pluginStoreWindow.show() },
                 onRunSetupAgain: { appDelegate.coordinator.onboardingWindow.presentAgain() },
-                updater: appDelegate.coordinator.updater,
-                toneProfileStore: appDelegate.coordinator.toneProfileStore,
-                recentApps: appDelegate.coordinator.recentApps
+                updater: appDelegate.coordinator.updater
             )
         } label: {
             Image(nsImage: Self.menubarIcon)

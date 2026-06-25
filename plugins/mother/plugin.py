@@ -19,8 +19,8 @@ no network, no accounts, no telemetry. She watches two surfaces —
 The privileged macOS work splits two ways, exactly like the other Halen
 plugins: notifications and modal prompts are proxied through the host over
 JSON-RPC (`ui/toast`, `ui/prompt`); quitting an app or closing a tab is done
-by Mother's own `osascript` subprocess — the same trick burnout-copilot uses
-to fire a Shortcut. Mother holds no macOS entitlements of her own.
+by Mother's own `osascript` subprocess — a subprocess the plugin spawns
+itself, not a host capability. Mother holds no macOS entitlements of her own.
 
 Config + state live under
   ~/Library/Application Support/Halen/com.halen.mother/

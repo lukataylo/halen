@@ -47,10 +47,11 @@ The manifest format and the host-side JSON-RPC methods live in
 event-dispatch / RPC-handling code lives in
 `Sources/Halen/Plugins/External/`.
 
-`burnout-copilot` and `meeting-prep` were extracted in milestones M2.3
-and M2.4 respectively. They're the reference implementations; new
-extractions should mirror their JSON-RPC plumbing (see the
-`_send` / `call` / `_resolve` helpers — identical in both).
+`burnout-copilot` and `meeting-prep` were the first extractions (milestones
+M2.3 and M2.4); both were later removed as unused. The surviving reference
+implementations are `reasoning-compactor` and `mother` — new extractions
+should mirror their JSON-RPC plumbing (see the `_send` / `call` / `_resolve`
+helpers, identical across all the out-of-process plugins).
 
 ## What StyleGuide proved
 

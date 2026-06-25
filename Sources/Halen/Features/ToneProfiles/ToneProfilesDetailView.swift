@@ -1,7 +1,13 @@
 import SwiftUI
 
+/// Per-app target-tone editor, surfaced inside the Writing Assistant's Tone
+/// tab. Renders as a plain `VStack` (no ScrollView of its own) so it can sit
+/// among the other cards in `SentimentGuardDetailView`'s scroll view. The user
+/// assigns an expected register (Formal / Business casual / Casual) to the apps
+/// they care about; Sentiment Guard flags messages that read less formal than
+/// that target. Apps left Neutral impose no target.
 @MainActor
-struct ToneProfilesDetailView: View {
+struct ToneProfilesEditor: View {
     @Bindable var store: AppToneProfileStore
     @Bindable var recentApps: RecentAppsModel
     /// Set of bundle ids the user has multi-selected in the unassigned list.
@@ -9,44 +15,9 @@ struct ToneProfilesDetailView: View {
     @State private var multiSelection: Set<String> = []
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 10) {
-                assignedCard
-                recentCard
-                tonesCard
-                aboutCard
-            }
-            .padding(12)
-        }
-    }
-
-    // MARK: - Tone descriptions
-
-    /// Surface the prompt clauses Halen actually feeds the model so the
-    /// user can see what each tone profile *does*. The strings live on
-    /// `ToneProfile.promptClause`; rendered here as a small reference card
-    /// rather than hidden inside the picker.
-    private var tonesCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 8) {
-                cardLabel("What each tone means")
-                ForEach(ToneProfile.allCases) { profile in
-                    VStack(alignment: .leading, spacing: 2) {
-                        // Semantic .callout — Larger Accessibility Sizes scales the label.
-                        Text(profile.label)
-                            .font(.callout)
-                            .fontWeight(.semibold)
-                        Text(profile.promptClause)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.vertical, 3)
-                    if profile != ToneProfile.allCases.last {
-                        Divider().opacity(0.3)
-                    }
-                }
-            }
+        VStack(spacing: 10) {
+            assignedCard
+            recentCard
         }
     }
 
@@ -55,11 +26,12 @@ struct ToneProfilesDetailView: View {
     private var assignedCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                cardLabel("App tone profiles")
+                cardLabel("Expected tone per app")
                 if store.sortedEntries.isEmpty {
-                    Text("Choose a tone for each app below.")
+                    Text("No apps set yet. Pick an app below and choose the tone you write in there — e.g. Outlook → Formal, Teams → Business casual.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else {
                     VStack(spacing: 0) {
                         ForEach(store.sortedEntries, id: \.bundleId) { entry in
@@ -82,7 +54,7 @@ struct ToneProfilesDetailView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
-                    cardLabel("Recently used apps")
+                    cardLabel("Add an app")
                     Spacer()
                     if !multiSelection.isEmpty {
                         Text("\(multiSelection.count) selected")
@@ -110,7 +82,13 @@ struct ToneProfilesDetailView: View {
                                         multiSelection.insert(app.bundleId)
                                     }
                                 },
-                                onAssign: { store.setProfile($0, for: app.bundleId) }
+                                onAssign: {
+                                    store.setProfile($0, for: app.bundleId)
+                                    // The row leaves the unassigned list now —
+                                    // drop it from any pending bulk selection so
+                                    // a later bulk tap can't overwrite this pick.
+                                    multiSelection.remove(app.bundleId)
+                                }
                             )
                         }
                     }
@@ -123,7 +101,9 @@ struct ToneProfilesDetailView: View {
                             Text("Apply to selected:")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            ForEach(ToneProfile.allCases) { tone in
+                            // Neutral is "no target" — assigning it here would
+                            // just clear the row, so only offer real registers.
+                            ForEach(ToneProfile.allCases.filter { $0 != .neutral }) { tone in
                                 Button(tone.label) {
                                     for bundleId in multiSelection {
                                         store.setProfile(tone, for: bundleId)
@@ -146,18 +126,6 @@ struct ToneProfilesDetailView: View {
                         .padding(.top, 6)
                     }
                 }
-            }
-        }
-    }
-
-    private var aboutCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 6) {
-                cardLabel("How it's used")
-                Text("Rules adjust to the app you're in. Slack gets different rules than Mail.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -192,8 +160,8 @@ private struct ToneRow: View {
             .pickerStyle(.menu)
             .labelsHidden()
             .fixedSize()
-            .accessibilityLabel("Tone profile for \(title)")
-            .accessibilityHint("Choose which tone Halen uses when you're in this app.")
+            .accessibilityLabel("Expected tone for \(title)")
+            .accessibilityHint("Choose the register Sentiment Guard holds your writing to in this app.")
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 2)
@@ -234,13 +202,14 @@ private struct SelectableToneRow: View {
             }
             Spacer(minLength: 8)
             Picker("", selection: Binding(get: { ToneProfile.neutral }, set: { onAssign($0) })) {
-                ForEach(ToneProfile.allCases) { Text($0.label).tag($0) }
+                Text("Set tone…").tag(ToneProfile.neutral)
+                ForEach(ToneProfile.allCases.filter { $0 != .neutral }) { Text($0.label).tag($0) }
             }
             .pickerStyle(.menu)
             .labelsHidden()
             .fixedSize()
             .accessibilityLabel("Assign tone to \(title)")
-            .accessibilityHint("Picks a tone profile for this app.")
+            .accessibilityHint("Picks the expected register for this app.")
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 2)

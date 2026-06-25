@@ -48,12 +48,11 @@ final class WritingCoach: HalenPlugin {
         clarityChecker.stop()
     }
 
+    // WritingCoach is an internal start/stop wrapper only — it isn't a
+    // registered plugin row. Its engines are surfaced as the Writing
+    // Assistant's top-level Tone and Clarity tabs (see WritingAssistant),
+    // so this never renders; HalenPlugin just requires it.
     func makeDetailView() -> AnyView {
-        AnyView(
-            WritingCoachDetailView(
-                sentiment: sentimentGuard,
-                clarity: clarityChecker
-            )
-        )
+        sentimentGuard.makeDetailView()
     }
 }

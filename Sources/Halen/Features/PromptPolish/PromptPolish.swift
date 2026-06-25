@@ -6,7 +6,7 @@ import IOKit.hid
 import UserNotifications
 
 /// Prompt Polish — select the prompt you're about to send to an LLM, press
-/// ⌃⌥P, and Halen makes targeted **word-level edits** to it in place so a modern
+/// ⌃⌥⌘P, and Halen makes targeted **word-level edits** to it in place so a modern
 /// model (Gemini-, GPT-, Claude-class) answers it well.
 ///
 /// This is the applied side of the `research/register-lab` study: word choice
@@ -32,15 +32,15 @@ final class PromptPolish: HalenPlugin {
     private let services: HalenServices
     private weak var caretObserver: CaretObserver?
 
-    /// NSEvent monitor handles for the ⌃⌥P hotkey.
+    /// NSEvent monitor handles for the ⌃⌥⌘P hotkey.
     private var globalHotkeyMonitor: Any?
     private var localHotkeyMonitor: Any?
-    /// In-flight polish Task. A second ⌃⌥P supersedes a slow first one.
+    /// In-flight polish Task. A second ⌃⌥⌘P supersedes a slow first one.
     private var inflight: Task<Void, Never>?
 
     // MARK: - Persisted settings
 
-    /// Which transform ⌃⌥P applies. Persisted in UserDefaults; the detail view
+    /// Which transform ⌃⌥⌘P applies. Persisted in UserDefaults; the detail view
     /// edits it via `@AppStorage(defaultModeKey)`.
     enum PolishMode: String, CaseIterable, Sendable {
         case improve
@@ -144,22 +144,23 @@ final class PromptPolish: HalenPlugin {
         AnyView(PromptPolishDetailView())
     }
 
-    // MARK: - Hotkey (⌃⌥P)
+    // MARK: - Hotkey (⌃⌥⌘P)
 
-    /// Install global + local `.keyDown` monitors for ⌃⌥P. Same mechanism as
+    /// Install global + local `.keyDown` monitors for ⌃⌥⌘P. Same mechanism as
     /// SnippetExpander's ⌃⌥R — NSEvent monitors (not Carbon) so the chord
     /// fires regardless of the focused app. Needs Input Monitoring;
     /// `IOHIDRequestAccess` is idempotent if another plugin already asked.
     private func installHotkey() {
         // Idempotent: never install a second pair of monitors over a live one
-        // (which would leak the first and double-fire ⌃⌥P). Matches the guard
+        // (which would leak the first and double-fire ⌃⌥⌘P). Matches the guard
         // SnippetExpander applies to its own start().
         guard globalHotkeyMonitor == nil else { return }
         _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
 
-        // ⌃⌥P: Control+Option held (and nothing else), key "p".
+        // ⌃⌥⌘P: Control+Option+Command held (and nothing else), key "p".
+        // Three modifiers so it can't collide with a browser/app shortcut.
         let isHotkey: (NSEvent) -> Bool = { event in
-            event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.control, .option]
+            event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.control, .option, .command]
                 && event.charactersIgnoringModifiers?.lowercased() == "p"
         }
         globalHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -169,11 +170,11 @@ final class PromptPolish: HalenPlugin {
         localHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if isHotkey(event) {
                 MainActor.assumeIsolated { self?.fire() }
-                return nil   // consume — don't let ⌃⌥P fall through
+                return nil   // consume — don't let ⌃⌥⌘P fall through
             }
             return event
         }
-        Log.info("PromptPolish: ⌃⌥P monitors installed (global=\(globalHotkeyMonitor != nil), local=\(localHotkeyMonitor != nil))")
+        Log.info("PromptPolish: ⌃⌥⌘P monitors installed (global=\(globalHotkeyMonitor != nil), local=\(localHotkeyMonitor != nil))")
     }
 
     /// Cancel any prior polish, kick off a new one against the current selection.
@@ -191,16 +192,16 @@ final class PromptPolish: HalenPlugin {
     @discardableResult
     private func polishSelection(mode: PolishMode, tone: ToneTarget) -> Task<Void, Never>? {
         guard let element = caretObserver?.currentElement else {
-            Log.info("PromptPolish: ⌃⌥P — no focused element")
+            Log.info("PromptPolish: ⌃⌥⌘P — no focused element")
             return nil
         }
         guard let cfRange = axReadSelectedRange(element), cfRange.length > 0 else {
-            notify(body: "Select the prompt you want to polish, then press ⌃⌥P.")
+            notify(body: "Select the prompt you want to polish, then press ⌃⌥⌘P.")
             return nil
         }
         let selected = axReadSelectedText(element)
         guard !selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            notify(body: "Select the prompt you want to polish, then press ⌃⌥P.")
+            notify(body: "Select the prompt you want to polish, then press ⌃⌥⌘P.")
             return nil
         }
         // The rewrite is capped at `maxTokens` below (~600 tokens ≈ a couple
@@ -370,7 +371,7 @@ final class PromptPolish: HalenPlugin {
                     Log.warn("PromptPolish: final AX write failed — target stale or unsupported")
                 }
             } catch is CancellationError {
-                // Superseded by a newer ⌃⌥P — leave the field as-is.
+                // Superseded by a newer ⌃⌥⌘P — leave the field as-is.
             } catch {
                 Log.warn("PromptPolish: failed: \(error)")
                 guard let self,

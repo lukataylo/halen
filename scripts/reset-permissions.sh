@@ -32,7 +32,7 @@ sleep 1
 #   Accessibility      — caret tracking + inline text writes (required)
 #   Microphone         — Voice Dictation audio capture
 #   SpeechRecognition  — on-device dictation transcription
-#   Calendar           — Meeting Prep / Burnout Copilot plugins
+#   Calendar           — optional calendar-using plugins (e.g. Desktop Buddy)
 #   ListenEvent        — Input Monitoring, for the ⌃H / ⌃⌥R hotkeys
 echo "→ resetting TCC permissions for $BUNDLE"
 if tccutil reset All "$BUNDLE" 2>/dev/null; then

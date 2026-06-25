@@ -3,6 +3,11 @@ import SwiftUI
 @MainActor
 struct SentimentGuardDetailView: View {
     @Bindable var rulesStore: SentimentRulesStore
+    /// Per-app target-tone profiles + the recent-apps list that drives the
+    /// app picker. Both surfaced here so "what tone this app expects" lives
+    /// next to the detection it controls.
+    @Bindable var toneProfiles: AppToneProfileStore
+    @Bindable var recentApps: RecentAppsModel
     let approvedCount: Int
     let flaggedCount: Int
     let onClearApproved: () -> Void
@@ -12,6 +17,11 @@ struct SentimentGuardDetailView: View {
     @State private var newPrompt = ""
     @State private var newColor = "purple"
     @State private var confirmingClear = false
+
+    /// Per-app target-tone enforcement — flag a message that reads more casual
+    /// than the app's assigned register. On by default; only acts on apps the
+    /// user has given a non-neutral tone.
+    @AppStorage(SentimentGuard.enforceToneKey) private var enforceTone = true
 
     /// Conciseness check — surfaces wordy filler phrases alongside the tone
     /// classifier. On by default; the scan is rule-based and free.
@@ -29,14 +39,98 @@ struct SentimentGuardDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
+                sectionHeader("Match the app's tone",
+                              "Tell Halen the register each app expects, and it flags messages that read more casual than that.")
+                targetToneCard
+                // The editor stays visible even with enforcement off: a per-app
+                // tone still biases the hostile/irritated classifier (a blunt
+                // Slack line isn't judged like a blunt email). The toggle only
+                // gates the extra "flag a register mismatch" pass + its reference.
+                ToneProfilesEditor(store: toneProfiles, recentApps: recentApps)
+                if enforceTone {
+                    toneMeaningsCard
+                }
+
+                sectionHeader("Catch difficult tone",
+                              "Flag messages that read hostile, irritated, or otherwise off — and offer a calmer rewrite.")
                 rulesCard
                 sensitivityCard
-                ignoredAppsCard
                 concisenessCard
+
+                sectionHeader("Scope & activity", nil)
+                ignoredAppsCard
                 statsCard
                 modelCard
             }
             .padding(12)
+        }
+    }
+
+    // MARK: - Section header
+
+    private func sectionHeader(_ title: String, _ subtitle: String?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(.subheadline, weight: .semibold))
+            if let subtitle {
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 4)
+    }
+
+    // MARK: - Target tone
+
+    private var targetToneCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    cardLabel("Flag tone that doesn't fit the app")
+                    Spacer()
+                    Toggle("", isOn: $enforceTone)
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .labelsHidden()
+                        .accessibilityLabel("Match the app's tone")
+                        .accessibilityHint("When on, a message that reads more casual than the app's set register is flagged.")
+                }
+                Text(enforceTone
+                     ? "e.g. a breezy line in Outlook (Formal) or Teams (Business casual) gets flagged, with a rewrite to the right register. Apps left Neutral are never checked."
+                     : "Off — Halen won't check messages against a per-app register.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Compact reference for the three target registers, so the user knows
+    /// what each picker option holds their writing to.
+    private var toneMeaningsCard: some View {
+        let registers: [ToneProfile] = [.formal, .businessCasual, .casual]
+        return GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                cardLabel("What each tone expects")
+                ForEach(registers) { tone in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(tone.label)
+                            .font(.callout)
+                            .fontWeight(.semibold)
+                        Text(tone.targetDescriptor ?? "")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 3)
+                    if tone != registers.last {
+                        Divider().opacity(0.3)
+                    }
+                }
+            }
         }
     }
 
@@ -87,7 +181,7 @@ struct SentimentGuardDetailView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
                 cardLabel("Ignored apps")
-                Text("Writing Coach stays silent in these apps. Type a bundle id (e.g. com.apple.iChat).")
+                Text("Sentiment Guard stays silent in these apps. Type a bundle id (e.g. com.apple.iChat).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -99,7 +193,7 @@ struct SentimentGuardDetailView: View {
                         .padding(.horizontal, 8).padding(.vertical, 5)
                         .background(RoundedRectangle(cornerRadius: 6).fill(.background.opacity(0.6)))
                         .accessibilityLabel("New ignored bundle id")
-                        .accessibilityHint("Type a bundle id like com.apple.iChat to silence Writing Coach there.")
+                        .accessibilityHint("Type a bundle id like com.apple.iChat to silence Sentiment Guard there.")
                     Button {
                         addIgnoredApp()
                     } label: {
@@ -111,7 +205,7 @@ struct SentimentGuardDetailView: View {
                     .foregroundStyle(newIgnoredApp.trimmingCharacters(in: .whitespaces).isEmpty
                                      ? Color.secondary.opacity(0.4) : Color.accentColor)
                     .accessibilityLabel("Add bundle id to ignore list")
-                    .accessibilityHint("Adds the bundle id you just typed so Writing Coach stops firing there.")
+                    .accessibilityHint("Adds the bundle id you just typed so Sentiment Guard stops firing there.")
                 }
 
                 if ignoredApps.isEmpty {
@@ -139,7 +233,7 @@ struct SentimentGuardDetailView: View {
                                 .buttonStyle(.plain)
                                 .help("Remove from ignore list")
                                 .accessibilityLabel("Remove \(bundleId) from ignore list")
-                                .accessibilityHint("Writing Coach will fire in this app again.")
+                                .accessibilityHint("Sentiment Guard will fire in this app again.")
                             }
                             .padding(.horizontal, 6).padding(.vertical, 3)
                         }

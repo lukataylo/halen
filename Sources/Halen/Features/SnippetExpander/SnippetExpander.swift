@@ -200,7 +200,8 @@ final class SnippetExpander: HalenPlugin {
         Text:
         \(selected)
         """
-        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 500,
+        let request = InferenceRequest(prompt: prompt, tier: .medium,
+                                       maxTokens: rewriteMaxTokens(forInputChars: selected.count),
                                        temperature: 0.4, taskKind: .generation)
         Log.info("SnippetExpander: ⌃⌥R rephrasing \(selected.count)-char selection")
         runPlaceholderInference(
@@ -210,7 +211,10 @@ final class SnippetExpander: HalenPlugin {
             // On an empty / failed response, restore the original selection.
             restoreText: selected,
             label: Self.rephraseHotkeyTrigger,
-            source: "snippet-rephrase"
+            source: "snippet-rephrase",
+            // The selection is the user's own text — recover to the clipboard
+            // if the in-place restore can't land.
+            restoreIsUserText: true
         )
     }
 
@@ -293,16 +297,34 @@ final class SnippetExpander: HalenPlugin {
         }
     }
 
+    /// Output budget for a rewrite. A whole-message rewrite (;casual on a
+    /// multi-paragraph field, or a long ⌃⌥R selection) needs more than the old
+    /// fixed 500 or the tail gets truncated. ~4 chars/token, so `/2` gives ~2×
+    /// the input's token count — ample headroom even when formalizing expands
+    /// the text. Capped at 4000 so a runaway can't spin forever; the AX path
+    /// bounds its input to `maxRewriteChars` so the budget can always cover it.
+    private func rewriteMaxTokens(forInputChars inputChars: Int) -> Int {
+        min(4000, max(500, inputChars / 2))
+    }
+
+    /// Upper bound on how much prior text a whole-field rewrite feeds the model.
+    /// Comfortably covers a long email; beyond it we rewrite only the most
+    /// recent slice (and replace only that slice) so the model's `maxTokens`
+    /// budget can always reproduce the whole input — no silent tail truncation,
+    /// no head deletion. ;casual on a giant document is not the use case.
+    private static let maxRewriteChars = 6000
+
     private func expandAI(snippet: Snippet, at tokenRange: NSRange, fullText ns: NSString) {
         let replacesPrior = snippet.replacesPrior == true
 
         // Compute the range we'll replace and the prior text we'll feed the model.
-        // When replacesPrior is true, we replace the entire prior paragraph + the
-        // trigger; otherwise we only replace the trigger and the prior text is
-        // appended-to (e.g. ;summary).
+        // When replacesPrior is true, we replace the entire field up to the
+        // trigger (a tone rewrite acts on the whole message, not just the last
+        // paragraph); otherwise we only replace the trigger and the prior text
+        // is appended-to (e.g. ;summary).
         let priorEnd = tokenRange.location
         let paragraphStart = replacesPrior
-            ? paragraphStartLocation(in: ns, before: priorEnd)
+            ? max(0, priorEnd - Self.maxRewriteChars)
             : max(0, priorEnd - 500)
         let priorText = priorEnd > paragraphStart
             ? ns.substring(with: NSRange(location: paragraphStart, length: priorEnd - paragraphStart))
@@ -323,20 +345,24 @@ final class SnippetExpander: HalenPlugin {
         let prompt = """
         \(snippet.value)
 
-        Paragraph:
+        Text:
         \(priorText)
         """
-        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 500,
+        let request = InferenceRequest(prompt: prompt, tier: .medium,
+                                       maxTokens: replacesPrior ? rewriteMaxTokens(forInputChars: priorText.count) : 500,
                                        temperature: 0.4, taskKind: .generation)
         runPlaceholderInference(
             range: replaceRange,
             in: caretObserver?.currentElement,
             request: request,
             // On an empty / failed response, restore what was there: the prior
-            // paragraph for a replacesPrior snippet, else just the trigger.
+            // text for a replacesPrior snippet, else just the trigger.
             restoreText: replacesPrior ? priorText : snippet.trigger,
             label: snippet.trigger,
-            source: "snippet-expander"
+            source: "snippet-expander",
+            // replacesPrior replaced the user's own text — recover to the
+            // clipboard if the in-place restore can't land.
+            restoreIsUserText: replacesPrior
         )
     }
 
@@ -348,13 +374,20 @@ final class SnippetExpander: HalenPlugin {
     /// replaces it with the cleaned response — or with `restoreText` when the
     /// model returns nothing or the call fails. `label` is used for the
     /// self-edit suppression key and log lines.
+    ///
+    /// `restoreIsUserText` is true when `restoreText` is the user's own content
+    /// (a whole-field tone rewrite, or a ⌃⌥R selection) rather than just a
+    /// trigger string. In that case, if the in-place restore can't land — the
+    /// placeholder is gone because the user edited the field — we fall back to
+    /// the clipboard so their text is never lost rather than silently dropped.
     private func runPlaceholderInference(
         range: NSRange,
         in element: AXUIElement?,
         request: InferenceRequest,
         restoreText: String,
         label: String,
-        source: String
+        source: String,
+        restoreIsUserText: Bool = false
     ) {
         let placeholder = "[…]"
         let placeholderWritten = applyReplacement(placeholder, at: range, trigger: label, in: element)
@@ -438,6 +471,9 @@ final class SnippetExpander: HalenPlugin {
                       let writeRange = self.locatePlaceholder(lastWritten, expectedAt: writtenRange, in: element)
                 else {
                     Log.warn("SnippetExpander: \(label) streamed text gone from field — skipping final write")
+                    if restoreIsUserText {
+                        self?.copyWithNotification(restoreText, reason: "Halen lost its place in the field")
+                    }
                     return
                 }
                 guard !cleaned.isEmpty else {
@@ -462,7 +498,13 @@ final class SnippetExpander: HalenPlugin {
             } catch {
                 Log.warn("SnippetExpander: \(label) failed: \(error)")
                 guard let self,
-                      let writeRange = self.locatePlaceholder(lastWritten, expectedAt: writtenRange, in: element) else { return }
+                      let writeRange = self.locatePlaceholder(lastWritten, expectedAt: writtenRange, in: element)
+                else {
+                    if restoreIsUserText {
+                        self?.copyWithNotification(restoreText, reason: "Halen lost its place in the field")
+                    }
+                    return
+                }
                 self.applyReplacement(restoreText, at: writeRange, trigger: label, in: element)
             }
         }
@@ -494,19 +536,6 @@ final class SnippetExpander: HalenPlugin {
             searchFrom = found.location + max(1, found.length)
         }
         return best
-    }
-
-    /// Returns the UTF-16 offset just after the most recent newline before
-    /// `location`, or 0 if there isn't one. Treats the prior paragraph as
-    /// everything since the last hard break.
-    private func paragraphStartLocation(in ns: NSString, before location: Int) -> Int {
-        var idx = location
-        while idx > 0 {
-            let ch = ns.character(at: idx - 1)
-            if ch == 10 /* \n */ { return idx }
-            idx -= 1
-        }
-        return 0
     }
 
     /// When `element` is supplied the write targets that specific field even if
@@ -626,26 +655,41 @@ final class SnippetExpander: HalenPlugin {
         if priorText.isEmpty,
            let element = caretObserver?.currentElement,
            let axText = axReadString(element, kAXValueAttribute),
-           let r = axText.range(of: token) {
+           let r = axText.range(of: token, options: .backwards) {
             priorText = String(axText[..<r.lowerBound])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
+
+        // A replacesPrior tone rewrite (;rephrase, ;formal, ;casual) acts on the
+        // WHOLE field, not just the line typed since the last newline — the
+        // keystroke buffer resets on Return, so `typed` is only the current line.
+        // Read the full field: if it holds more than this session's typed line,
+        // the keystroke path can't backspace across the earlier newlines, so hand
+        // off to the AX `text.pause` path, which selects and replaces the whole
+        // field. If the field can't be read, fall through and rewrite what we do
+        // have (the current line) rather than nothing.
+        if replacesPrior {
+            if let element = caretObserver?.currentElement,
+               let axText = axReadString(element, kAXValueAttribute),
+               let r = axText.range(of: token, options: .backwards) {
+                let fieldPrior = String(axText[..<r.lowerBound])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if fieldPrior.count > typed.count {
+                    Log.info("SnippetExpander: \(token) — rewriting whole field, deferring to text.pause path")
+                    return
+                }
+            } else if typed.isEmpty {
+                Log.info("SnippetExpander: \(token) — no context to work from, leaving trigger")
+                return
+            }
+        }
+
         // Bound the prompt — a long email shouldn't be sent whole.
         if priorText.count > 4000 {
             priorText = String(priorText.suffix(4000))
         }
         guard !priorText.isEmpty else {
             Log.info("SnippetExpander: \(token) — no context to work from, leaving trigger")
-            return
-        }
-
-        // A replacesPrior snippet (;rephrase, ;formal, ;casual) must *delete*
-        // the paragraph it rewrites. The keystroke path can only delete what
-        // was typed contiguously this session — so when the paragraph predates
-        // that, hand off to the AX `text.pause` path, the only one that can
-        // select and replace pre-existing text.
-        if replacesPrior && typed.isEmpty {
-            Log.info("SnippetExpander: \(token) — prior paragraph predates this session, deferring to text.pause path")
             return
         }
 
@@ -675,10 +719,11 @@ final class SnippetExpander: HalenPlugin {
         let prompt = """
         \(snippet.value)
 
-        Paragraph:
+        Text:
         \(priorText)
         """
-        let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 500,
+        let request = InferenceRequest(prompt: prompt, tier: .medium,
+                                       maxTokens: replacesPrior ? rewriteMaxTokens(forInputChars: priorText.count) : 500,
                                        temperature: 0.4, taskKind: .generation)
         Log.info("SnippetExpander: \(token) — keystroke AI expand (replacesPrior=\(replacesPrior), priorChars=\(priorText.count))")
 
@@ -688,6 +733,23 @@ final class SnippetExpander: HalenPlugin {
             try? await Task.sleep(for: .milliseconds(120))
             guard let self else { return }
             let activityBaseline = self.keystrokeBuffer.activityCount
+
+            // Restore the user's original text if the rewrite fails or returns
+            // empty. For a replacesPrior snippet we already deleted their whole
+            // line and pasted `[…]`, so doing nothing would lose it. (;summary
+            // left the text intact, so there's nothing to restore there.)
+            @MainActor func restoreOriginal() {
+                guard replacesPrior else { return }
+                if self.keystrokeBuffer.activityCount == activityBaseline {
+                    self.recentWrites.append(PendingWrite(trigger: token, timestamp: Date()))
+                    self.keystrokeBuffer.suppress(forMillis: 300)
+                    _ = CaretObserver.pasteFallback(text: priorText, deleteCount: placeholderLen)
+                } else {
+                    // User moved on — a blind write would land wrong; hand the
+                    // original back via the clipboard so it's never lost.
+                    self.copyWithNotification(priorText, reason: "Halen couldn't rewrite it")
+                }
+            }
 
             services.eventBus.publish(.inferenceActivity(.init(
                 phase: .started, source: "snippet-expander", timestamp: Date())))
@@ -699,7 +761,8 @@ final class SnippetExpander: HalenPlugin {
                 let response = try await services.inference.complete(request)
                 let cleaned = response.text.unwrappedModelText
                 guard !cleaned.isEmpty else {
-                    Log.warn("SnippetExpander: \(token) keystroke AI returned empty — leaving placeholder")
+                    Log.warn("SnippetExpander: \(token) keystroke AI returned empty — restoring original")
+                    restoreOriginal()
                     return
                 }
                 if self.keystrokeBuffer.activityCount == activityBaseline {
@@ -719,7 +782,8 @@ final class SnippetExpander: HalenPlugin {
                     Log.info("SnippetExpander: \(token) keystroke AI — field changed, copied to clipboard")
                 }
             } catch {
-                Log.warn("SnippetExpander: \(token) keystroke AI failed: \(error)")
+                Log.warn("SnippetExpander: \(token) keystroke AI failed: \(error) — restoring original")
+                restoreOriginal()
             }
         }
     }

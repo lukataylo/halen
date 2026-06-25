@@ -9,8 +9,8 @@
 > store registry yet. Build the companion with `build.sh` (below) and install
 > it by hand to try it.
 >
-> **Runs out-of-process** as a JSON-RPC plugin over stdio, like Meeting Prep
-> and Burnout Copilot. `plugin.py` is a bridge: JSON-RPC to the Halen host on
+> **Runs out-of-process** as a JSON-RPC plugin over stdio, like Reasoning
+> Compactor and Mother. `plugin.py` is a bridge: JSON-RPC to the Halen host on
 > one side, NDJSON over a child pipe to the Swift companion on the other. The
 > companion holds no host capabilities of its own — every privileged call
 > (inference, AX reads/writes, calendar reads, hotkey wiring) goes through

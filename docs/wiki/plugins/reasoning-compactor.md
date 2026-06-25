@@ -3,13 +3,14 @@
 > Plugin id: `com.halen.reasoning-compactor` · Category: Productivity · Code:
 > [`plugins/reasoning-compactor/`](../../../plugins/reasoning-compactor/)
 >
-> **Runs out-of-process** as a JSON-RPC plugin over stdio, like Meeting Prep
-> and Burnout Copilot. The menubar app brokers `text.pause` events and the
+> **Runs out-of-process** as a JSON-RPC plugin over stdio, like Mother and
+> Desktop Buddy. The menubar app brokers `text.pause` events and the
 > ⌃⌥K hotkey to it, and proxies the calls it makes back — `ax/readSelection`
 > to read the selected reasoning, `inference/complete` to run the on-device
 > compaction (`tier: medium`), and `ui/toast` to report savings. Writing the
 > result to the clipboard is done by the plugin's own `/usr/bin/pbcopy`
-> subprocess — the same pattern Burnout Copilot uses to fire a Shortcut — so
+> subprocess — the same `osascript`/subprocess pattern the other out-of-process
+> plugins use for their own privileged side effects — so
 > the plugin holds no macOS entitlements of its own. Declared permissions:
 > `inference`, `ax.read`, `notifications`. See
 > [plugins/README.md](../../../plugins/README.md) for the protocol.

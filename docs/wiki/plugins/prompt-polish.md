@@ -4,7 +4,7 @@
 > [`Sources/Halen/Features/PromptPolish/`](../../../Sources/Halen/Features/PromptPolish/)
 
 Select the prompt you're about to send to an AI — in any app, including a
-ChatGPT, Claude, or Gemini text box — and press **⌃⌥P**. Halen rewrites it in
+ChatGPT, Claude, or Gemini text box — and press **⌃⌥⌘P**. Halen rewrites it in
 place with targeted **word-level edits** so a modern model answers it well. A
 `[…]` placeholder shows while the on-device model works; ⌘Z undoes.
 
@@ -14,7 +14,7 @@ a prompt is to fix the *words* — not rewrite it wholesale.
 
 ## The four modes
 
-⌃⌥P applies whichever mode is selected in the detail view. They map to the most
+⌃⌥⌘P applies whichever mode is selected in the detail view. They map to the most
 common prompting tasks:
 
 | Mode | What it changes |
@@ -40,7 +40,7 @@ no API key, consistent with Halen's privacy promise.
 ## How the write-back works
 
 Hotkey-only — the plugin does not subscribe to text events, so it needs no
-self-edit suppression. On ⌃⌥P it reads the selection via AX, drops a `[…]`
+self-edit suppression. On ⌃⌥⌘P it reads the selection via AX, drops a `[…]`
 placeholder, streams the model's output into it (re-locating the placeholder on
 each snapshot in case the user edits the field mid-call), then writes the
 cleaned final text — or restores the original on an empty/failed response. The
@@ -50,6 +50,6 @@ choreography mirrors Snippet Expander's proven ⌃⌥R rephrase path.
 
 - **No preview/diff.** It rewrites in place; you compare against your memory of
   the original (or ⌘Z). A side-by-side review panel is queued.
-- **No per-mode hotkeys.** One chord (⌃⌥P) applies the configured default mode;
+- **No per-mode hotkeys.** One chord (⌃⌥⌘P) applies the configured default mode;
   switching mode is a click in the detail view.
-- **No app whitelist.** ⌃⌥P is global, like ⌃⌥R / ⌃⌥E.
+- **No app whitelist.** ⌃⌥⌘P is global, like ⌃⌥R / ⌃⌥E.

@@ -121,7 +121,7 @@ func windowAroundCaret(text: String, offset: Int, radius: Int) -> (text: String,
 
 /// The paragraph immediately surrounding the caret — from the previous newline
 /// (or start of text) through to the next newline (or end), trimmed. For
-/// tone-style plugins (SentimentGuard, BurnoutCopilot) that should judge what
+/// tone-style plugins (SentimentGuard, ClarityChecker) that should judge what
 /// the user is *currently* writing, not historical text in the same field.
 /// Avoids the two failure modes of `windowAroundCaret` for tone classification:
 ///   1. Earlier text in the buffer (an old hostile draft, a quoted reply,

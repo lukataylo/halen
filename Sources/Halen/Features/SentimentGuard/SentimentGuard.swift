@@ -42,6 +42,15 @@ final class SentimentGuard: HalenPlugin {
         UserDefaults.standard.object(forKey: concisenessDefaultsKey) as? Bool ?? true
     }
 
+    /// UserDefaults key for per-app target-tone enforcement. When on (default),
+    /// a message that reads less formal than the app's assigned tone profile
+    /// (e.g. a casual line in Outlook=Formal) is flagged. Apps left at Neutral
+    /// impose no target, so they're never checked. See `SentimentGuardDetailView`.
+    static let enforceToneKey = "halen.sentiment-guard.enforceTone"
+    static var enforceToneEnabled: Bool {
+        UserDefaults.standard.object(forKey: enforceToneKey) as? Bool ?? true
+    }
+
     /// Comma-separated list of bundle ids the user has asked Sentiment Guard
     /// to stay silent in (e.g. iMessage threads, gaming voice channels —
     /// places blunt phrasing is the register). Edited from the detail view's
@@ -127,8 +136,16 @@ final class SentimentGuard: HalenPlugin {
         let anchor: CaretAnchoredPanel.Anchor?
         let appBundleId: String
         let rule: SentimentRule?
+        let mismatch: ToneMismatch?
         let fillers: [FillerMatch]
         let hash: String
+    }
+
+    /// A message read less formal than the app's assigned target register —
+    /// `actual` is what it reads as, `target` is what the app expects.
+    private struct ToneMismatch {
+        let actual: ToneProfile
+        let target: ToneProfile
     }
     private var pendingFindings: [String: ActiveFinding] = [:]
 
@@ -146,6 +163,8 @@ final class SentimentGuard: HalenPlugin {
         AnyView(
             SentimentGuardDetailView(
                 rulesStore: rulesStore,
+                toneProfiles: services.toneProfiles,
+                recentApps: services.recentApps,
                 approvedCount: approvedHashes.count,
                 flaggedCount: flaggedThisSession,
                 onClearApproved: { [weak self] in
@@ -293,17 +312,78 @@ final class SentimentGuard: HalenPlugin {
             // alongside the tone classifier, gated by a Settings toggle.
             let fillers = Self.concisenessEnabled ? FillerPhrases.scan(paragraph) : []
             let matched = enabled.first(where: { $0.label.lowercased() == label })
-            if matched != nil || !fillers.isEmpty {
-                publishFinding(paragraph: paragraph, rule: matched, fillers: fillers,
+
+            // Per-app target-tone check. A second cheap classifier pass, run
+            // only when no stronger tone rule fired (hostile/irritated outrank
+            // "too casual"), enforcement is on, and the app has an expected
+            // register assigned. Apps left Neutral are skipped entirely.
+            // On "lax", skip the register pass entirely — the user only wants
+            // unambiguous flags, and a one-label register guess is too noisy.
+            var mismatch: ToneMismatch? = nil
+            if matched == nil, Self.enforceToneEnabled, Self.sensitivity != .lax {
+                let target = services.toneProfiles.profile(for: appBundleId)
+                if target.enforcesTarget {
+                    mismatch = await classifyRegisterMismatch(paragraph: paragraph, target: target)
+                }
+            }
+
+            // The two sequential inference calls above mean the user may have
+            // moved on (new paragraph, switched field) before we get here — a
+            // stale finding anchored to the old caret would be wrong. Bail if a
+            // newer classification has since cancelled this task.
+            guard !Task.isCancelled else { return }
+
+            if matched != nil || mismatch != nil || !fillers.isEmpty {
+                publishFinding(paragraph: paragraph, rule: matched, mismatch: mismatch,
+                               fillers: fillers,
                                appBundleId: appBundleId, anchor: anchorSnapshot)
             } else {
                 // Paragraph reads clean from this plugin's perspective — clear
-                // any prior finding the overlay was still showing.
+                // any prior finding the overlay was still showing, and drop its
+                // cached context so a late action can't reopen stale text.
+                pendingFindings.removeAll()
                 services.eventBus.publish(.findingsCleared(.init(
                     source: id, id: nil, timestamp: Date())))
             }
         } catch {
             Log.warn("SentimentGuard: inference failed: \(error)")
+        }
+    }
+
+    /// Classify the message's register (formal / business-casual / casual) and
+    /// return a mismatch only when it reads *less formal* than `target`. One
+    /// `.classifier` call (Qwen 0.5B); parsed by substring so "business casual"
+    /// vs "business-casual" both resolve.
+    private func classifyRegisterMismatch(paragraph: String, target: ToneProfile) async -> ToneMismatch? {
+        let prompt = """
+        You classify the register (level of formality) of a message as exactly one of these labels:
+        - formal: \(ToneProfile.formal.targetDescriptor ?? "")
+        - business-casual: \(ToneProfile.businessCasual.targetDescriptor ?? "")
+        - casual: \(ToneProfile.casual.targetDescriptor ?? "")
+        - neutral: ordinary, unremarkable phrasing that doesn't clearly fit any of the above
+
+        Reply with ONLY the matching label, lowercase, no punctuation, no preamble.
+
+        Message: \"\"\"\(paragraph)\"\"\"
+        """
+        let request = InferenceRequest(prompt: prompt, tier: .classifier, maxTokens: 8,
+                                       temperature: 0.0, taskKind: .classification)
+        do {
+            let response = try await services.inference.complete(request)
+            guard !Task.isCancelled else { return nil }
+            // Exact-token parse via the shared helper. It returns nil for
+            // "neutral", "informal", or any off-list reply — so a clean message,
+            // or a synonym the model invents, never produces a false flag. (The
+            // old substring scan mis-read "informal" as formal.)
+            guard let actual = ToneProfile.fromClassifierToken(response.text.modelLabelToken) else { return nil }
+            Log.info("SentimentGuard: register=\(actual.classifierToken) target=\(target.classifierToken)")
+            // Only flag when the message is *less* formal than the app expects.
+            // ponytail: one-directional; flag over-formal too if users ask.
+            guard actual.formalityRank < target.formalityRank else { return nil }
+            return ToneMismatch(actual: actual, target: target)
+        } catch {
+            Log.warn("SentimentGuard: register classification failed: \(error)")
+            return nil
         }
     }
 
@@ -316,16 +396,24 @@ final class SentimentGuard: HalenPlugin {
     /// the user clicks Rephrase or Looks fine — the paragraph text itself
     /// never leaves this process.
     private func publishFinding(paragraph: String, rule: SentimentRule?,
+                                mismatch: ToneMismatch?,
                                 fillers: [FillerMatch], appBundleId: String,
                                 anchor: CaretAnchoredPanel.Anchor?) {
         flaggedThisSession += 1
-        let severity: Event.FindingDetected.Severity = (rule != nil) ? .tone : .conciseness
+        let severity: Event.FindingDetected.Severity
         let summary: String
         if let rule {
+            severity = .tone
             summary = "Reads as \(rule.label)"
+        } else if let mismatch {
+            // A register mismatch is a tone issue — tint it like one.
+            severity = .tone
+            summary = "Reads \(mismatch.actual.label.lowercased()), not \(mismatch.target.label.lowercased())"
         } else if fillers.count == 1 {
+            severity = .conciseness
             summary = "1 wordy phrase"
         } else {
+            severity = .conciseness
             summary = "\(fillers.count) wordy phrases"
         }
         let hash = sha256Hex(paragraph)
@@ -341,7 +429,7 @@ final class SentimentGuard: HalenPlugin {
         pendingFindings.removeAll()
         pendingFindings[findingId] = ActiveFinding(
             paragraph: paragraph, anchor: anchor, appBundleId: appBundleId,
-            rule: rule, fillers: fillers, hash: hash)
+            rule: rule, mismatch: mismatch, fillers: fillers, hash: hash)
 
         services.eventBus.publish(.findingDetected(.init(
             id: findingId,
@@ -384,6 +472,7 @@ final class SentimentGuard: HalenPlugin {
             // popup is now where the user's attention should be.
             showPopup(text: context.paragraph,
                       rule: context.rule,
+                      mismatch: context.mismatch,
                       fillers: context.fillers,
                       hash: context.hash,
                       appBundleId: context.appBundleId,
@@ -392,17 +481,21 @@ final class SentimentGuard: HalenPlugin {
             services.eventBus.publish(.findingsCleared(.init(
                 source: id, id: request.findingId, timestamp: Date())))
             // Kick off streaming immediately — the user's intent is already
-            // "Rephrase," no need to make them click another button.
-            beginRephrase(originalText: context.paragraph)
+            // "Rephrase," no need to make them click another button. For a
+            // register mismatch we rewrite toward the app's target tone.
+            beginRephrase(originalText: context.paragraph,
+                          targetTone: context.mismatch?.target)
         }
     }
 
     // MARK: - Popup
 
-    private func showPopup(text: String, rule: SentimentRule?, fillers: [FillerMatch],
+    private func showPopup(text: String, rule: SentimentRule?, mismatch: ToneMismatch?,
+                           fillers: [FillerMatch],
                            hash: String, appBundleId: String,
                            anchor: CaretAnchoredPanel.Anchor? = nil) {
-        flaggedThisSession += 1
+        // Note: not counted here — `publishFinding` already counted this finding
+        // when it first surfaced; showPopup only re-opens it for the rephrase.
         activePanel?.orderOut(nil)
         dismissTask?.cancel()
 
@@ -420,6 +513,10 @@ final class SentimentGuard: HalenPlugin {
             headline = "This reads as \(rule.label)"
             headlineColor = rule.colorName
             icon = "exclamationmark.bubble.fill"
+        } else if let mismatch {
+            headline = "Too \(mismatch.actual.label.lowercased()) for a \(mismatch.target.label.lowercased()) app"
+            headlineColor = "orange"
+            icon = "character.bubble"
         } else {
             headline = findings.count == 1 ? "1 wordy phrase" : "\(findings.count) wordy phrases"
             headlineColor = "yellow"
@@ -446,9 +543,10 @@ final class SentimentGuard: HalenPlugin {
             findings: findings,
             primaryActionLabel: "Rephrase",
             // Rephrase no longer closes the popup — it streams the rewrite
-            // into the preview pane in place.
+            // into the preview pane in place. A register mismatch rewrites
+            // toward the app's target tone; everything else aims calmer.
             onPrimaryAction: { [weak self] in
-                self?.beginRephrase(originalText: text)
+                self?.beginRephrase(originalText: text, targetTone: mismatch?.target)
             },
             approveLabel: "Looks fine",
             onApprove: { [weak self] in
@@ -518,7 +616,7 @@ final class SentimentGuard: HalenPlugin {
     /// Stream a calmer rewrite of `originalText` into the popup's preview pane.
     /// The popup grows to fit the pane and tokens appear as the local model
     /// produces them; the result lands on the clipboard when the user taps Copy.
-    private func beginRephrase(originalText: String) {
+    private func beginRephrase(originalText: String, targetTone: ToneProfile? = nil) {
         guard let state = rephraseState else { return }
         // The user is engaged now — stop the 12 s auto-dismiss.
         dismissTask?.cancel()
@@ -533,8 +631,16 @@ final class SentimentGuard: HalenPlugin {
         // knowing whether the click took.
         AnnounceCenter.say("Rewriting")
 
+        // A register mismatch rewrites toward the app's expected tone; any
+        // other finding (hostile/irritated) aims for a calmer version.
+        let instruction: String
+        if let targetTone, let descriptor = targetTone.targetDescriptor {
+            instruction = "Rewrite the following message in a \(targetTone.label.lowercased()) register (\(descriptor)) while keeping its meaning and intent."
+        } else {
+            instruction = "Rewrite the following message in a calmer, more constructive tone while keeping the original intent and length."
+        }
         let prompt = """
-        Rewrite the following message in a calmer, more constructive tone while keeping the original intent and length. Output only the rewritten text — no quotes, no preamble.
+        \(instruction) Output only the rewritten text — no quotes, no preamble.
 
         Message: \"\"\"\(originalText)\"\"\"
         """

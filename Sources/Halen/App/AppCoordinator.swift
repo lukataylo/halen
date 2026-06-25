@@ -29,10 +29,10 @@ final class AppCoordinator {
     /// Per-app tone profiles — a host service (passed into `HalenServices`),
     /// not a plugin-owned store, so every writing plugin reads the same data.
     let toneProfileStore = AppToneProfileStore()
-    /// In-memory list of apps focused this session. Powers the "recently
-    /// used apps" picker in Settings → App tone profiles. App-coordinator
-    /// scope so it accumulates across the Settings sheet's open/close
-    /// cycle and survives the user navigating away from Settings.
+    /// In-memory list of apps focused this session. Powers the "add an app"
+    /// picker in the Writing Assistant → Tone tab's per-app tone editor.
+    /// App-coordinator scope so it accumulates across the panel's open/close
+    /// cycle and survives the user navigating away.
     let recentApps = RecentAppsModel()
     private var recentAppsTask: Task<Void, Never>?
     let registry = PluginRegistry()
@@ -209,14 +209,14 @@ final class AppCoordinator {
             caretObserver: observer,
             calendar: CalendarService(),
             toneProfiles: toneProfileStore,
+            recentApps: recentApps,
             appSupportDir: HalenServices.defaultAppSupportDir()
         )
 
-        // Register first-party plugins. Meeting Prep and Burnout Copilot are
-        // no longer built in — they ship as out-of-process plugins
-        // (plugins/meeting-prep/, plugins/burnout-copilot/), installable from
-        // the Plugin Store, with their privileged work (calendar, the break
-        // prompt) behind the JSON-RPC boundary like any third-party plugin.
+        // Register first-party plugins. Optional add-ons (Reasoning Compactor,
+        // Mother, Desktop Buddy) aren't built in — they ship as out-of-process
+        // plugins under plugins/, installable from the Plugin Store, with any
+        // privileged work behind the JSON-RPC boundary like any third-party plugin.
         registry.register(AskHalen(services: services))
         // Writing Assistant is the single "Grammarly-esque" writing surface —
         // it merges Word Replacements (typo fixes + term swaps), Writing Coach
@@ -232,7 +232,7 @@ final class AppCoordinator {
         // EmailReplyDrafter + the ;reply built-in trigger + the ⌃⌥E
         // hotkey installed in SnippetExpander.start().
         registry.register(SnippetExpander(services: services))
-        // Prompt Polish — ⌃⌥P rewrites the selected prompt in place with
+        // Prompt Polish — ⌃⌥⌘P rewrites the selected prompt in place with
         // word-level edits tuned for modern LLMs (improve / set-tone /
         // summarise / coding). Hotkey-only; no text-event subscription.
         registry.register(PromptPolish(services: services))
@@ -296,7 +296,7 @@ final class AppCoordinator {
                 case .appFocused(let payload):
                     Log.info("evt app.focused \(payload.appName)")
                     // Feed the recently-focused-apps list used by the
-                    // Settings → App tone profiles editor. Lives on the
+                    // Tone tab's per-app tone editor. Lives on the
                     // coordinator (previously inside the ToneProfiles
                     // plugin) so it accumulates whether or not the
                     // editor is open.

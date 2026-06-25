@@ -130,4 +130,55 @@ final class AppToneProfileStoreTests: XCTestCase {
                            "\(profile.rawValue) has an empty label")
         }
     }
+
+    // MARK: - Register classifier token parsing (Sentiment Guard target-tone)
+
+    /// `fromClassifierToken` maps the small model's register reply back to a
+    /// profile. The exact-match contract is load-bearing: a substring scan
+    /// once read "informal" as `.formal` (its opposite), silently suppressing
+    /// the flag. Pin the real labels AND the off-list rejects.
+    func testFromClassifierTokenMapsRealRegisters() {
+        XCTAssertEqual(ToneProfile.fromClassifierToken("formal"), .formal)
+        XCTAssertEqual(ToneProfile.fromClassifierToken("casual"), .casual)
+        XCTAssertEqual(ToneProfile.fromClassifierToken("business-casual"), .businessCasual)
+        XCTAssertEqual(ToneProfile.fromClassifierToken("business casual"), .businessCasual)
+        // First-token parse can clip "business casual" to "business".
+        XCTAssertEqual(ToneProfile.fromClassifierToken("business"), .businessCasual)
+        XCTAssertEqual(ToneProfile.fromClassifierToken("FORMAL"), .formal)
+    }
+
+    func testFromClassifierTokenRejectsOffListReplies() {
+        // The bug that motivated this: "informal" must NOT resolve to .formal.
+        XCTAssertNil(ToneProfile.fromClassifierToken("informal"))
+        XCTAssertNil(ToneProfile.fromClassifierToken("neutral"))
+        XCTAssertNil(ToneProfile.fromClassifierToken(""))
+        XCTAssertNil(ToneProfile.fromClassifierToken("polite and nice"))
+    }
+
+    /// Detection only flags a message that reads *less* formal than the app's
+    /// target (`actual.formalityRank < target.formalityRank`). Pin the rank
+    /// ordering the comparison depends on, and the `enforcesTarget` gate.
+    func testFormalityRankOrderingAndEnforcement() {
+        XCTAssertGreaterThan(ToneProfile.formal.formalityRank,
+                             ToneProfile.businessCasual.formalityRank)
+        XCTAssertGreaterThan(ToneProfile.businessCasual.formalityRank,
+                             ToneProfile.casual.formalityRank)
+        XCTAssertGreaterThan(ToneProfile.casual.formalityRank,
+                             ToneProfile.neutral.formalityRank)
+        // Teams=Business casual flags casual, not formal.
+        XCTAssertLessThan(ToneProfile.casual.formalityRank,
+                          ToneProfile.businessCasual.formalityRank)
+        XCTAssertFalse(ToneProfile.formal.formalityRank
+                       < ToneProfile.businessCasual.formalityRank)
+        // Only non-neutral profiles impose a target.
+        XCTAssertTrue(ToneProfile.formal.enforcesTarget)
+        XCTAssertTrue(ToneProfile.businessCasual.enforcesTarget)
+        XCTAssertFalse(ToneProfile.neutral.enforcesTarget)
+        // Every enforcing profile has a non-nil target descriptor (the
+        // register prompt + rephrase rely on it being present).
+        for p in ToneProfile.allCases where p.enforcesTarget {
+            XCTAssertNotNil(p.targetDescriptor, "\(p.rawValue) missing targetDescriptor")
+        }
+        XCTAssertNil(ToneProfile.neutral.targetDescriptor)
+    }
 }

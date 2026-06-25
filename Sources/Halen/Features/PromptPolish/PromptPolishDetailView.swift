@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Settings + reference for Prompt Polish. The plugin itself is hotkey-driven
-/// (⌃⌥P); this view picks which transform the hotkey applies and, for tone
+/// (⌃⌥⌘P); this view picks which transform the hotkey applies and, for tone
 /// mode, which register to steer toward. The reference card explains what each
 /// mode changes at the word level.
 @MainActor
@@ -32,8 +32,8 @@ struct PromptPolishDetailView: View {
     private var modeCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
-                cardLabel("What ⌃⌥P does")
-                Text("Pick the transform Halen applies when you select a prompt and press ⌃⌥P.")
+                cardLabel("What ⌃⌥⌘P does")
+                Text("Pick the transform Halen applies when you select a prompt and press ⌃⌥⌘P.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -45,7 +45,7 @@ struct PromptPolishDetailView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .accessibilityLabel("Default polish mode")
-                .accessibilityHint("Picks the transform the ⌃⌥P hotkey applies to the selected prompt.")
+                .accessibilityHint("Picks the transform the ⌃⌥⌘P hotkey applies to the selected prompt.")
                 Label {
                     Text(mode.blurb)
                         .font(.caption)
@@ -87,7 +87,7 @@ struct PromptPolishDetailView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 6) {
                 cardLabel("How it works")
-                Text("Highlight the prompt you're about to send to an AI — in any app, including a ChatGPT, Claude, or Gemini text box — and press ⌃⌥P. Halen rewrites it in place with word-level edits. A placeholder shows while it works; press ⌘Z to undo.")
+                Text("Highlight the prompt you're about to send to an AI — in any app, including a ChatGPT, Claude, or Gemini text box — and press ⌃⌥⌘P. Halen rewrites it in place with word-level edits. A placeholder shows while it works; press ⌘Z to undo.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

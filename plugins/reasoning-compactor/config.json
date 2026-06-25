@@ -15,6 +15,9 @@
 
   "max_single_pass_tokens": 1200,
 
+  "extractive_model_tier": "small",
+  "abstractive_model_tier": "medium",
+
   "clipboard_cmd": ["/usr/bin/pbcopy"],
 
   "hotkey_keycode": 40,

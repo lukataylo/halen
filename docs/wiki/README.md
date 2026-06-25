@@ -13,8 +13,8 @@ Your text never leaves your Mac.
   they never touch AX themselves.
 - **Same contract, in-process or out.** Event names are JSON-RPC
   method names. In-process plugins call them via Swift. External
-  plugins read NDJSON over stdio. Burnout Copilot and Meeting Prep
-  run out-of-process; bundled plugins live inside the menubar app.
+  plugins read NDJSON over stdio (Reasoning Compactor, Mother,
+  Desktop Buddy); bundled plugins live inside the menubar app.
 - **Tier-based, multi-backend inference.** Plugins ask for
   `classifier`, `small`, `medium`, or `large`. `RouterInferenceClient`
   picks a backend and falls through on failure. The `.classifier`
@@ -49,7 +49,7 @@ toggles them on or off and opens their detail panel.
 | [Writing Assistant](plugins/writing-assistant.md) | Writing | On | Fixes typos, flags tone & clarity, and finishes your sentences as you type. Tab to accept a completion. |
 | [Snippet Expander](plugins/snippet-expander.md) | Productivity | On | `;tag` expands. `;reply` or ⌃⌥E drafts an email. ⌃⌥R rewrites a selection. |
 | [Voice Dictation](plugins/voice-dictation.md) | Voice | Off | ⌃⌥Space opens a listening pill. Apple's on-device transcription writes at your caret. |
-| [Prompt Polish](plugins/prompt-polish.md) | Productivity | On | ⌃⌥P rewrites the selected prompt in place with word-level edits for modern LLMs. |
+| [Prompt Polish](plugins/prompt-polish.md) | Productivity | On | ⌃⌥⌘P rewrites the selected prompt in place with word-level edits for modern LLMs. |
 
 ## External plugins (out-of-process, JSON-RPC over stdio)
 
@@ -59,8 +59,6 @@ into `~/Library/Application Support/Halen/Plugins/`.
 
 | Plugin | Category | What it does |
 |---|---|---|
-| [Burnout Copilot](plugins/burnout-copilot.md) | Focus | Three signals. Two of three trip. "Take 10?" with a calendar block + Shortcuts integration. |
-| [Meeting Prep](plugins/meeting-prep.md) | Scheduling | 15 minutes before each event, drops a 5-bullet Gemma briefing on your clipboard. |
 | [Mother](plugins/mother.md) | Focus | Hardcore local discipline. Quits blocklisted apps and closes blocklisted browser tabs during your focus hours. No network. |
 | [Reasoning Compactor](plugins/reasoning-compactor.md) | Productivity | ⌃⌥K compacts a verbose LLM chain-of-thought on-device — keeps the load-bearing steps and final answer, drops the filler. Copies the result to the clipboard. |
 | [Desktop Buddy](plugins/desktop-buddy.md) | Productivity | A Gemma-powered character on your desktop; ⌃⌥B to focus it. **Pre-alpha — not in the Plugin Store**; needs its companion binary built via `build.sh`. |

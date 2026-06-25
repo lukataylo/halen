@@ -64,7 +64,8 @@ final class WritingAssistant: HalenPlugin {
         AnyView(
             WritingAssistantDetailView(
                 corrections: wordReplacements.makeDetailView(),
-                clarity: writingCoach.makeDetailView(),
+                tone: writingCoach.sentimentGuard.makeDetailView(),
+                clarity: writingCoach.clarityChecker.makeDetailView(),
                 autocomplete: autocomplete.makeDetailView()
             )
         )
@@ -77,6 +78,7 @@ final class WritingAssistant: HalenPlugin {
 @MainActor
 private struct WritingAssistantDetailView: View {
     let corrections: AnyView
+    let tone: AnyView
     let clarity: AnyView
     let autocomplete: AnyView
 
@@ -84,7 +86,8 @@ private struct WritingAssistantDetailView: View {
 
     private enum Section: String, CaseIterable, Identifiable {
         case corrections = "Corrections"
-        case clarity = "Clarity & Tone"
+        case tone = "Tone"
+        case clarity = "Clarity"
         case autocomplete = "Autocomplete"
         var id: String { rawValue }
     }
@@ -103,6 +106,7 @@ private struct WritingAssistantDetailView: View {
 
             switch tab {
             case .corrections:  corrections
+            case .tone:         tone
             case .clarity:      clarity
             case .autocomplete: autocomplete
             }

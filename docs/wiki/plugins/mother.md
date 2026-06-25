@@ -3,12 +3,12 @@
 > Plugin id: `com.halen.mother` · Category: Focus · Code:
 > [`plugins/mother/`](../../../plugins/mother/)
 >
-> **Runs out-of-process** as a JSON-RPC plugin over stdio, like Meeting
-> Prep and Burnout Copilot. The menubar app brokers `app.focused` events
+> **Runs out-of-process** as a JSON-RPC plugin over stdio, like Reasoning
+> Compactor and Desktop Buddy. The menubar app brokers `app.focused` events
 > to it and proxies the notifications and modal prompts it asks for
 > (`ui/toast`, `ui/prompt`). Quitting an app and closing a browser tab is
-> done by Mother's own `osascript` subprocess — the same mechanism
-> Burnout Copilot uses to fire a Shortcut. Mother holds no macOS
+> done by Mother's own `osascript` subprocess — a subprocess the plugin
+> spawns itself rather than a host capability. Mother holds no macOS
 > entitlements of her own. See
 > [plugins/README.md](../../../plugins/README.md) for the protocol.
 
@@ -95,8 +95,8 @@ plain JSON; nothing leaves your Mac.
 
 Reading a browser tab's URL and closing it, and quitting an app, are
 ordinary macOS automation. Rather than add new privileged host methods,
-Mother shells out to `osascript` from her own process — exactly as
-Burnout Copilot does to run a Shortcut. The first time she reads a tab or
+Mother shells out to `osascript` from her own process — a subprocess she
+spawns herself, not a host capability. The first time she reads a tab or
 closes one, macOS shows its standard Automation (Apple Events) consent
 prompt for *that* browser; the grant is between Mother's subprocess and
 the browser, managed by the OS. The host's only jobs are the toast and

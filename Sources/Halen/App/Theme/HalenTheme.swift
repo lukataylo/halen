@@ -96,10 +96,10 @@ struct GlassCard<Content: View>: View {
 
 // MARK: - HalenChatBubble + TypingDots
 
-/// Cobalt-blue chat bubble used by Meeting Prep (and reusable by other
-/// plugins). Avatar on the left, bubble content on the right. Bullets in the
-/// body get rendered as a clean list; loading state animates three dots in
-/// the bubble.
+/// Cobalt-blue chat bubble — reusable card chrome (avatar on the left, bubble
+/// content on the right). Bullets in the body render as a clean list; the
+/// loading state animates three dots. Currently unused after Meeting Prep was
+/// removed; kept as theme infra for future plugin/card UIs.
 @MainActor
 struct HalenChatBubble: View {
     let headline: String

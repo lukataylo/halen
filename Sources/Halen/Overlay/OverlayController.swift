@@ -74,6 +74,12 @@ final class OverlayController {
     /// UserDefaults key. Read on every `showCaret()` so the toggle takes effect live.
     static let showDotKey = "halen.showOverlayDot"
 
+    /// UserDefaults key for "minimal" indicator mode. When on (the default), the
+    /// dot only appears for an active finding (sentiment/clarity) or while Halen
+    /// is working (rewriting / classification) — not as an idle cursor-follower.
+    /// Off restores the always-on dot that trails the caret while you type.
+    static let minimalDotKey = "halen.minimalOverlayDot"
+
     /// UserDefaults key for the indicator's visual style. Two values:
     /// `"solid"` (default — filled cobalt mark) and `"outline"` (white-filled
     /// speech bubble with a cobalt outline and eyes). `HalenCaretIndicator`
@@ -120,7 +126,9 @@ final class OverlayController {
                 case .caretMoved(let payload):
                     self.lastCaretRect = payload.rect
                     // While busy, hold position — let the loader sit where it is.
-                    if self.busyDepth == 0 {
+                    // In minimal mode the dot only follows the caret when a
+                    // finding is tinting it; otherwise it stays hidden.
+                    if self.busyDepth == 0, self.idleDotAllowed {
                         self.showCaret(at: payload.rect)
                     }
                 case .inferenceActivity(let payload):
@@ -164,6 +172,17 @@ final class OverlayController {
                 if !Self.indicatorEnabled {
                     self.caretPanel?.orderOut(nil)
                     self.busy.hide()
+                } else if Self.minimalIndicator, self.indicatorState.severity == nil,
+                          self.busyDepth == 0 {
+                    // Just switched to minimal mode while the idle dot was
+                    // trailing the caret — retire it now (no finding, not busy).
+                    self.caretPanel?.orderOut(nil)
+                    self.lastCaretFrame = nil
+                } else if !Self.minimalIndicator, self.indicatorState.severity == nil,
+                          self.busyDepth == 0, let rect = self.lastCaretRect {
+                    // Switched back to always-on while idle — bring the dot back
+                    // now instead of waiting for the next caret move.
+                    self.showCaret(at: rect)
                 }
                 self.recomputeIndicatorState()
             }
@@ -190,6 +209,18 @@ final class OverlayController {
 
     static var indicatorEnabled: Bool {
         UserDefaults.standard.object(forKey: showDotKey) as? Bool ?? true
+    }
+
+    /// Minimal mode (default on): the idle dot doesn't trail the caret — it only
+    /// shows for a finding or while Halen is working.
+    static var minimalIndicator: Bool {
+        UserDefaults.standard.object(forKey: minimalDotKey) as? Bool ?? true
+    }
+
+    /// Whether the idle (no finding) cursor-follower dot should appear right now.
+    /// In minimal mode it stays hidden unless a finding is tinting it.
+    private var idleDotAllowed: Bool {
+        !Self.minimalIndicator || indicatorState.severity != nil
     }
 
     private static func makePanel(size: CGFloat) -> NSPanel {
@@ -287,7 +318,9 @@ final class OverlayController {
         busyWatchdog?.cancel()
         busyWatchdog = nil
         busy.hide()
-        if let caret = lastCaretRect {
+        // Hand back to the caret dot — but in minimal mode, only if a finding
+        // is keeping it on screen. Otherwise the work is done and it retires.
+        if let caret = lastCaretRect, idleDotAllowed {
             showCaret(at: caret)
         }
     }

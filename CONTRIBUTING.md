@@ -80,9 +80,9 @@ A few good first issues, in rough order of accessibility:
   Same idea — common misspellings everyone makes.
 - **A plugin doc** under [`docs/wiki/plugins/`](docs/wiki/plugins/) if you
   notice something the existing docs miss.
-- **A new out-of-process plugin** under [`plugins/`](plugins/). The two
-  reference plugins (`burnout-copilot`, `meeting-prep`) are ~100 lines of
-  Python each. Protocol docs in [`plugins/README.md`](plugins/README.md).
+- **A new out-of-process plugin** under [`plugins/`](plugins/). The
+  reference plugins (`reasoning-compactor`, `mother`) are compact Python
+  bridges. Protocol docs in [`plugins/README.md`](plugins/README.md).
 - **Bugs and rough edges** in the open issues — see the [Halen issue list](https://github.com/lukataylo/halen/issues).
 
 For larger things, the [`ROADMAP.md`](ROADMAP.md) lists what we've explicitly
@@ -159,8 +159,8 @@ A plugin PR should include:
 - A `halen-plugin.json` manifest with the right `events` and `permissions`.
 - The implementation. Python is the path of least resistance — Halen ships
   `python3` on the system; no extra dependencies if you stay standard-library.
-- A `README.md` in the plugin's folder. Match the shape of `burnout-copilot/`
-  or `meeting-prep/`.
+- A `README.md` in the plugin's folder. Match the shape of `reasoning-compactor/`
+  or `mother/`.
 
 The Plugin Store curates plugins through
 [`plugin-registry.json`](plugin-registry.json) at the repo root. We don't

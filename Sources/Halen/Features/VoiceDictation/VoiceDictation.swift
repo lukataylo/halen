@@ -229,7 +229,7 @@ final class VoiceDictation: HalenPlugin {
     /// pane of System Settings.
     ///
     /// Halen has the Notification permission only if the user has granted
-    /// it — Meeting Prep / Ask Halen request it lazily. If neither has
+    /// it — Ask Halen and the Snippet Expander request it lazily. If none has
     /// run, `add()` no-ops; we still log the missing permission so the
     /// user can find it from the detail view's permission status.
     private func postPermissionDeniedNotification() {

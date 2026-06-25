@@ -18,9 +18,13 @@ struct HalenServices {
     /// Per-app tone profiles. Read by Writing Coach (tone classifier +
     /// clarity rules) and Snippet Expander's email-reply action to bias
     /// their prompts by the focused app's formality. The editor UI lives
-    /// in Settings → App tone profiles; the store is owned by
+    /// in the Writing Assistant's Tone tab; the store is owned by
     /// AppCoordinator.
     let toneProfiles: AppToneProfileStore
+    /// Apps the user has recently focused, for the Tone tab's per-app target
+    /// picker (so the user picks from a list instead of typing bundle ids).
+    /// Owned by AppCoordinator, fed from `app.focused` events.
+    let recentApps: RecentAppsModel
     let appSupportDir: URL
 
     /// `~/Library/Application Support/Halen/<pluginId>/` — make this lazily; not

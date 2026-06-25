@@ -74,17 +74,16 @@ so the demo runs in **60 seconds flat** with no dead air.
   output replaces the trigger. I can add my own snippets — static text or
   custom Gemma prompts."*
 
-## 0:52 — 1:00 · Meeting Prep + wrap (8 s)
+## 0:52 — 1:00 · Tone per app + wrap (8 s)
 
-> *"And it watches my calendar so my meetings get pre-briefed."*
+> *"And it knows the tone each app expects."*
 
-- Open the menubar → tap **Meeting Prep**. The detail view shows the **Halen
-  mascot card**: *"Next up — [your next meeting]"* with attendee chips.
-- Hover over the **"Brief this event now"** button. *"15 minutes before any
-  meeting, Halen reads the entry, asks Gemma 4 for a five-bullet briefing,
-  drops it on my clipboard, and posts a notification."*
+- Open the menubar → **Writing Assistant → Tone**. Show the **per-app target
+  tone** list: *"Outlook → Formal, Teams → Business casual."*
+- *"Write something too casual in a formal app and Halen flags it — with a
+  one-tap rewrite to the right register. All on-device."*
 - Close the dropdown.
-- *"That's Halen. five bundled plugins, local Gemma 4, every keystroke private.
+- *"That's Halen. bundled plugins, local Gemma 4, every keystroke private.
   Built in a hackathon."* 🎤
 
 ---

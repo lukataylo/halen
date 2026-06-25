@@ -14,14 +14,16 @@ struct TypoFixerDetailView: View {
     @AppStorage(TypoStore.activeThresholdKey) private var activeThreshold: Int = TypoStore.activeThresholdDefault
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 14) {
             thresholdCard
             addCard
             searchField
             entriesList
             footer
         }
-        .padding(12)
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .padding(.bottom, 14)
     }
 
     // MARK: - Threshold
@@ -32,7 +34,7 @@ struct TypoFixerDetailView: View {
     /// would actually want; finer than that is just noise.
     private var thresholdCard: some View {
         GlassCard {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     // Semantic .caption — Larger Accessibility Sizes scales the card label.
                     Text("Auto-fix sensitivity")
@@ -90,7 +92,7 @@ struct TypoFixerDetailView: View {
 
     private var addCard: some View {
         GlassCard {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text("Add a correction")
                     .font(.caption)
                     .fontWeight(.semibold)
@@ -100,7 +102,7 @@ struct TypoFixerDetailView: View {
                     TextField("typo", text: $newTypo)
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 7)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
                                 .fill(.background.opacity(0.6))
@@ -117,7 +119,7 @@ struct TypoFixerDetailView: View {
                     TextField("correction", text: $newCorrection)
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 7)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
                                 .fill(.background.opacity(0.6))
@@ -214,7 +216,7 @@ struct TypoFixerDetailView: View {
                     )
             )
         }
-        .frame(maxHeight: 240)
+        .frame(minHeight: 150, maxHeight: 260)
     }
 
     // MARK: - Footer

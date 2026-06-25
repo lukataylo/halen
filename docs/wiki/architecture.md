@@ -45,9 +45,9 @@ Sources/Halen/
        │  AskHalen  TypoFixer  SentimentGuard  SnippetExpander        │
        │  ClarityChecker  VoiceDictation  WritingAssistant            │
        │  EmailReply  ToneProfiles                                    │
-       │                       │            BurnoutCopilot ─┐         │
-       │                       │            MeetingPrep    ─┤ stdio   │
-       │                       │ async calls               ─┘ JSON-RPC│
+       │                       │            Reasoning Compactor ─┐    │
+       │                       │            Mother · Desktop Buddy┤ stdio │
+       │                       │ async calls                     ─┘ JSON-RPC│
        │                       ▼                                      │
        │  ┌────────────────────────────────────────────────────────┐  │
        │  │              RouterInferenceClient                     │  │
@@ -110,8 +110,8 @@ Writing Coach, and `Autocomplete` into a single Writing Assistant plugin.
 The class names (and the on-disk plugin ids) keep their
 pre-merge form so existing user data carries over without migration.
 
-Out-of-process plugins — `BurnoutCopilot` and `MeetingPrep` ship in this
-repo under `plugins/`; users can also drop their own into
+Out-of-process plugins — `Reasoning Compactor`, `Mother`, and `Desktop Buddy`
+ship in this repo under `plugins/`; users can also drop their own into
 `~/Library/Application Support/Halen/Plugins/` — are registered alongside
 the in-process set via `ExternalPluginAdapter`. They speak the same
 `HalenPlugin` event surface over NDJSON-on-stdio.
@@ -275,7 +275,7 @@ Each plugin gets a directory under
 | `Halen/com.halen.sentiment-guard/rules.json`       | SentimentRulesStore      | Built-in + custom tone rules |
 | `Halen/com.halen.sentiment-guard/approved.json`    | SentimentGuard           | SHA-256 hashes of texts the user marked "Looks fine" |
 | `Halen/com.halen.snippet-expander/snippets.json`   | SnippetStore             | Built-in + custom snippets |
-| `Halen/com.halen.meeting-prep/processed.json`      | MeetingPrep              | EventKit identifiers already briefed |
+| `Halen/com.halen.tone-profiles/profiles.json`      | AppToneProfileStore      | Per-app target tone (Tone tab) |
 
 All files are pretty-printed JSON with sorted keys. They are hand-editable;
 the host re-merges built-ins on every launch so newly-shipped seed entries

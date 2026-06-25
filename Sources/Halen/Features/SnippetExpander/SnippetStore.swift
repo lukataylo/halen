@@ -31,16 +31,16 @@ final class SnippetStore {
         Snippet(trigger: ";summary",  kind: .ai,
                 value: "Summarise the following text in three concise bullet points. Output only the bullets, no preamble.",
                 displayName: "Summarise prior text", builtin: true, replacesPrior: false),
-        // Replaces the paragraph the user just wrote with a rewrite.
+        // Replaces everything the user wrote in the field with a rewrite.
         Snippet(trigger: ";rephrase", kind: .ai,
-                value: "Rewrite the following paragraph more concisely while keeping its meaning. Output only the rewrite, no preamble, no quotes.",
-                displayName: "Rephrase prior paragraph", builtin: true, replacesPrior: true),
+                value: "Rewrite the following text more concisely while keeping its meaning. Preserve paragraph breaks. Output only the rewrite, no preamble, no quotes.",
+                displayName: "Rephrase your text", builtin: true, replacesPrior: true),
         Snippet(trigger: ";formal",   kind: .ai,
-                value: "Rewrite the following paragraph in a more formal, professional tone. Output only the rewrite, no preamble, no quotes.",
-                displayName: "Make prior paragraph formal", builtin: true, replacesPrior: true),
+                value: "Rewrite the following text in a more formal, professional tone. Preserve paragraph breaks. Output only the rewrite, no preamble, no quotes.",
+                displayName: "Make your text formal", builtin: true, replacesPrior: true),
         Snippet(trigger: ";casual",   kind: .ai,
-                value: "Rewrite the following paragraph in a friendlier, more casual tone. Output only the rewrite, no preamble, no quotes.",
-                displayName: "Make prior paragraph casual", builtin: true, replacesPrior: true),
+                value: "Rewrite the following text in a friendlier, more casual tone. Preserve paragraph breaks. Output only the rewrite, no preamble, no quotes.",
+                displayName: "Make your text casual", builtin: true, replacesPrior: true),
         // Folded-in email reply action — formerly the standalone
         // EmailReply plugin. Special-cased in
         // SnippetExpander.handle(...): the trigger fires the built-in

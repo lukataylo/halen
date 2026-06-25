@@ -49,9 +49,9 @@ enum SystemPermission: String, CaseIterable, Identifiable {
         case .accessibility:     return "Caret tracking, inline corrections, snippet expansion."
         case .microphone:        return "Voice Dictation captures audio locally."
         case .speechRecognition: return "Voice Dictation transcribes audio to text."
-        case .calendar:          return "Burnout Copilot breaks, Meeting Prep briefings."
+        case .calendar:          return "Optional plugins that read your schedule (e.g. Desktop Buddy)."
         case .inputMonitoring:   return "Ask Halen palette hotkey (⌃H) from any app."
-        case .notifications:     return "Burnout reminders and Meeting Prep alerts."
+        case .notifications:     return "Clipboard-fallback alerts and plugin reminders."
         }
     }
 
@@ -181,8 +181,8 @@ final class SystemPermissionsModel {
 
     private func calendarGrant() -> PermissionGrant {
         // macOS 14 split EKAuthorizationStatus into `.fullAccess` and
-        // `.writeOnly`. Halen *reads* events (Burnout Copilot's
-        // calendar-density signal, Meeting Prep's briefings), so write-only
+        // `.writeOnly`. Plugins that use the calendar capability *read* events
+        // (the host's `calendar/upcomingEvents` JSON-RPC method), so write-only
         // is functionally insufficient and surfaced as denied.
         switch EKEventStore.authorizationStatus(for: .event) {
         case .fullAccess:                  return .granted

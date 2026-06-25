@@ -281,6 +281,16 @@ final class CaretObserver {
         // will time out fast instead of wedging the main thread.
         axApplyMessagingTimeout(to: appElement)
 
+        // Chromium/Electron apps (Claude Desktop, Chrome, VS Code, Slack…) hide
+        // their entire AX tree unless VoiceOver is running or a client sets this
+        // attribute — without it the focused text element is invisible and every
+        // in-place feature (PromptPolish, SnippetExpander, Autocomplete) no-ops.
+        // Setting it is the documented opt-in; native apps ignore the unknown
+        // attribute, so we set it unconditionally rather than keep a bundle-id
+        // allowlist that would rot. ponytail: unconditional set, add a denylist
+        // only if some app misbehaves with its AX tree forced on.
+        AXUIElementSetAttributeValue(appElement, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+
         var newObserver: AXObserver?
         let result = AXObserverCreate(pid, axCallback, &newObserver)
         guard result == .success, let observer = newObserver else {
@@ -386,7 +396,7 @@ final class CaretObserver {
         // The element's AX value often lags the document actually loading — e.g.
         // opening a note in TextEdit, where the focus snapshot reads "" before the
         // content lands in the AX tree. Re-snapshot shortly after so text-driven
-        // plugins (SentimentGuard, BurnoutCopilot) see the real content without
+        // plugins (SentimentGuard, ClarityChecker) see the real content without
         // waiting for the user's first keystroke.
         scheduleDebouncedEmit(reason: "focus-settle")
     }
@@ -445,7 +455,7 @@ final class CaretObserver {
     /// `text.pause` debounce. 600ms keeps snippet expansion and typo learning
     /// responsive while noticeably cutting per-keystroke AX reads and fan-out
     /// versus the old 400ms. Inference-driven plugins debounce *further* on top
-    /// of this (see SentimentGuard / BurnoutCopilot) so Gemma isn't run mid-type.
+    /// of this (see SentimentGuard / ClarityChecker) so Gemma isn't run mid-type.
     private static let pauseDebounce: Duration = .milliseconds(600)
 
     private func scheduleDebouncedEmit(reason: String) {

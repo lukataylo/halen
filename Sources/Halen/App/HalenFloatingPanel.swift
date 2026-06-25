@@ -1,8 +1,8 @@
 import AppKit
 
 /// Factory for the borderless floating panels Halen overlays on other apps:
-/// the caret indicator, the Sentiment Guard popover, the Burnout Copilot
-/// suggestion, the Voice Dictation listening pill.
+/// the caret indicator, the Sentiment Guard popover, the Voice Dictation
+/// listening pill.
 ///
 /// Four call sites used to hand-build these with `NSPanel(...)` + a dozen
 /// property assignments, and the configs had already drifted —

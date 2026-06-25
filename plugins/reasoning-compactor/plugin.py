@@ -34,8 +34,9 @@ metrics, and chunking of long inputs — are documented in README.md.
 Every privileged operation (reading the selection, running inference, posting
 the notification) goes through the host over JSON-RPC — this plugin holds no
 macOS entitlements of its own and links no system frameworks. Setting the
-clipboard uses /usr/bin/pbcopy, a subprocess the plugin spawns itself (same
-pattern Burnout Copilot uses for its Shortcuts trigger).
+clipboard uses /usr/bin/pbcopy, a subprocess the plugin spawns itself (the
+same self-spawned-subprocess pattern the other out-of-process plugins use for
+their own side effects).
 
 Protocol: JSON-RPC 2.0, newline-delimited. stdin = host -> plugin,
 stdout = plugin -> host, stderr = log (forwarded into Halen's unified log).
@@ -51,7 +52,7 @@ import threading
 import itertools
 import subprocess
 
-# --- JSON-RPC plumbing (shared shape with meeting-prep / burnout-copilot) ----
+# --- JSON-RPC plumbing (shared shape across the out-of-process plugins) ------
 
 _ids = itertools.count(1)
 _ids_lock = threading.Lock()
@@ -130,6 +131,13 @@ DEFAULTS = {
     "clipboard_cmd": ["/usr/bin/pbcopy"],
     "hotkey_keycode": 40,            # kVK_ANSI_K
     "hotkey_modifiers": 0x1000 | 0x800,  # ⌃⌥ (controlKey | optionKey)
+    # Model tiers for the two compaction passes. "extractive" just needs the
+    # model to pick step-numbers (classification task) — "small" (Gemma 4 E2B)
+    # is fast and accurate enough. "abstractive" rewrites prose so benefits from
+    # the more capable "medium" (Gemma 4 E4B). Valid values: "small", "medium",
+    # "large", "classifier". See docs/wiki/architecture.md for tier definitions.
+    "extractive_model_tier": "small",
+    "abstractive_model_tier": "medium",
 }
 
 HOTKEY_ID = "reasoning-compactor.compact"
@@ -201,6 +209,12 @@ def load_config():
 
     if not isinstance(cfg["clipboard_cmd"], list) or not cfg["clipboard_cmd"]:
         cfg["clipboard_cmd"] = list(DEFAULTS["clipboard_cmd"])
+
+    _VALID_TIERS = {"small", "medium", "large", "classifier"}
+    for tier_key in ("extractive_model_tier", "abstractive_model_tier"):
+        if cfg.get(tier_key) not in _VALID_TIERS:
+            cfg[tier_key] = DEFAULTS[tier_key]
+
     return cfg
 
 
@@ -381,7 +395,7 @@ def _extractive_pass(prose, target):
     try:
         result = call("inference/complete", {
             "prompt": _extractive_prompt(steps, keep_n),
-            "tier": "medium",
+            "tier": CFG["extractive_model_tier"],
             "maxTokens": 128,
             "temperature": 0.0,
             "taskKind": "classification",
@@ -473,7 +487,7 @@ def _abstractive_pass(text, target):
     try:
         result = call("inference/complete", {
             "prompt": _abstractive_prompt(text, target),
-            "tier": "medium",
+            "tier": CFG["abstractive_model_tier"],
             "maxTokens": max_tokens,
             "temperature": 0.2,
             "taskKind": "generation",
