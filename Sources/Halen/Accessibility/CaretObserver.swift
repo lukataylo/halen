@@ -284,7 +284,7 @@ final class CaretObserver {
         // Chromium/Electron apps (Claude Desktop, Chrome, VS Code, Slack…) hide
         // their entire AX tree unless VoiceOver is running or a client sets this
         // attribute — without it the focused text element is invisible and every
-        // in-place feature (PromptPolish, SnippetExpander, Autocomplete) no-ops.
+        // in-place feature (PromptPolish, SnippetExpander) no-ops.
         // Setting it is the documented opt-in; native apps ignore the unknown
         // attribute, so we set it unconditionally rather than keep a bundle-id
         // allowlist that would rot. ponytail: unconditional set, add a denylist

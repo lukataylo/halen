@@ -41,7 +41,7 @@ Halen updates itself. You'll never need to come back to this page.
 | Plugin | What it does |
 |---|---|
 | ✨ **Ask Halen** | Press ⌃H. Ask anything. Halen knows what's on screen. |
-| ✍️ **Writing Assistant** | Fixes typos, flags tone & clarity, and finishes your sentences as you type (Tab to accept). |
+| ✍️ **Writing Assistant** | Fixes typos and flags tone & clarity as you type, with per-app target tones and a one-tap rewrite. |
 | 💬 **Snippet Expander** | Type `;sig`, `;today`, `;summary`, `;reply`. Or ⌃⌥R to rewrite a selection. |
 | 🎙️ **Voice Dictation** | Press ⌃⌥Space. Speak. Press again. Apple's on-device transcription. |
 | 🪄 **Prompt Polish** | Press ⌃⌥⌘P. Rewrites the selected prompt in place with word-level edits for modern LLMs. |

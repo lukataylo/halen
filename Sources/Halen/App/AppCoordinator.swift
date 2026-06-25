@@ -219,11 +219,11 @@ final class AppCoordinator {
         // privileged work behind the JSON-RPC boundary like any third-party plugin.
         registry.register(AskHalen(services: services))
         // Writing Assistant is the single "Grammarly-esque" writing surface —
-        // it merges Word Replacements (typo fixes + term swaps), Writing Coach
-        // (tone + clarity), and Autocomplete (ghost-text) into one plugin with
-        // one on/off switch. Each engine stays a distinct internal object so
-        // its UX model (silent inline / popover / ghost-text) survives; the
-        // wrapper starts/stops them together and hosts a tabbed detail view.
+        // it merges Word Replacements (typo fixes + term swaps) and Writing
+        // Coach (tone + clarity) into one plugin with one on/off switch. Each
+        // engine stays a distinct internal object so its UX model (silent
+        // inline / popover) survives; the wrapper starts/stops them together
+        // and hosts a tabbed detail view.
         // (Halen's focus moved to model orchestration; writing help is now one
         // consolidated feature rather than three independent toggles.)
         registry.register(WritingAssistant(services: services, typoStore: typoStore))

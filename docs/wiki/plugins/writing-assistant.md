@@ -5,20 +5,18 @@
 >
 > Runs **in-process** inside the menubar binary. One marketplace row, one
 > on/off switch, on by default. No hotkey of its own — its engines react
-> to you typing, and Tab accepts an autocomplete suggestion.
+> to you typing.
 
-Halen's single Grammarly-esque writing surface. It fixes typos, flags
-tone and clarity, and finishes your sentences — three engines under one
-plugin so there's one toggle and one detail panel instead of three rows
-competing for the same paragraph.
+Halen's single Grammarly-esque writing surface. It fixes typos and flags
+tone and clarity — two engines under one plugin so there's one toggle and
+one detail panel instead of separate rows competing for the same paragraph.
 
-## The three engines
+## The engines
 
 | Engine | When it fires | UX |
 |---|---|---|
 | **Corrections** | As you finish a word / settle a paragraph | Silent inline typo swap; popover-with-button for your preferred-word rules. |
-| **Clarity & tone** | After ~1 s of stillness | Tints the caret indicator. Click for **Looks fine** / **Rephrase**. |
-| **Autocomplete** | When you pause at the end of a field | Gray ghost text past the caret. **Tab** accepts. |
+| **Clarity & tone** | After ~1 s of stillness | Tints the caret indicator. Click for **Looks fine** / **Rephrase**. Per-app target tones flag the wrong register. |
 
 ### Corrections
 
@@ -52,24 +50,12 @@ colour. **Rephrase** streams a Gemma rewrite into a preview pane and
 writes back on confirm. Per-app tone profiles keep Slack's bluntness from
 over-flagging while Mail stays formal.
 
-### Autocomplete
-
-When you pause at the **end** of a field with at least 20 characters of
-context, Halen asks the local model (`tier: .small`, `maxTokens: 12`,
-`temperature: 0.3`) for a short continuation and draws it as gray ghost
-text in a borderless floating panel at the caret. **Tab** accepts (the
-hotkey is registered *only while a suggestion is on screen*); any other
-keystroke dismisses.
-
-Autocomplete and the caret-indicator findings never fight for the same
-paragraph: while a corrections / clarity / tone finding is open, no ghost
-text is drawn — the user is meant to be revising, not extending.
-
 ## Detail view
 
 Tabs for each engine: auto-typo sensitivity and learned dictionary; your
-preferred-word rules with CSV import/export; tone sensitivity, rules, and
-ignored apps; clarity sensitivity and suggestion mode.
+preferred-word rules with CSV import/export; tone sensitivity, rules,
+per-app target tones, and ignored apps; clarity sensitivity and suggestion
+mode.
 
 ## Migration
 

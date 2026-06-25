@@ -93,20 +93,20 @@ protocol HalenPlugin: AnyObject {
 
 Categories: `writing`, `voice`, `scheduling`, `focus`, `productivity`.
 
-Ten in-process plugins ship as Swift classes wired into
+In-process plugins ship as Swift classes wired into
 `AppCoordinator.startObservers()`: `AskHalen`, `TypoFixer`,
 `SentimentGuard`, `SnippetExpander`, `ClarityChecker`, `VoiceDictation`,
-`Autocomplete`, `StyleGuide`, `EmailReply`, `ToneProfiles`. The
+`StyleGuide`, `EmailReply`, `ToneProfiles`. The
 `PluginRegistry` (`@Observable`) persists each plugin's enabled state in
 `UserDefaults` under the key `plugin.<id>.enabled` and calls `start()` /
 `stop()` on toggle. Default-off plugins (Voice, EmailReply, ToneProfiles) opt in via onboarding.
 
-These ten classes back the **five** entries you see in the marketplace —
+These classes back the entries you see in the marketplace —
 the v0.3 merges fold `TypoFixer` + `StyleGuide` into Word Replacements,
 `SentimentGuard` + `ClarityChecker` into Writing Coach, and `EmailReply`
-into Snippet Expander; `ToneProfiles` moved out of the marketplace into
-Settings. The Writing Assistant consolidation then folds Word Replacements,
-Writing Coach, and `Autocomplete` into a single Writing Assistant plugin.
+into Snippet Expander; `ToneProfiles` moved out of the marketplace into the
+Writing Assistant's Tone tab. The Writing Assistant consolidation then folds
+Word Replacements and Writing Coach into a single Writing Assistant plugin.
 The class names (and the on-disk plugin ids) keep their
 pre-merge form so existing user data carries over without migration.
 

@@ -346,10 +346,9 @@ extension Event {
             // feedback loops. The mitigation now is that re-emitting a
             // finding from a plugin requires a host method that doesn't
             // exist (`finding/publish` isn't in the protocol), so subscribing
-            // is read-only by construction. Exposing the events lets external
-            // Autocomplete suppress its ghost suggestions when other writing
-            // plugins are flagging the paragraph — the UX-3 behaviour it had
-            // in-process.
+            // is read-only by construction. Exposing the events lets an external
+            // plugin react to other plugins' findings — e.g. a writing plugin
+            // suppressing its own suggestions while the paragraph is flagged.
             return ("finding.detected", .object([
                 "source": p.source,
                 "id": p.id,

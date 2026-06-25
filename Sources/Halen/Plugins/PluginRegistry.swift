@@ -95,11 +95,12 @@ final class PluginRegistry {
                                             "com.halen.style-guide"],
             "com.halen.writing-coach":     ["com.halen.sentiment-guard",
                                             "com.halen.clarity-checker"],
-            // Writing Assistant rolls up the three writing plugins. Any one of
-            // them previously enabled → Writing Assistant on; all three stored
-            // off → off (preserve "I opted out of writing help"). Autocomplete
-            // was default-off, but a nil (never-touched) value doesn't count as
-            // an opt-out here — only an explicit stored value does.
+            // Writing Assistant rolls up the writing plugins. Any one of them
+            // previously enabled → Writing Assistant on; all stored off → off
+            // (preserve "I opted out of writing help"). The retired Autocomplete
+            // id stays in this legacy list so a user who'd explicitly enabled it
+            // still inherits Writing Assistant on upgrade; a nil (never-touched)
+            // value doesn't count as an opt-out — only an explicit stored value.
             "com.halen.writing-assistant": ["com.halen.word-replacements",
                                             "com.halen.writing-coach",
                                             "com.halen.autocomplete"],
@@ -166,9 +167,7 @@ final class PluginRegistry {
     /// Writing Assistant, Snippet Expander (which carries the folded-in
     /// email-reply action), and Prompt Polish. Voice Dictation stays
     /// opt-in because it needs mic/speech permission prompts the user
-    /// shouldn't get on first launch. (Autocomplete used to be opt-in for
-    /// its interrupting ghost-text, but it now rides inside the default-on
-    /// Writing Assistant — its old id is no longer a registered plugin.)
+    /// shouldn't get on first launch.
     static let defaultDisabledPluginIds: Set<String> = [
         "com.halen.voice-dictation",
     ]

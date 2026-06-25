@@ -46,7 +46,7 @@ toggles them on or off and opens their detail panel.
 | Plugin | Category | Default | What it does |
 |---|---|---|---|
 | Ask Halen | Productivity | On | ⌃H opens a floating palette. One question, with your focused app + selection + clipboard as context. |
-| [Writing Assistant](plugins/writing-assistant.md) | Writing | On | Fixes typos, flags tone & clarity, and finishes your sentences as you type. Tab to accept a completion. |
+| [Writing Assistant](plugins/writing-assistant.md) | Writing | On | Fixes typos and flags tone & clarity as you type. Per-app target tones; one-tap rewrite on a finding. |
 | [Snippet Expander](plugins/snippet-expander.md) | Productivity | On | `;tag` expands. `;reply` or ⌃⌥E drafts an email. ⌃⌥R rewrites a selection. |
 | [Voice Dictation](plugins/voice-dictation.md) | Voice | Off | ⌃⌥Space opens a listening pill. Apple's on-device transcription writes at your caret. |
 | [Prompt Polish](plugins/prompt-polish.md) | Productivity | On | ⌃⌥⌘P rewrites the selected prompt in place with word-level edits for modern LLMs. |

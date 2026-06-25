@@ -11,7 +11,6 @@ import Foundation
 /// allocated ids in the 100+ range via `PluginHost`.
 enum HotkeyID: UInt32 {
     case voiceDictation = 1
-    case autocomplete   = 4
 }
 
 /// A `(keyCode, modifiers)` chord paired with a human label, both as they

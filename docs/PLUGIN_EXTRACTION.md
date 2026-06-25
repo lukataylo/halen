@@ -25,7 +25,6 @@ Three reasons to move plugins out of the menubar binary:
 |---|---|---|---|
 | **StyleGuide** | First-cut external version ships in v0.2.0 alongside the in-process one | [`plugins/style-guide/`](../plugins/style-guide/) | Auto-install pattern not built yet; in-process registration not removed |
 | **EmailReply** | First-cut external version ships in v0.2.0 alongside the in-process one. New `hotkey/register` host RPC method underpins it | [`plugins/email-reply/`](../plugins/email-reply/) | Same auto-install + in-process-removal cutover as StyleGuide; also needs `clipboard/set` and a richer `ax/readSelection` to match in-process UX exactly |
-| **Autocomplete** | First-cut external version ships in v0.2.0 alongside the in-process one. New `finding.detected`/`finding.cleared` event topics underpin it | [`plugins/autocomplete/`](../plugins/autocomplete/) | UX regression — can't draw ghost text from a plugin; suggestion is invisible until Tab accepts. Needs a `ui/ghostText` host method to match in-process UX |
 | **ToneProfiles** | First-cut external version ships in v0.2.0 alongside the in-process one. New `profile/{get,set,list}ToneProfile` host RPC methods underpin it | [`plugins/tone-profiles/`](../plugins/tone-profiles/) | Editor only — host still owns the store, in-process Sentiment Guard / Clarity Checker continue reading the host service. Same auto-install cutover |
 | **VoiceDictation** | In-process only, likely stays | — | AVAudioEngine + SFSpeechRecognizer need framework access; would require a Swift-binary plugin and TCC inheritance work |
 
@@ -72,12 +71,12 @@ caret-anchored `FindingsPopover` becomes a system modal via
 
 ## What the next extractions need
 
-### EmailReply, Autocomplete — `hotkey/register` ✅ shipped in v0.2.0
+### EmailReply — `hotkey/register` ✅ shipped in v0.2.0
 
-Both use Carbon hotkeys (⌃⌥E and Tab-while-ghost-showing respectively).
-`hotkey/register` and `hotkey/unregister` are now host RPC methods —
-the host owns the Carbon registration and pushes `event/hotkey.fired`
-notifications back to the registering plugin.
+EmailReply uses a Carbon hotkey (⌃⌥E). `hotkey/register` and
+`hotkey/unregister` are now host RPC methods — the host owns the Carbon
+registration and pushes `event/hotkey.fired` notifications back to the
+registering plugin.
 
 ```jsonc
 { "method": "hotkey/register",
@@ -101,17 +100,14 @@ can't leave a stale Carbon registration around. See
 and [`plugins/email-reply/`](../plugins/email-reply/) for a worked
 example.
 
-### Autocomplete — finding events
+### Finding events for external plugins
 
-Autocomplete needs to suppress itself when another writing plugin has
-an active finding (UX-3: no ghost text over a tinted indicator). Today
-it subscribes to internal `.findingDetected` / `.findingsCleared`
-event-bus messages that aren't exposed in the plugin protocol.
-
-Proposed: add `event/finding.detected` and `event/finding.cleared` to
-the topics plugins can declare in their manifest. Host fans them out
-the same way it does `text.pause`. The opaque-shape payload (source
-plugin id, severity, summary) goes over the wire unchanged.
+An external writing plugin may want to react to other plugins' findings
+(e.g. suppress its own suggestions while a paragraph is flagged). The host
+exposes `event/finding.detected` and `event/finding.cleared` topics that
+plugins can declare in their manifest; the host fans them out the same way
+it does `text.pause`. The opaque-shape payload (source plugin id, severity,
+summary) goes over the wire unchanged.
 
 ### ToneProfiles — `profile/getToneProfile`
 
