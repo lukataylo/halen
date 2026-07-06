@@ -62,7 +62,7 @@ struct PermissionsView: View {
     private var systemCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                cardLabel("macOS permissions", systemImage: "lock.shield")
+                cardLabel("macOS permissions")
                 ForEach(SystemPermission.allCases) { permission in
                     HStack(spacing: 10) {
                         Image(systemName: permission.iconName)

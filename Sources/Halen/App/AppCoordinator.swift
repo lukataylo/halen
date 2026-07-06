@@ -43,8 +43,11 @@ final class AppCoordinator {
     /// picker. App-coordinator scope so it accumulates across panel opens.
     let recentApps = RecentAppsModel()
     /// Host-owned snippet library, handed to plugins via the `snippets`
-    /// capability.
-    let snippetStore = SnippetStore()
+    /// capability. The file stays at its pre-pivot path so existing users
+    /// keep their snippets.
+    let snippetStore = SnippetStore(
+        fileURL: HalenSupportDirectory.subdirectory("com.halen.snippet-expander")
+            .appending(path: "snippets.json"))
     let registry = PluginRegistry()
     /// Surfaced to Settings via HalenApp → HalenCenterView. Lives at app
     /// scope (not view scope) so its observable status survives the
