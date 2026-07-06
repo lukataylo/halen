@@ -196,7 +196,7 @@ public struct FindingsPopover: View {
         // users would have to Tab in from the previously-focused app window.
         // The short hop on the main actor lets the NSPanel finish becoming
         // key before SwiftUI processes the focus change, mirroring the same
-        // race we work around in `AskHalenPalette`.
+        // race this popover works around with ObservableObject.
         .task {
             try? await Task.sleep(for: .milliseconds(80))
             focusedField = (onPrimaryAction != nil) ? .primary : .approve

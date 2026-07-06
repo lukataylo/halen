@@ -353,8 +353,8 @@ struct SettingsView: View {
         }
     }
 
-    // Per-app tone profiles moved to the Writing Assistant → Tone tab
-    // (alongside the detection they drive), reached via HalenServices.
+    // Per-app tone profiles live in the Writing Assistant → Tone tab
+    // (alongside the detection they drive), fed by the host's shared store.
 
     private var overlayPreview: some View {
         ZStack {

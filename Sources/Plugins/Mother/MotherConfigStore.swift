@@ -366,7 +366,7 @@ final class MotherConfigStore {
             guard var dict = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] else { return }
             if mergingUnknownKeys,
                let existingData = try? Data(contentsOf: configURL),
-               let existing = try? JSONSerialization.jsonObject(with: existingData) as? [String: Any] {
+               let existing = (try? JSONSerialization.jsonObject(with: existingData)) as? [String: Any] {
                 // Keys this build doesn't model ride along untouched.
                 for (key, value) in existing where dict[key] == nil {
                     dict[key] = value

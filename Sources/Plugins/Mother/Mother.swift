@@ -324,7 +324,7 @@ public final class Mother: HalenPlugin {
         // Per-host backoff so a persistent blocked tab isn't nuked + toasted
         // every poll. (The warn path also toasts, so this covers all modes.)
         let now = ContinuousClock.now
-        if let last = siteLastEnforced[host], now - last < Self.siteEnforceCooldown { return }
+        if let last = siteLastEnforced[host], last.duration(to: now) < Self.siteEnforceCooldown { return }
         siteBusy.insert(host)
         siteLastEnforced[host] = now
         defer { siteBusy.remove(host) }

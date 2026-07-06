@@ -173,5 +173,13 @@ package final class PluginRegistry {
     /// shouldn't get on first launch.
     package static let defaultDisabledPluginIds: Set<String> = [
         "com.halen.voice-dictation",
+        // Mother quits apps on your behalf; nobody should get that without
+        // asking for it.
+        "com.halen.mother",
+        // Notch Boss owns the notch and listens on an agent socket — off
+        // unless you're an agent user. (AppCoordinator flips it on when a
+        // NotchBar install is detected, so migrating users keep their
+        // doorbell.)
+        "com.halen.notch-boss",
     ]
 }
