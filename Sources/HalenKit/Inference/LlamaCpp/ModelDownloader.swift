@@ -39,7 +39,7 @@ package final class ModelDownloader {
     /// on even a slow residential link — beyond that we'd rather fail loudly.
     private static let resourceTimeout: TimeInterval = 60 * 60
 
-    package enum State: Equatable {
+    public enum State: Equatable {
         case notDownloaded
         case downloading(fraction: Double, bytes: Int64, total: Int64)
         case verifying
@@ -48,7 +48,7 @@ package final class ModelDownloader {
         case failed(message: String)
     }
 
-    package private(set) var state: State
+    public private(set) var state: State
 
     private var downloadTask: Task<Void, Never>?
 

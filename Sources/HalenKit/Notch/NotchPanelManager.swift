@@ -13,6 +13,7 @@ import HalenPluginAPI
 /// throws if another plugin already holds it.
 @MainActor
 package final class NotchPanelManager {
+    @MainActor
     private final class PanelController {
         let panel: NSPanel
 

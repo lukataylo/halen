@@ -18,14 +18,14 @@ package enum HotkeyID: UInt32 {
 /// were when the conflict was detected. The label is the *attempted* owner
 /// — the one we rejected; `existingOwner` is the registration that keeps
 /// the chord. Surfaced in Settings so the user can disable or rebind.
-package struct HotkeyConflict: Equatable, Identifiable, Sendable {
-    package let id = UUID()
-    package let keyCode: UInt32
-    package let modifiers: UInt32
-    package let existingOwner: String
-    package let attemptedOwner: String
+public struct HotkeyConflict: Equatable, Identifiable, Sendable {
+    public let id = UUID()
+    public let keyCode: UInt32
+    public let modifiers: UInt32
+    public let existingOwner: String
+    public let attemptedOwner: String
 
-    package static func == (lhs: HotkeyConflict, rhs: HotkeyConflict) -> Bool {
+    public static func == (lhs: HotkeyConflict, rhs: HotkeyConflict) -> Bool {
         lhs.keyCode == rhs.keyCode
             && lhs.modifiers == rhs.modifiers
             && lhs.existingOwner == rhs.existingOwner
@@ -36,7 +36,7 @@ package struct HotkeyConflict: Equatable, Identifiable, Sendable {
     /// bitmask values are stable across macOS versions, so this is a pure
     /// lookup. Unknown key codes fall back to their numeric form so the
     /// row stays informative even for obscure keys.
-    package var displayChord: String {
+    public var displayChord: String {
         var s = ""
         if modifiers & UInt32(controlKey) != 0 { s += "⌃" }
         if modifiers & UInt32(optionKey)  != 0 { s += "⌥" }
@@ -106,7 +106,7 @@ package final class HotkeyConflictRegistry {
     /// Conflicts collected since launch. Two plugins attempting the same
     /// chord at startup append once; the UI uses identity (`UUID`) to
     /// stably render rows even if the array is mutated.
-    package private(set) var conflicts: [HotkeyConflict] = []
+    public private(set) var conflicts: [HotkeyConflict] = []
 
     private init() {}
 

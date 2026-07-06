@@ -8,7 +8,7 @@ import HalenPluginAPI
 @Observable
 @MainActor
 package final class PluginRegistry {
-    package private(set) var plugins: [any HalenPlugin] = []
+    public private(set) var plugins: [any HalenPlugin] = []
     private var enabledStates: [String: Bool] = [:]
 
     private let defaults = UserDefaults.standard

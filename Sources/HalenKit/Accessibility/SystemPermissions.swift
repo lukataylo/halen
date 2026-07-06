@@ -14,7 +14,7 @@ import HalenPluginAPI
 @MainActor
 @Observable
 package final class SystemPermissionsModel {
-    package private(set) var grants: [SystemPermission: PermissionGrant] = [:]
+    public private(set) var grants: [SystemPermission: PermissionGrant] = [:]
 
     package init() {
         // Populate synchronously where we can so the Settings view doesn't

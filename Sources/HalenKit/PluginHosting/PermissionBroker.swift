@@ -27,7 +27,7 @@ package final class PermissionBroker {
     package let system = SystemPermissionsModel()
 
     /// Bumped on every grant change so SwiftUI dependents refresh.
-    package private(set) var revision = 0
+    public private(set) var revision = 0
 
     private let defaults: UserDefaults
 

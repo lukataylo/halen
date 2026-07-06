@@ -10,13 +10,13 @@ package final class InferenceSettings {
     package static let preferenceOrderKey = "halen.inference.backendOrder"
 
     /// Backend priority, highest first. Persisted as raw-value strings.
-    package var preferenceOrder: [BackendKind] {
+    public var preferenceOrder: [BackendKind] {
         didSet { persist() }
     }
 
     /// Last probed availability per backend — drives the Settings status dots.
     /// Live state, not persisted.
-    package var availability: [BackendKind: BackendAvailability] = [:]
+    public var availability: [BackendKind: BackendAvailability] = [:]
 
     package init() {
         if let raw = UserDefaults.standard.array(forKey: Self.preferenceOrderKey) as? [String] {
