@@ -1,4 +1,5 @@
 import Foundation
+import HalenPluginAPI
 
 /// Inference backend backed by a llama.cpp-loaded GGUF model. The exact model
 /// is determined by the `ModelSpec` passed at init — Gemma 4 E4B for the
@@ -17,10 +18,10 @@ import Foundation
 ///
 /// An `actor`: the underlying `LlamaContext` is loaded lazily and reused, and
 /// must never be touched concurrently.
-actor LlamaCppBackend: InferenceBackend {
-    nonisolated let kind: BackendKind = .bundledLlama
-    nonisolated let capability: BackendCapability
-    nonisolated let spec: ModelSpec
+package actor LlamaCppBackend: InferenceBackend {
+    package nonisolated let kind: BackendKind = .bundledLlama
+    package nonisolated let capability: BackendCapability
+    package nonisolated let spec: ModelSpec
 
     private var loadedContext: LlamaContext?
     private var loadFailed = false
@@ -31,7 +32,7 @@ actor LlamaCppBackend: InferenceBackend {
     private var idleUnloadTask: Task<Void, Never>?
     private let idleUnloadInterval: TimeInterval = 5 * 60
 
-    init(spec: ModelSpec) {
+    package init(spec: ModelSpec) {
         self.spec = spec
         self.capability = BackendCapability(
             servesTiers: spec.servesTiers,
@@ -45,7 +46,7 @@ actor LlamaCppBackend: InferenceBackend {
     /// Mac without Apple Intelligence, before the user downloads).
     private var modelURL: URL? { ModelLocation.resolved(for: spec) }
 
-    func availability() async -> BackendAvailability {
+    package func availability() async -> BackendAvailability {
         if loadFailed { return .unavailable(reason: "\(spec.displayName) failed to load") }
         if loadedContext != nil { return .available }   // already loaded — proven good
         guard let url = modelURL else {
@@ -62,7 +63,7 @@ actor LlamaCppBackend: InferenceBackend {
     /// time after); idempotent — a second call is a no-op once loaded.
     /// Returns silently on failure — `availability()` will report the
     /// problem the next time the router asks.
-    func prewarm() async {
+    package func prewarm() async {
         guard loadedContext == nil, !loadFailed else { return }
         _ = try? ensureContext()
     }
@@ -86,7 +87,7 @@ actor LlamaCppBackend: InferenceBackend {
         return size >= 100_000_000
     }
 
-    func complete(_ request: InferenceRequest) async throws -> InferenceResponse {
+    package func complete(_ request: InferenceRequest) async throws -> InferenceResponse {
         let context = try ensureContext()
         // Push the idle-eviction deadline out on every request, success or not.
         defer { scheduleIdleUnload() }
@@ -110,7 +111,7 @@ actor LlamaCppBackend: InferenceBackend {
     /// Token-streaming variant of `complete`. `nonisolated` so it satisfies the
     /// non-`async` protocol requirement from an `actor` — the real work hops
     /// onto the actor inside the spawned `Task`.
-    nonisolated func stream(_ request: InferenceRequest) -> AsyncThrowingStream<String, Error> {
+    package nonisolated func stream(_ request: InferenceRequest) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let task = Task { await self.runStreaming(request, into: continuation) }
             // Consumer stopped reading (panel closed, plugin cancelled) — cancel

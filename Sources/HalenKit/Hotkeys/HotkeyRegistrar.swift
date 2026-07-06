@@ -1,6 +1,7 @@
 import Carbon.HIToolbox
 import AppKit
 import Foundation
+import HalenPluginAPI
 
 /// Process-wide catalogue of in-process hotkey ids. Held by
 /// `HotkeyRegistrar.register(..., id:)` so distinct chords can be
@@ -9,7 +10,7 @@ import Foundation
 /// (Carbon's EventHotKeyID disambiguated handlers); kept on the
 /// NSEvent-backed path for API compatibility with external plugins
 /// allocated ids in the 100+ range via `PluginHost`.
-enum HotkeyID: UInt32 {
+package enum HotkeyID: UInt32 {
     case voiceDictation = 1
 }
 
@@ -17,14 +18,14 @@ enum HotkeyID: UInt32 {
 /// were when the conflict was detected. The label is the *attempted* owner
 /// — the one we rejected; `existingOwner` is the registration that keeps
 /// the chord. Surfaced in Settings so the user can disable or rebind.
-struct HotkeyConflict: Equatable, Identifiable, Sendable {
-    let id = UUID()
-    let keyCode: UInt32
-    let modifiers: UInt32
-    let existingOwner: String
-    let attemptedOwner: String
+package struct HotkeyConflict: Equatable, Identifiable, Sendable {
+    package let id = UUID()
+    package let keyCode: UInt32
+    package let modifiers: UInt32
+    package let existingOwner: String
+    package let attemptedOwner: String
 
-    static func == (lhs: HotkeyConflict, rhs: HotkeyConflict) -> Bool {
+    package static func == (lhs: HotkeyConflict, rhs: HotkeyConflict) -> Bool {
         lhs.keyCode == rhs.keyCode
             && lhs.modifiers == rhs.modifiers
             && lhs.existingOwner == rhs.existingOwner
@@ -35,7 +36,7 @@ struct HotkeyConflict: Equatable, Identifiable, Sendable {
     /// bitmask values are stable across macOS versions, so this is a pure
     /// lookup. Unknown key codes fall back to their numeric form so the
     /// row stays informative even for obscure keys.
-    var displayChord: String {
+    package var displayChord: String {
         var s = ""
         if modifiers & UInt32(controlKey) != 0 { s += "⌃" }
         if modifiers & UInt32(optionKey)  != 0 { s += "⌥" }
@@ -90,12 +91,12 @@ struct HotkeyConflict: Equatable, Identifiable, Sendable {
 /// so `SettingsView` can render a warning card.
 @MainActor
 @Observable
-final class HotkeyConflictRegistry {
+package final class HotkeyConflictRegistry {
     /// Singleton — the registry is process-wide because Carbon's hotkey
     /// namespace is process-wide. Per-instance state wouldn't catch the
     /// case where two separate `HotkeyRegistrar` objects (one per plugin)
     /// race on the same chord, which is the entire point of this class.
-    static let shared = HotkeyConflictRegistry()
+    package static let shared = HotkeyConflictRegistry()
 
     /// `(keyCode << 32) | modifiers` → owner label. Keyed on the chord
     /// pair so a lookup is O(1); the owner label is what we render in
@@ -105,7 +106,7 @@ final class HotkeyConflictRegistry {
     /// Conflicts collected since launch. Two plugins attempting the same
     /// chord at startup append once; the UI uses identity (`UUID`) to
     /// stably render rows even if the array is mutated.
-    private(set) var conflicts: [HotkeyConflict] = []
+    package private(set) var conflicts: [HotkeyConflict] = []
 
     private init() {}
 
@@ -113,8 +114,8 @@ final class HotkeyConflictRegistry {
     /// `HotkeyConflict` on collision. The existing owner is *not*
     /// displaced — first registration wins, so plugin load order
     /// determines the outcome but the user always sees both labels.
-    func claim(keyCode: UInt32, modifiers: UInt32,
-               owner: String) -> HotkeyConflict? {
+    package func claim(keyCode: UInt32, modifiers: UInt32,
+                       owner: String) -> HotkeyConflict? {
         let key = Self.chordKey(keyCode: keyCode, modifiers: modifiers)
         if let existing = owners[key] {
             // Same owner re-claiming after `release` is fine and ends
@@ -145,7 +146,7 @@ final class HotkeyConflictRegistry {
     /// idempotence). Also clears any conflicts that referred to the
     /// freed chord so the UI doesn't keep showing a stale warning after
     /// the owning plugin is disabled.
-    func release(keyCode: UInt32, modifiers: UInt32, owner: String) {
+    package func release(keyCode: UInt32, modifiers: UInt32, owner: String) {
         let key = Self.chordKey(keyCode: keyCode, modifiers: modifiers)
         guard owners[key] == owner else { return }
         owners.removeValue(forKey: key)
@@ -154,7 +155,7 @@ final class HotkeyConflictRegistry {
 
     /// Test-only reset. Production code never calls this; the registry
     /// lives for the app's lifetime.
-    func _resetForTesting() {
+    package func _resetForTesting() {
         owners.removeAll()
         conflicts.removeAll()
     }
@@ -171,10 +172,9 @@ final class HotkeyConflictRegistry {
 /// for any chord with a Cocoa-menu collision or any modifier combination
 /// the system has progressively reserved on macOS 14+ — registration
 /// succeeded (no errors logged) but the callback never fired. Meanwhile
-/// AskHalen's `NSEvent`-monitor path worked reliably for ⌃H on the same
-/// machine.
+/// an `NSEvent`-monitor path worked reliably for ⌃H on the same machine.
 ///
-/// This rewrite matches the AskHalen path: an Input-Monitoring-gated
+/// This rewrite matches that path: an Input-Monitoring-gated
 /// global monitor for events in other apps, plus a local monitor so the
 /// chord still fires when Halen itself is frontmost (and the local one
 /// can swallow it via `nil` return so SwiftUI text fields don't see a
@@ -186,7 +186,7 @@ final class HotkeyConflictRegistry {
 /// `NSEvent.ModifierFlags` inside the match check so the per-plugin
 /// `register` call sites don't need to change.
 @MainActor
-final class HotkeyRegistrar {
+package final class HotkeyRegistrar {
     private var globalMonitor: Any?
     private var localMonitor: Any?
     private var onFire: (() -> Void)?
@@ -207,11 +207,11 @@ final class HotkeyRegistrar {
     /// a process-wide handler the way Carbon's event target did, so
     /// per-registrar closures are isolated by construction.
     @discardableResult
-    func register(keyCode: UInt32,
-                  modifiers: UInt32,
-                  id: UInt32 = 1,
-                  owner: String,
-                  onFire: @escaping () -> Void) -> Bool {
+    package func register(keyCode: UInt32,
+                          modifiers: UInt32,
+                          id: UInt32 = 1,
+                          owner: String,
+                          onFire: @escaping () -> Void) -> Bool {
         _ = id   // kept for caller compatibility, see doc comment above
 
         // First: ask the process-wide registry whether this chord is
@@ -249,8 +249,8 @@ final class HotkeyRegistrar {
 
         // Global monitor: keystrokes in other apps. Cannot consume the
         // event (NSEvent returns Void), so an app whose own menu binds
-        // the same chord may still see it — same trade-off AskHalen has
-        // lived with for ⌃H.
+        // the same chord may still see it — a known trade-off of the
+        // NSEvent-monitor approach.
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard match(event) else { return }
             // Log + fire on the main actor (NSEvent global monitor
@@ -284,7 +284,7 @@ final class HotkeyRegistrar {
         return true
     }
 
-    func unregister() {
+    package func unregister() {
         if let m = globalMonitor { NSEvent.removeMonitor(m); globalMonitor = nil }
         if let m = localMonitor  { NSEvent.removeMonitor(m); localMonitor  = nil }
         if let owner = currentOwner {

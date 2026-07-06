@@ -1,4 +1,5 @@
 import Foundation
+import HalenPluginAPI
 
 /// A wordy phrase paired with a tighter replacement. Pure data — the
 /// conciseness scan that uses this is rule-based and instant, no model call.

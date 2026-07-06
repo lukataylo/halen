@@ -1,4 +1,4 @@
-import SwiftUI
+import HalenPluginAPI
 
 /// Paragraph-level writing critique — the user-facing rollup of two
 /// classifiers that both inspect each settled paragraph:
@@ -19,23 +19,17 @@ import SwiftUI
 /// rule sets is a follow-up — would roughly halve per-paragraph latency
 /// but needs the prompts redesigned.
 ///
-/// Migration: PluginRegistry.readPersistedEnabled migrates the new id
-/// from either of `com.halen.sentiment-guard` / `com.halen.clarity-checker`
-/// on first launch, same pattern as Word Replacements.
+/// WritingCoach is an internal start/stop wrapper only — it isn't a plugin.
+/// Its engines are surfaced as the Writing Assistant's top-level Tone and
+/// Clarity tabs (see WritingAssistant.makeDetailView).
 @MainActor
-final class WritingCoach: HalenPlugin {
-    let id = "com.halen.writing-coach"
-    let name = "Writing Coach"
-    let summary = "Catches tone and clarity issues as you write."
-    let icon = "text.magnifyingglass"
-    let category: PluginCategory = .writing
-
+final class WritingCoach {
     let sentimentGuard: SentimentGuard
     let clarityChecker: ClarityChecker
 
-    init(services: HalenServices) {
-        self.sentimentGuard = SentimentGuard(services: services)
-        self.clarityChecker = ClarityChecker(services: services)
+    init(context: PluginContext) {
+        self.sentimentGuard = SentimentGuard(context: context)
+        self.clarityChecker = ClarityChecker(context: context)
     }
 
     func start() {
@@ -46,13 +40,5 @@ final class WritingCoach: HalenPlugin {
     func stop() {
         sentimentGuard.stop()
         clarityChecker.stop()
-    }
-
-    // WritingCoach is an internal start/stop wrapper only — it isn't a
-    // registered plugin row. Its engines are surfaced as the Writing
-    // Assistant's top-level Tone and Clarity tabs (see WritingAssistant),
-    // so this never renders; HalenPlugin just requires it.
-    func makeDetailView() -> AnyView {
-        sentimentGuard.makeDetailView()
     }
 }

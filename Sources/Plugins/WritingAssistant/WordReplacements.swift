@@ -1,3 +1,4 @@
+import HalenPluginAPI
 import SwiftUI
 
 /// Word-level replacement engine — the user-facing rollup of two distinct
@@ -10,33 +11,22 @@ import SwiftUI
 ///      rules, applied at the paragraph level with a popover that asks
 ///      "replace?". Lower-confidence path; explicit UI surface.
 ///
-/// Surfaced as a single plugin in the marketplace because users think of
+/// Surfaced as the Writing Assistant's Corrections tab because users think of
 /// them as "the thing that swaps words I don't want for words I do." The
 /// two engines are kept as separate internal objects (`TypoFixer` and
 /// `StyleGuide`) so their UX models — silent-inline vs popover — remain
 /// honest. Sharing a single event subscription would force one UX model
 /// onto both, which is the wrong simplification.
-///
-/// Migration: previous installations toggled `com.halen.typo-fixer` and
-/// `com.halen.style-guide` independently. `PluginRegistry` migrates the
-/// new id's enabled-state from either of the old ids on first launch —
-/// see `PluginRegistry.readPersistedEnabled`.
 @MainActor
-final class WordReplacements: HalenPlugin {
-    let id = "com.halen.word-replacements"
-    let name = "Word Replacements"
-    let summary = "Fixes typos. Swaps in your preferred terms."
-    let icon = "character.cursor.ibeam"
-    let category: PluginCategory = .writing
-
+final class WordReplacements {
     /// Auto-corrects typos inline. Started/stopped alongside this wrapper.
     let typoFixer: TypoFixer
     /// Surfaces user-defined banned → preferred rules via popover.
     let styleGuide: StyleGuide
 
-    init(services: HalenServices, typoStore: TypoStore) {
-        self.typoFixer = TypoFixer(services: services, store: typoStore)
-        self.styleGuide = StyleGuide(services: services)
+    init(context: PluginContext, typoStore: TypoStore) {
+        self.typoFixer = TypoFixer(context: context, store: typoStore)
+        self.styleGuide = StyleGuide(context: context)
     }
 
     func start() {

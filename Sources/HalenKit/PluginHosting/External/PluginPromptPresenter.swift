@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import HalenPluginAPI
 
 /// Host-side presenter for the `ui/prompt` plugin capability — an interactive
 /// popup with a body and a row of action buttons. Unlike `ui/toast` (fire and

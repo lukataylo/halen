@@ -223,7 +223,7 @@ package enum RouterError: Error, LocalizedError, CustomStringConvertible {
     case backendUnavailable(BackendKind)
     case allBackendsFailed(Error?)
 
-    /// User-facing — surfaced in plugin UIs (e.g. Ask Halen) via
+    /// User-facing — surfaced in plugin UIs via
     /// `error.localizedDescription`. Kept actionable, never a raw error dump.
     package var errorDescription: String? {
         switch self {

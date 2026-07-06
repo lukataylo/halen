@@ -1,4 +1,5 @@
 import Foundation
+import HalenPluginAPI
 
 /// Thin HTTP client for a local Ollama daemon (default
 /// `http://localhost:11434`). Maps `ModelTier` to the local Gemma 4 model

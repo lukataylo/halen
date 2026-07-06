@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import HalenPluginAPI
 
 /// The 40×40 floating panel shown while a Gemma call is in flight — a
 /// rotating cobalt arc around the Halen mark, plus a breathing-opacity

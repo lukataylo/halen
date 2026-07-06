@@ -1,5 +1,6 @@
 import Foundation
 import EventKit
+import HalenPluginAPI
 
 /// Host-side calendar capability. The host owns the single `EKEventStore` and
 /// the Calendar TCC permission; out-of-process plugins reach it only through
@@ -10,17 +11,19 @@ import EventKit
 /// Replaces the per-feature `EKEventStore` instances that MeetingPrep and
 /// BurnoutCopilot each held while they were in-host plugins.
 @MainActor
-final class CalendarService {
+package final class CalendarService {
     private let store = EKEventStore()
 
     /// Whether full-access has been granted this session. Read-only to callers.
     private(set) var authorized = false
 
+    package init() {}
+
     /// Request EventKit full access. Idempotent — safe to call before every
     /// operation; once granted it's a cheap status check. macOS 14+ only
     /// (Halen's `LSMinimumSystemVersion`).
     @discardableResult
-    func requestAccess() async -> Bool {
+    package func requestAccess() async -> Bool {
         if authorized { return true }
         do {
             authorized = try await store.requestFullAccessToEvents()
@@ -34,7 +37,7 @@ final class CalendarService {
     /// Upcoming non-all-day events within the next `hours`, soonest first,
     /// capped at `max`. Returns an empty array (not an error) when access
     /// hasn't been granted — the caller decides how to surface that.
-    func upcomingEvents(withinHours hours: Double, max: Int) -> [CalendarEvent] {
+    package func upcomingEvents(withinHours hours: Double, max: Int) -> [CalendarEvent] {
         guard authorized else { return [] }
         let now = Date()
         let predicate = store.predicateForEvents(
@@ -51,7 +54,7 @@ final class CalendarService {
 
     /// Create an event in the user's default calendar. Returns the new
     /// event's identifier, or `nil` if access is missing / the save failed.
-    func createEvent(title: String, start: Date, durationMinutes: Int) -> String? {
+    package func createEvent(title: String, start: Date, durationMinutes: Int) -> String? {
         guard authorized, let calendar = store.defaultCalendarForNewEvents else { return nil }
         let event = EKEvent(eventStore: store)
         event.calendar = calendar
@@ -70,16 +73,16 @@ final class CalendarService {
 
 /// Serialisable view of one calendar event — the shape sent over JSON-RPC.
 /// Deliberately flat and primitive so it maps cleanly to an `RPCValue.object`.
-struct CalendarEvent {
+package struct CalendarEvent {
     /// Per-*occurrence* id. `EKEvent.eventIdentifier` is shared across every
     /// instance of a recurring event, so it's combined with the start time —
     /// the same keying MeetingPrep used to dedupe briefings.
-    let id: String
-    let title: String
-    let startEpoch: Double
-    let endEpoch: Double
-    let attendees: [String]
-    let notes: String
+    package let id: String
+    package let title: String
+    package let startEpoch: Double
+    package let endEpoch: Double
+    package let attendees: [String]
+    package let notes: String
 
     init(from event: EKEvent) {
         let start = event.startDate ?? Date()

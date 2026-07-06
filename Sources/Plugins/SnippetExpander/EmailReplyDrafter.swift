@@ -1,6 +1,6 @@
 import AppKit
 import ApplicationServices
-import UserNotifications
+import HalenPluginAPI
 
 /// Drafts a reply to the email message at the user's cursor. Previously
 /// the entire surface area of the standalone `EmailReply` plugin; folded
@@ -10,7 +10,7 @@ import UserNotifications
 /// Behaviour preserved verbatim from the standalone plugin:
 ///   - Bails with a "focus a mail app" toast if the front app isn't on the
 ///     known list of native mail clients.
-///   - Captures the message via `AskHalenContext` (selected text →
+///   - Captures the message via `CapturedFieldContext` (selected text →
 ///     surrounding paragraph → clipboard).
 ///   - Tone resolution: a user-selected default ("formal" / "casual" /
 ///     "concise" / "warm") wins; otherwise the per-app Tone Profile.
@@ -61,7 +61,7 @@ enum EmailReplyDrafter {
     /// (Gmail / Outlook web) isn't reliably distinguishable from any
     /// other tab, so it's deliberately excluded — users work around by
     /// selecting the message text first, which still flows through
-    /// `AskHalenContext`.
+    /// `CapturedFieldContext`.
     static let mailBundleIds: Set<String> = [
         "com.apple.mail",
         "com.microsoft.Outlook",
@@ -82,32 +82,33 @@ enum EmailReplyDrafter {
     /// multiple call sites (`;reply` and ⌃⌥E) share the same race-free
     /// contract.
     @discardableResult
-    static func draft(services: HalenServices,
-                      caretObserver: CaretObserver?) -> DraftTask? {
+    static func draft(context: PluginContext) -> DraftTask? {
         let frontApp = NSWorkspace.shared.frontmostApplication
         let bundleId = frontApp?.bundleIdentifier ?? ""
         guard mailBundleIds.contains(bundleId) else {
-            notify(body: "Focus a mail app (Mail, Outlook, Spark, Airmail…) and try again.")
+            notify(context, body: "Focus a mail app (Mail, Outlook, Spark, Airmail…) and try again.")
             return nil
         }
 
-        // Reuse the palette's context capture — selected text first, then the
+        // Reuse the captured-field snapshot — selected text first, then the
         // paragraph around the caret, then the clipboard.
-        let context = AskHalenContext.capture(via: caretObserver)
-        let original = [context.selectedText, context.currentParagraph, context.clipboardText]
+        let captured = CapturedFieldContext.capture(text: context.text,
+                                                    clipboard: context.clipboard)
+        let original = [captured.selectedText, captured.currentParagraph, captured.clipboardText]
             .compactMap { $0 }
             .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         guard let original else {
-            notify(body: "Select the message you want to reply to, then try again.")
+            notify(context, body: "Select the message you want to reply to, then try again.")
             return nil
         }
 
-        // Tone resolution: user-selected default wins; otherwise the
-        // per-app Tone Profile.
+        // Tone resolution: user-selected default wins; otherwise the per-app
+        // Tone Profile. When the tone-profiles grant is missing the clause is
+        // empty — a neutral register.
         let replyTone = defaultTone
         let toneClause: String
         if replyTone == .match {
-            toneClause = services.toneProfiles.profile(for: bundleId).promptClause
+            toneClause = context.toneProfiles?.profile(for: bundleId).promptClause ?? ""
         } else {
             toneClause = replyTone.promptClause
         }
@@ -128,21 +129,21 @@ enum EmailReplyDrafter {
 
         return Task { @MainActor in
             do {
-                let response = try await services.inference.complete(request)
+                let response = try await context.inference.complete(request)
                 guard !Task.isCancelled else { return }
                 let draftText = response.text.unwrappedModelText
                 guard !draftText.isEmpty else {
-                    notify(body: "The model returned an empty draft. Try again.")
+                    notify(context, body: "The model returned an empty draft. Try again.")
                     return
                 }
                 deliver(draft: draftText,
-                        focusedElement: context.focusedElement,
-                        caretObserver: caretObserver)
+                        focusedElement: captured.focusedElement,
+                        context: context)
                 Log.info("EmailReplyDrafter: drafted reply (\(response.latencyMs)ms, \(draftText.count) chars)")
             } catch is CancellationError {
                 // Superseded — silent.
             } catch {
-                notify(body: "Couldn't draft a reply: \(error.localizedDescription)")
+                notify(context, body: "Couldn't draft a reply: \(error.localizedDescription)")
                 Log.warn("EmailReplyDrafter: inference failed: \(error)")
             }
         }
@@ -155,33 +156,21 @@ enum EmailReplyDrafter {
     /// there would clobber it, so that path always uses the clipboard.
     private static func deliver(draft: String,
                                 focusedElement: AXUIElement?,
-                                caretObserver: CaretObserver?) {
+                                context: PluginContext) {
         if let element = focusedElement,
            let range = axReadSelectedRange(element), range.length == 0,
-           caretObserver?.replaceRange(NSRange(location: range.location, length: 0),
-                                       with: draft, in: element) == true {
+           context.text?.replaceRange(NSRange(location: range.location, length: 0),
+                                      with: draft, in: element, describedAs: nil) == true {
             Log.info("EmailReplyDrafter: inserted draft at caret")
             return
         }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(draft, forType: .string)
-        notify(body: "Reply draft copied — press ⌘V in your reply.")
+        context.clipboard?.write(draft)
+        notify(context, body: "Reply draft copied — press ⌘V in your reply.")
     }
 
-    /// Post a transient system notification. Authorisation is requested
-    /// lazily; if denied the `add` fails silently.
-    private static func notify(body: String) {
-        let content = UNMutableNotificationContent()
-        content.title = "Email Reply"
-        content.body = body
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false))
-        Task {
-            let center = UNUserNotificationCenter.current()
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
-            try? await center.add(request)
-        }
+    /// Post a transient toast through the host. No-ops when the
+    /// notifications grant is missing.
+    private static func notify(_ context: PluginContext, body: String) {
+        context.ui?.toast(title: "Email Reply", body: body)
     }
 }

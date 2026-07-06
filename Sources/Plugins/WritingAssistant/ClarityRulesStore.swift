@@ -1,4 +1,5 @@
 import Foundation
+import HalenPluginAPI
 import Observation
 
 /// A single clarity-detection rule. `prompt` is the description fed to the

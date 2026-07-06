@@ -6,19 +6,19 @@ import Observation
 /// `RouterInferenceClient` when ordering candidate backends.
 @Observable
 @MainActor
-final class InferenceSettings {
-    static let preferenceOrderKey = "halen.inference.backendOrder"
+package final class InferenceSettings {
+    package static let preferenceOrderKey = "halen.inference.backendOrder"
 
     /// Backend priority, highest first. Persisted as raw-value strings.
-    var preferenceOrder: [BackendKind] {
+    package var preferenceOrder: [BackendKind] {
         didSet { persist() }
     }
 
     /// Last probed availability per backend — drives the Settings status dots.
     /// Live state, not persisted.
-    var availability: [BackendKind: BackendAvailability] = [:]
+    package var availability: [BackendKind: BackendAvailability] = [:]
 
-    init() {
+    package init() {
         if let raw = UserDefaults.standard.array(forKey: Self.preferenceOrderKey) as? [String] {
             let restored = raw.compactMap(BackendKind.init(rawValue:))
             // Append any backend kinds added since the order was last saved.

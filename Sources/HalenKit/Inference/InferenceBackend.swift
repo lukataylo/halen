@@ -1,9 +1,10 @@
 import Foundation
+import HalenPluginAPI
 
 /// A concrete inference provider behind `RouterInferenceClient`. Each backend
 /// reports what it can serve and whether it's currently usable; the router
 /// picks one per request and falls through to the next on failure.
-protocol InferenceBackend: Sendable {
+package protocol InferenceBackend: Sendable {
     var kind: BackendKind { get }
     var capability: BackendCapability { get }
 
@@ -24,7 +25,7 @@ extension InferenceBackend {
     /// `complete` and emits the whole result as one final snapshot. The
     /// consumer's streaming code path still works — it just sees a single
     /// update instead of many.
-    func stream(_ request: InferenceRequest) -> AsyncThrowingStream<String, Error> {
+    package func stream(_ request: InferenceRequest) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -40,12 +41,12 @@ extension InferenceBackend {
     }
 }
 
-enum BackendKind: String, Sendable, Codable, CaseIterable {
+package enum BackendKind: String, Sendable, Codable, CaseIterable {
     case bundledLlama          = "bundled-llama"
     case appleFoundationModels = "apple-fm"
     case ollama                = "ollama"
 
-    var displayName: String {
+    package var displayName: String {
         switch self {
         case .bundledLlama:          return "Built-in (Gemma 4 E4B)"
         case .appleFoundationModels: return "Apple Intelligence"
@@ -54,21 +55,29 @@ enum BackendKind: String, Sendable, Codable, CaseIterable {
     }
 }
 
-struct BackendCapability: Sendable {
+package struct BackendCapability: Sendable {
     /// Tiers this backend can serve at all. The router filters on this first.
-    let servesTiers: Set<ModelTier>
+    package let servesTiers: Set<ModelTier>
     /// Task kinds this backend is good at — the router nudges toward a match.
-    let strongAt: Set<InferenceTaskKind>
+    package let strongAt: Set<InferenceTaskKind>
     /// Tie-breaker when user preference is equal. Lower = preferred.
-    let basePriority: Int
+    package let basePriority: Int
+
+    package init(servesTiers: Set<ModelTier>,
+                 strongAt: Set<InferenceTaskKind>,
+                 basePriority: Int) {
+        self.servesTiers = servesTiers
+        self.strongAt = strongAt
+        self.basePriority = basePriority
+    }
 }
 
-enum BackendAvailability: Sendable, Equatable {
+package enum BackendAvailability: Sendable, Equatable {
     case available
     /// Human-readable reason, surfaced in Settings (e.g. "Ollama not reachable").
     case unavailable(reason: String)
 
-    var isAvailable: Bool {
+    package var isAvailable: Bool {
         if case .available = self { return true }
         return false
     }

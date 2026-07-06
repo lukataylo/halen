@@ -11,10 +11,10 @@ import Foundation
 ///
 /// The downloaded copy takes precedence so a user-initiated re-download or a
 /// future model update can be picked up without rebuilding the app.
-enum ModelLocation {
+package enum ModelLocation {
     /// Best-available URL for `spec`'s GGUF, or `nil` if neither location has
     /// it (fresh install — `ModelDownloader` must be invoked).
-    static func resolved(for spec: ModelSpec) -> URL? {
+    package static func resolved(for spec: ModelSpec) -> URL? {
         if let downloaded = downloaded(for: spec),
            FileManager.default.fileExists(atPath: downloaded.path) {
             return downloaded
@@ -24,7 +24,7 @@ enum ModelLocation {
 
     /// Target path for `ModelDownloader`. Always returns a valid URL — the
     /// file may or may not exist on disk yet.
-    static func downloaded(for spec: ModelSpec) -> URL? {
+    package static func downloaded(for spec: ModelSpec) -> URL? {
         guard let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
         return appSupport
@@ -43,5 +43,5 @@ enum ModelLocation {
 
     /// True iff `spec`'s GGUF is available somewhere on disk (downloaded or
     /// bundled).
-    static func isAvailable(for spec: ModelSpec) -> Bool { resolved(for: spec) != nil }
+    package static func isAvailable(for spec: ModelSpec) -> Bool { resolved(for: spec) != nil }
 }

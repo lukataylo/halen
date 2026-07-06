@@ -1,3 +1,4 @@
+import HalenPluginAPI
 import SwiftUI
 
 @MainActor
@@ -5,9 +6,10 @@ struct SentimentGuardDetailView: View {
     @Bindable var rulesStore: SentimentRulesStore
     /// Per-app target-tone profiles + the recent-apps list that drives the
     /// app picker. Both surfaced here so "what tone this app expects" lives
-    /// next to the detection it controls.
-    @Bindable var toneProfiles: AppToneProfileStore
-    @Bindable var recentApps: RecentAppsModel
+    /// next to the detection it controls. nil when the tone-profiles
+    /// capability has been revoked — the editor is replaced by a hint.
+    let toneProfiles: AppToneProfileStore?
+    let recentApps: RecentAppsModel?
     let approvedCount: Int
     let flaggedCount: Int
     let onClearApproved: () -> Void
@@ -41,14 +43,18 @@ struct SentimentGuardDetailView: View {
             VStack(spacing: 10) {
                 sectionHeader("Match the app's tone",
                               "Tell Halen the register each app expects, and it flags messages that read more casual than that.")
-                targetToneCard
-                // The editor stays visible even with enforcement off: a per-app
-                // tone still biases the hostile/irritated classifier (a blunt
-                // Slack line isn't judged like a blunt email). The toggle only
-                // gates the extra "flag a register mismatch" pass + its reference.
-                ToneProfilesEditor(store: toneProfiles, recentApps: recentApps)
-                if enforceTone {
-                    toneMeaningsCard
+                if let toneProfiles {
+                    targetToneCard
+                    // The editor stays visible even with enforcement off: a per-app
+                    // tone still biases the hostile/irritated classifier (a blunt
+                    // Slack line isn't judged like a blunt email). The toggle only
+                    // gates the extra "flag a register mismatch" pass + its reference.
+                    ToneProfilesEditor(store: toneProfiles, recentApps: recentApps)
+                    if enforceTone {
+                        toneMeaningsCard
+                    }
+                } else {
+                    toneProfilesRevokedCard
                 }
 
                 sectionHeader("Catch difficult tone",
@@ -101,6 +107,20 @@ struct SentimentGuardDetailView: View {
                 Text(enforceTone
                      ? "e.g. a breezy line in Outlook (Formal) or Teams (Business casual) gets flagged, with a rewrite to the right register. Apps left Neutral are never checked."
                      : "Off — Halen won't check messages against a per-app register.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Shown in place of the tone editor when the shared tone-profiles
+    /// capability has been revoked for the Writing Assistant.
+    private var toneProfilesRevokedCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 6) {
+                cardLabel("Tone profiles unavailable")
+                Text("The \"Shared tone profiles\" capability is turned off for Writing Assistant, so per-app registers can't be read or edited. Messages are judged against a neutral register. Re-enable the capability in Halen's permissions screen to bring this back.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

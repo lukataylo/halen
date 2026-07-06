@@ -1,6 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
-import IOKit.hid
+import HalenPluginAPI
 
 /// A passive, app-agnostic record of the characters the user has typed
 /// contiguously into the *currently focused* text field — reconstructed from
@@ -11,7 +11,7 @@ import IOKit.hid
 /// reach: web fields in Chromium browsers, Electron apps, and anywhere else
 /// `kAXValueAttribute` comes back empty. We never ask the app what it
 /// contains — we already know, because we watched it being typed. Write-back
-/// then goes through `CaretObserver.pasteFallback`, which is itself
+/// then goes through `TextService.pasteFallback`, which is itself
 /// app-agnostic, so the whole path needs no AX support and no browser
 /// extension.
 ///
@@ -21,8 +21,9 @@ import IOKit.hid
 /// switch, a ⌘/⌃ shortcut — resets it. A stale buffer is therefore empty,
 /// never wrong: callers get either an accurate tail or nothing.
 ///
-/// Requires Input Monitoring (`NSEvent` global monitors). Halen already
-/// requests it for the ⌃H and ⌃⌥R hotkeys; `IOHIDRequestAccess` is idempotent.
+/// Requires Input Monitoring (`NSEvent` global monitors). The host owns the
+/// TCC prompt — the plugin requests it once via `context.permissions` at
+/// start; the monitors here simply go dark until it's granted.
 @MainActor
 final class KeystrokeBuffer {
     /// Fired the instant the typed text ends with `;<word><separator>`.
@@ -60,7 +61,6 @@ final class KeystrokeBuffer {
 
     func start() {
         guard globalKeyMonitor == nil else { return }
-        _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
 
         // Global monitors only — they fire for *other* apps' events, never
         // Halen's own windows, which is exactly the scope we want: expand in

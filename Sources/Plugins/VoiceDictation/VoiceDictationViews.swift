@@ -1,4 +1,5 @@
 import SwiftUI
+import HalenPluginAPI
 
 /// Pixel-grid voice indicator shown near the caret while dictation is
 /// recording. Deep-black capsule, glowing recording dot on the left, a
@@ -254,8 +255,10 @@ struct VoiceDictationDetailView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
                 cardLabel("Permissions")
-                permissionRow(label: "Microphone", state: state.micPermission)
-                permissionRow(label: "Speech recognition", state: state.speechPermission)
+                permissionRow(label: "Microphone", grant: state.micPermission,
+                              permission: .microphone)
+                permissionRow(label: "Speech recognition", grant: state.speechPermission,
+                              permission: .speechRecognition)
                 Button("Refresh") { state.refreshPermissions() }
                     .buttonStyle(.borderless)
                     .controlSize(.small)
@@ -298,15 +301,26 @@ struct VoiceDictationDetailView: View {
 
     // MARK: - Bits
 
-    private func permissionRow(label: String, state: PermissionState) -> some View {
+    private func permissionRow(label: String, grant: PermissionGrant,
+                               permission: SystemPermission) -> some View {
         HStack(spacing: 8) {
-            statusDot(for: state)
+            statusDot(for: grant)
             Text(label)
                 .font(.system(.callout))
             Spacer()
-            Text(stateLabel(state))
+            Text(stateLabel(grant))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+            // Denied means the user must flip their own previous "no" in
+            // System Settings — give them the jump straight to the pane.
+            if grant == .denied {
+                Button("Open Settings") {
+                    state.openSystemSettings(for: permission)
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .accessibilityHint("Opens the Privacy & Security pane for \(label).")
+            }
         }
     }
 
@@ -318,20 +332,21 @@ struct VoiceDictationDetailView: View {
         }
     }
 
-    private func stateLabel(_ s: PermissionState) -> String {
+    private func stateLabel(_ s: PermissionGrant) -> String {
         switch s {
-        case .notDetermined: return "Will request on first use"
-        case .granted:       return "Granted"
-        case .denied:        return "Denied — check System Settings"
+        case .notRequested: return "Will request on first use"
+        case .granted:      return "Granted"
+        case .denied:       return "Denied — check System Settings"
+        case .checking:     return "Checking…"
         }
     }
 
-    private func statusDot(for s: PermissionState) -> some View {
+    private func statusDot(for s: PermissionGrant) -> some View {
         let color: Color
         switch s {
-        case .granted:       color = Color(red: 0.20, green: 0.78, blue: 0.35)
-        case .denied:        color = Color.red
-        case .notDetermined: color = Color.orange
+        case .granted:                 color = Color(red: 0.20, green: 0.78, blue: 0.35)
+        case .denied:                  color = Color.red
+        case .notRequested, .checking: color = Color.orange
         }
         return statusDot(color: color)
     }

@@ -1,4 +1,5 @@
 import Foundation
+import HalenPluginAPI
 import Observation
 
 /// Persistent dictionary of (lowercased-typo → correction) entries with observation counts.

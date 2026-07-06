@@ -1,4 +1,5 @@
 import Foundation
+import HalenPluginAPI
 
 #if canImport(FoundationModels)
 import FoundationModels

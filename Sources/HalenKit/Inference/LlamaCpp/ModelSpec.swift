@@ -1,4 +1,5 @@
 import Foundation
+import HalenPluginAPI
 
 /// Everything `LlamaCppBackend` + `ModelDownloader` need to know about a
 /// specific bundled GGUF model: where to fetch it, how to verify it, where it
@@ -8,10 +9,10 @@ import Foundation
 /// adding the Qwen 2.5 0.5B classifier required parameterising the backend
 /// + downloader so two (and later N) GGUFs can coexist behind the same
 /// machinery. Pure-data — every field is `Sendable` and frozen at init.
-struct ModelSpec: Sendable {
+package struct ModelSpec: Sendable {
     /// Stable identifier surfaced in `InferenceResponse.modelId` and used as
     /// the namespace for download-state UserDefaults. Reverse-DNS style.
-    let id: String
+    package let id: String
 
     /// On-disk filename (also the trailing path component of the HuggingFace
     /// asset URL). Used by `ModelLocation` to derive download + bundled paths.
@@ -21,15 +22,15 @@ struct ModelSpec: Sendable {
     /// `Bundle.main.url(forResource:withExtension:subdirectory:)`.
     let bundleResourceName: String
 
-    /// User-facing label for Settings / Plugin Store copy.
-    let displayName: String
+    /// User-facing label for Settings copy.
+    package let displayName: String
 
     /// Canonical download URL — the HuggingFace LFS mirror.
     let sourceURL: URL
 
     /// Expected file size in bytes. Drives the progress denominator and the
     /// fast-fail sanity check before the (~3s) SHA-256 pass.
-    let expectedSize: Int64
+    package let expectedSize: Int64
 
     /// Pinned content hash from HuggingFace's `x-linked-etag`. If this ever
     /// mismatches, the upstream file changed — bump the pin and the user is
@@ -64,7 +65,7 @@ struct ModelSpec: Sendable {
 extension ModelSpec {
     /// Default generation model. Used for `.medium` rewrites/drafts and the
     /// historical `.small` path before `.classifier` existed.
-    static let gemma4E4B_IQ4_XS = ModelSpec(
+    package static let gemma4E4B_IQ4_XS = ModelSpec(
         id: "bundled/gemma-4-e4b",
         filename: "gemma-4-E4B-it-IQ4_XS.gguf",
         bundleResourceName: "gemma-4-E4B-it-IQ4_XS",
@@ -91,7 +92,7 @@ extension ModelSpec {
     /// cold-load, fast enough to make text.paused → popover land in well under
     /// 2 s warm. Used by SentimentGuard and ClarityChecker for the
     /// `.classifier` tier; rewrites/drafts stay on Gemma.
-    static let qwen25_05B_Q4_K_M = ModelSpec(
+    package static let qwen25_05B_Q4_K_M = ModelSpec(
         id: "bundled/qwen2.5-0.5b",
         filename: "qwen2.5-0.5b-instruct-q4_k_m.gguf",
         bundleResourceName: "qwen2.5-0.5b-instruct-q4_k_m",

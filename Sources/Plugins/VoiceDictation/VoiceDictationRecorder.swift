@@ -1,6 +1,7 @@
 import AVFoundation
 import Speech
 import Foundation
+import HalenPluginAPI
 
 /// Wraps AVAudioEngine + SFSpeechRecognizer for one-shot dictation. Streams audio
 /// buffers from the input node into a `SFSpeechAudioBufferRecognitionRequest`; on
@@ -16,6 +17,13 @@ final class VoiceDictationRecorder {
     /// Emits a normalised 0…1 audio level every audio-buffer tick (~20 Hz).
     var onLevel: ((Float) -> Void)?
 
+    /// Host-brokered permission requests, injected by the plugin before
+    /// `start()`. The recorder never calls SFSpeechRecognizer/AVCaptureDevice
+    /// request APIs itself — the host owns every TCC prompt. Unset (nil)
+    /// requesters are treated as "not authorised".
+    var requestSpeechAuthorization: (@MainActor () async -> Bool)?
+    var requestMicAccess: (@MainActor () async -> Bool)?
+
     private let audioEngine = AVAudioEngine()
     private let recognizer = SFSpeechRecognizer()
     private var request: SFSpeechAudioBufferRecognitionRequest?
@@ -26,28 +34,17 @@ final class VoiceDictationRecorder {
     private var hasDelivered = false
 
     func start() {
-        SFSpeechRecognizer.requestAuthorization { [weak self] status in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                guard status == .authorized else {
-                    self.onError?(VoiceDictationError.speechNotAuthorised)
-                    return
-                }
-                self.requestMicAndBegin()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard await self.requestSpeechAuthorization?() == true else {
+                self.onError?(VoiceDictationError.speechNotAuthorised)
+                return
             }
-        }
-    }
-
-    private func requestMicAndBegin() {
-        AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                guard granted else {
-                    self.onError?(VoiceDictationError.micNotAuthorised)
-                    return
-                }
-                self.beginRecognition()
+            guard await self.requestMicAccess?() == true else {
+                self.onError?(VoiceDictationError.micNotAuthorised)
+                return
             }
+            self.beginRecognition()
         }
     }
 

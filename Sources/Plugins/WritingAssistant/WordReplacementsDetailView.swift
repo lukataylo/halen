@@ -1,3 +1,4 @@
+import HalenPluginAPI
 import SwiftUI
 
 /// Two-tab detail view for the merged Word Replacements plugin. Hosts the

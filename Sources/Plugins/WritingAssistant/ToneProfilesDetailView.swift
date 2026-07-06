@@ -1,3 +1,4 @@
+import HalenPluginAPI
 import SwiftUI
 
 /// Per-app target-tone editor, surfaced inside the Writing Assistant's Tone
@@ -6,10 +7,14 @@ import SwiftUI
 /// assigns an expected register (Formal / Business casual / Casual) to the apps
 /// they care about; Sentiment Guard flags messages that read less formal than
 /// that target. Apps left Neutral impose no target.
+///
+/// `store` comes from `context.toneProfiles` (the caller guards nil — the
+/// editor is only shown while the capability is granted). `recentApps` is
+/// optional: without the grant the "Add an app" list is simply empty.
 @MainActor
 struct ToneProfilesEditor: View {
-    @Bindable var store: AppToneProfileStore
-    @Bindable var recentApps: RecentAppsModel
+    let store: AppToneProfileStore
+    let recentApps: RecentAppsModel?
     /// Set of bundle ids the user has multi-selected in the unassigned list.
     /// Used by the bulk-assign affordance — apply one tone to N apps at once.
     @State private var multiSelection: Set<String> = []
@@ -63,7 +68,7 @@ struct ToneProfilesEditor: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                let unassigned = recentApps.apps.filter { store.profiles[$0.bundleId] == nil }
+                let unassigned = (recentApps?.apps ?? []).filter { store.profiles[$0.bundleId] == nil }
                 if unassigned.isEmpty {
                     Text("Apps you use will appear here.")
                         .font(.caption)
@@ -131,7 +136,7 @@ struct ToneProfilesEditor: View {
     }
 
     private func displayName(for bundleId: String) -> String {
-        recentApps.apps.first(where: { $0.bundleId == bundleId })?.name ?? bundleId
+        recentApps?.apps.first(where: { $0.bundleId == bundleId })?.name ?? bundleId
     }
 }
 

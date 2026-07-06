@@ -1,11 +1,12 @@
 import Foundation
+import HalenPluginAPI
 
 /// In-process pub/sub. Multiple subscribers each receive every published event via
 /// an `AsyncStream<Event>`. Termination of a stream auto-unsubscribes.
 ///
 /// In M4 this is replaced by JSON-RPC notifications to plugin processes, but the
 /// publish/subscribe contract stays the same shape.
-final class EventBus: @unchecked Sendable {
+package final class EventBus: @unchecked Sendable {
     private let lock = NSLock()
     private var continuations: [UUID: AsyncStream<Event>.Continuation] = [:]
     /// Per-subscriber drop counter. Slow subscribers — usually because a
@@ -15,7 +16,9 @@ final class EventBus: @unchecked Sendable {
     /// trail without the log being flooded.
     private var dropCounts: [UUID: Int] = [:]
 
-    func subscribe() -> AsyncStream<Event> {
+    package init() {}
+
+    package func subscribe() -> AsyncStream<Event> {
         // Bounded buffer: a slow subscriber drops the oldest events rather than
         // growing memory without limit (caret.moved fires on every keystroke;
         // text.pause can carry several KB of text).
@@ -36,7 +39,7 @@ final class EventBus: @unchecked Sendable {
         }
     }
 
-    func publish(_ event: Event) {
+    package func publish(_ event: Event) {
         lock.lock()
         // Snapshot keyed pairs so the `.dropped` accounting can attribute
         // the drop to the right subscriber — `Array(continuations.values)`
@@ -54,7 +57,7 @@ final class EventBus: @unchecked Sendable {
     /// Drop count across every active subscriber. Exposed for tests pinning
     /// that the back-pressure path is wired correctly — production code
     /// reads dropped-event signal off the log warnings, not this property.
-    var totalDrops: Int {
+    package var totalDrops: Int {
         lock.lock(); defer { lock.unlock() }
         return dropCounts.values.reduce(0, +)
     }

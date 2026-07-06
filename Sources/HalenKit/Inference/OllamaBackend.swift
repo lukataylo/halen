@@ -1,4 +1,5 @@
 import Foundation
+import HalenPluginAPI
 
 /// Wraps the existing `OllamaInferenceClient` as a router backend. The client
 /// itself is unchanged — it still owns the wire format and tier→model mapping;

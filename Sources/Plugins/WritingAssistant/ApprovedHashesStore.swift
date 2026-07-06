@@ -1,4 +1,5 @@
 import Foundation
+import HalenPluginAPI
 
 /// A persistent, file-backed allowlist of SHA-256 paragraph fingerprints the
 /// user has explicitly said "looks fine" to. Pulled out of `SentimentGuard`

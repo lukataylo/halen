@@ -4,16 +4,14 @@ import ApplicationServices
 import UserNotifications
 import HalenPluginAPI
 
-/// Single source of truth for every plugin/extension → host JSON-RPC method
-/// the host exposes. Both transports (stdio via `PluginHost` and WebSocket
-/// via `WebSocketBridge`) delegate every incoming request to
-/// `HostBridge.dispatch(...)` so the API surface is identical regardless of
-/// how a client arrived.
+/// Single source of truth for every plugin → host JSON-RPC method the host
+/// exposes. Every transport (currently stdio via `PluginHost`) delegates
+/// each incoming request to `HostBridge.dispatch(...)` so the API surface
+/// is identical regardless of how a client arrived.
 ///
-/// This used to live duplicated in `PluginHost.handleIncoming` and
-/// `WebSocketBridge.dispatch`, and the two had already drifted: the WS path
-/// hardcoded `temperature: 0.4`, didn't accept `stop`/`taskKind`/`maxTokens`,
-/// and was missing `ax/replaceRange` + `ui/toast` entirely. Consolidating
+/// This used to live duplicated per transport, and the copies had already
+/// drifted (hardcoded `temperature: 0.4`, missing `stop`/`taskKind`/
+/// `maxTokens`, missing `ax/replaceRange` + `ui/toast`). Consolidating
 /// closes that class of bug.
 @MainActor
 final class HostBridge {
@@ -29,12 +27,12 @@ final class HostBridge {
     /// The one dispatch site. Returns the `result` payload or throws an
     /// `RPCErrorObject` the transport then encodes back to the caller.
     ///
-    /// `grantedPermissions` is the calling client's permission set — for a
-    /// stdio plugin, its manifest's `permissions`; for the WebSocket bridge,
-    /// empty (the browser extension has no privileged grants). Sensitive
-    /// methods (currently `calendar/*`) are gated on it. The text/AX/inference
-    /// methods stay ungated for now — tightening those is a separate security
-    /// pass that would need every existing plugin to declare permissions.
+    /// `grantedCapabilities` is the calling client's capability set — for a
+    /// stdio plugin, the broker's effective grants for its manifest.
+    /// Sensitive methods (currently `calendar/*`) are gated on it. The
+    /// text/AX/inference methods stay ungated for now — tightening those is
+    /// a separate security pass that would need every existing plugin to
+    /// declare capabilities.
     func dispatch(method: String,
                   params: RPCValue?,
                   grantedCapabilities: Set<String>) async throws -> RPCValue {
@@ -227,7 +225,7 @@ final class HostBridge {
 
     // MARK: - Tone profiles
     //
-    // The host owns `AppToneProfileStore` as a shared `HalenServices`
+    // The host owns `AppToneProfileStore` as a shared `HostServices`
     // member because Writing Coach (tone + clarity classifiers) and the
     // ;reply / ⌃⌥E email-reply action in Snippet Expander both read it
     // on every classification. Exposing the store over RPC lets an

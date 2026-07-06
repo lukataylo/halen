@@ -1,4 +1,5 @@
 import AppKit
+import HalenPluginAPI
 import SwiftUI
 import ApplicationServices
 
@@ -11,15 +12,8 @@ import ApplicationServices
 /// also feed its rules into Email Reply / rewrite prompts ("follow these style
 /// rules: …").
 @MainActor
-final class StyleGuide: HalenPlugin {
-    let id = "com.halen.style-guide"
-    let name = "Personal Style Guide"
-    let summary = "Flags your banned words and offers your preferred terms."
-    let icon = "character.book.closed"
-    let category: PluginCategory = .writing
-
-    private let services: HalenServices
-    private weak var caretObserver: CaretObserver?
+final class StyleGuide {
+    private let context: PluginContext
     let store: StyleRulesStore
     /// Settle-debounce + paragraph extraction + dedup. The `classify` closure
     /// here is synchronous work (a rule scan), not a model call.
@@ -30,17 +24,19 @@ final class StyleGuide: HalenPlugin {
     private var activePanel: NSPanel?
     private var dismissTask: Task<Void, Never>?
 
-    init(services: HalenServices) {
-        self.services = services
-        self.caretObserver = services.caretObserver
-        let dir = services.storageDirectory(for: "com.halen.style-guide")
-        self.store = StyleRulesStore(fileURL: dir.appending(path: "rules.json"))
+    init(context: PluginContext) {
+        self.context = context
+        // The engines share the Writing Assistant's single storage directory,
+        // so each rule store gets its own filename instead of the per-engine
+        // subdirectory the old per-plugin ids provided.
+        let dir = context.storage.directory
+        self.store = StyleRulesStore(fileURL: dir.appending(path: "style-rules.json"))
     }
 
     func start() {
         guard task == nil else { return }
-        task = Task { @MainActor [services, weak self] in
-            for await event in services.eventBus.subscribe() {
+        task = Task { @MainActor [events = context.events, weak self] in
+            for await event in events.subscribe() {
                 guard let self else { return }
                 switch event {
                 case .caretMoved(let p):
@@ -72,17 +68,13 @@ final class StyleGuide: HalenPlugin {
         activePanel = nil
     }
 
-    func makeDetailView() -> AnyView {
-        AnyView(StyleGuideDetailView(store: store))
-    }
-
     // MARK: - Scan
 
     private func scan(paragraph: String) {
         let matches = store.scan(paragraph)
         guard !matches.isEmpty else { return }
         let anchor = CaretAnchoredPanel.resolveAnchor(
-            caretObserver: caretObserver, cachedCaretRect: lastCaretRect)
+            element: context.text?.focusedElement, cachedCaretRect: lastCaretRect)
         showPopup(matches: matches, anchor: anchor)
     }
 
@@ -144,7 +136,7 @@ final class StyleGuide: HalenPlugin {
     /// lands even if the user kept typing after the scan. Literal rules
     /// honour word boundaries; regex rules honour their own pattern.
     private func replace(rule: StyleRule) {
-        guard let element = caretObserver?.currentElement,
+        guard let element = context.text?.focusedElement,
               let current = axReadString(element, kAXValueAttribute) else { return }
         let ns = current as NSString
         let range: NSRange?
@@ -159,9 +151,9 @@ final class StyleGuide: HalenPlugin {
         // VoiceOver bridge — describe the substitution so VO users hear
         // the style-guide fix happen at their caret. Brief clause only.
         let announcement = "Replaced '\(rule.banned)' with '\(rule.preferred)'"
-        let wrote = caretObserver?.replaceRange(range, with: rule.preferred,
-                                                in: element,
-                                                describedAs: announcement) ?? false
+        let wrote = context.text?.replaceRange(range, with: rule.preferred,
+                                               in: element,
+                                               describedAs: announcement) ?? false
         Log.info("StyleGuide: replaced \"\(rule.banned)\" → \"\(rule.preferred)\" wrote=\(wrote)")
     }
 }

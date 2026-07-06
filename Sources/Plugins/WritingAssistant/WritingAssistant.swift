@@ -1,3 +1,4 @@
+import HalenPluginAPI
 import SwiftUI
 
 /// The single "Grammarly-esque" writing surface — the user-facing rollup of the
@@ -17,38 +18,44 @@ import SwiftUI
 /// starts/stops them together and hosts a tabbed detail view.
 ///
 /// Migration: previous installations toggled `com.halen.word-replacements` and
-/// `com.halen.writing-coach` independently. `PluginRegistry` migrates this id's
-/// enabled-state from those on first launch — see
-/// `PluginRegistry.readPersistedEnabled`.
+/// `com.halen.writing-coach` independently. The host migrates this id's
+/// enabled-state from those on first launch.
 @MainActor
-final class WritingAssistant: HalenPlugin {
-    let id = "com.halen.writing-assistant"
-    let name = "Writing Assistant"
-    let summary = "Fixes typos, flags tone & clarity as you write."
-    let icon = "pencil.line"
-    let category: PluginCategory = .writing
+public final class WritingAssistant: HalenPlugin {
+    public static let pluginManifest = PluginManifest(
+        id: "com.halen.writing-assistant",
+        name: "Writing Assistant",
+        summary: "Inline typo fixes, term swaps, tone & clarity coaching.",
+        version: "0.4.0",
+        events: ["text.pause", "caret.moved", "app.focused", "finding.action"],
+        capabilities: [.observeText, .insertText, .popoverUI, .clipboard, .toneProfiles],
+        icon: "pencil.line",
+        category: .writing)
+
+    public var manifest: PluginManifest { Self.pluginManifest }
 
     /// Silent inline typo fixes + preferred-term swaps.
     let wordReplacements: WordReplacements
     /// Tone + clarity findings as you write.
     let writingCoach: WritingCoach
 
-    init(services: HalenServices, typoStore: TypoStore) {
-        self.wordReplacements = WordReplacements(services: services, typoStore: typoStore)
-        self.writingCoach = WritingCoach(services: services)
+    public init(context: PluginContext) {
+        let typoStore = TypoStore()
+        self.wordReplacements = WordReplacements(context: context, typoStore: typoStore)
+        self.writingCoach = WritingCoach(context: context)
     }
 
-    func start() {
+    public func start() {
         wordReplacements.start()
         writingCoach.start()
     }
 
-    func stop() {
+    public func stop() {
         wordReplacements.stop()
         writingCoach.stop()
     }
 
-    func makeDetailView() -> AnyView {
+    public func makeDetailView() -> AnyView {
         AnyView(
             WritingAssistantDetailView(
                 corrections: wordReplacements.makeDetailView(),

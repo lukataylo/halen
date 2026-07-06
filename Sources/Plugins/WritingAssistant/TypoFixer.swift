@@ -1,5 +1,5 @@
 import Foundation
-import SwiftUI
+import HalenPluginAPI
 
 /// Watches `text.pause` events and does two things:
 ///   1. **Learn** — diff the snapshot against the previous one in the same app.
@@ -12,19 +12,12 @@ import SwiftUI
 /// (user undoing an auto-fix within 60s) demote the dictionary entry — the safety
 /// net for context-dependent corrections.
 @MainActor
-final class TypoFixer: HalenPlugin {
-    let id = "com.halen.typo-fixer"
-    let name = "Typo Fixer"
-    let summary = "Auto-replaces your known typos and learns new corrections as you make them."
-    let icon = "character.cursor.ibeam"
-    let category: PluginCategory = .writing
-
-    private let eventBus: EventBus
+final class TypoFixer {
+    private let context: PluginContext
     private let store: TypoStore
     /// Exposed for the merged Word Replacements detail view to bind to.
     /// Internal getter only — the engine still owns the store.
     var storeForDetailView: TypoStore { store }
-    private weak var caretObserver: CaretObserver?
     private var task: Task<Void, Never>?
 
     /// Last known full-text snapshot per app, used to compute the diff that
@@ -50,20 +43,15 @@ final class TypoFixer: HalenPlugin {
     private var recentSelfEdits: [SelfEdit] = []
     private var recentAutoFixes: [SelfEdit] = []
 
-    init(services: HalenServices, store: TypoStore) {
-        self.eventBus = services.eventBus
+    init(context: PluginContext, store: TypoStore) {
+        self.context = context
         self.store = store
-        self.caretObserver = services.caretObserver
-    }
-
-    func makeDetailView() -> AnyView {
-        AnyView(TypoFixerDetailView(store: store))
     }
 
     func start() {
         guard task == nil else { return }
-        task = Task { @MainActor [eventBus, weak self] in
-            for await event in eventBus.subscribe() {
+        task = Task { @MainActor [events = context.events, weak self] in
+            for await event in events.subscribe() {
                 guard let self else { return }
                 switch event {
                 case .textPaused(let payload):
@@ -208,7 +196,7 @@ final class TypoFixer: HalenPlugin {
         // the substitution so they hear it through the announcement bridge.
         // Short clause only — VO speaks the whole string.
         let description = "Fixed '\(word)' to '\(cased)'"
-        caretObserver?.replaceRange(range, with: cased, describedAs: description)
+        _ = context.text?.replaceRange(range, with: cased, describedAs: description)
     }
 
     private func matchCase(of source: String, in replacement: String) -> String {

@@ -2,8 +2,8 @@ import Foundation
 import SwiftUI
 import AppKit
 import ApplicationServices
-import IOKit.hid
-import UserNotifications
+import Carbon.HIToolbox
+import HalenPluginAPI
 
 /// Prompt Polish — select the prompt you're about to send to an LLM, press
 /// ⌃⌥⌘P, and Halen makes targeted **word-level edits** to it in place so a modern
@@ -22,19 +22,19 @@ import UserNotifications
 /// explicit format/audience, tone-marking word choice), which is what the
 /// modern models reward.
 @MainActor
-final class PromptPolish: HalenPlugin {
-    let id = "com.halen.prompt-polish"
-    let name = "Prompt Polish"
-    let summary = "Select a prompt, press \u{2303}\u{2325}P to sharpen it."
-    let icon = "wand.and.stars"
-    let category: PluginCategory = .productivity
+public final class PromptPolish: HalenPlugin {
+    public static let pluginManifest = PluginManifest(
+        id: "com.halen.prompt-polish", name: "Prompt Polish",
+        summary: "Rewrite the selected prompt in place, tuned for LLMs.",
+        version: "0.4.0",
+        events: [],
+        capabilities: [.observeText, .insertText, .hotkeys, .notifications, .clipboard],
+        icon: "wand.and.stars", category: .writing)
 
-    private let services: HalenServices
-    private weak var caretObserver: CaretObserver?
+    public var manifest: PluginManifest { Self.pluginManifest }
 
-    /// NSEvent monitor handles for the ⌃⌥⌘P hotkey.
-    private var globalHotkeyMonitor: Any?
-    private var localHotkeyMonitor: Any?
+    private let context: PluginContext
+
     /// In-flight polish Task. A second ⌃⌥⌘P supersedes a slow first one.
     private var inflight: Task<Void, Never>?
 
@@ -124,57 +124,37 @@ final class PromptPolish: HalenPlugin {
             ?? .professional
     }
 
-    init(services: HalenServices) {
-        self.services = services
-        self.caretObserver = services.caretObserver
+    public init(context: PluginContext) {
+        self.context = context
     }
 
-    func start() {
-        installHotkey()
+    public func start() {
+        registerHotkey()
     }
 
-    func stop() {
-        if let m = globalHotkeyMonitor { NSEvent.removeMonitor(m); globalHotkeyMonitor = nil }
-        if let m = localHotkeyMonitor  { NSEvent.removeMonitor(m); localHotkeyMonitor  = nil }
+    public func stop() {
+        context.hotkeys?.unregisterAll()
         inflight?.cancel()
         inflight = nil
     }
 
-    func makeDetailView() -> AnyView {
+    public func makeDetailView() -> AnyView {
         AnyView(PromptPolishDetailView())
     }
 
     // MARK: - Hotkey (⌃⌥⌘P)
 
-    /// Install global + local `.keyDown` monitors for ⌃⌥⌘P. Same mechanism as
-    /// SnippetExpander's ⌃⌥R — NSEvent monitors (not Carbon) so the chord
-    /// fires regardless of the focused app. Needs Input Monitoring;
-    /// `IOHIDRequestAccess` is idempotent if another plugin already asked.
-    private func installHotkey() {
-        // Idempotent: never install a second pair of monitors over a live one
-        // (which would leak the first and double-fire ⌃⌥⌘P). Matches the guard
-        // SnippetExpander applies to its own start().
-        guard globalHotkeyMonitor == nil else { return }
-        _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
-
-        // ⌃⌥⌘P: Control+Option+Command held (and nothing else), key "p".
-        // Three modifiers so it can't collide with a browser/app shortcut.
-        let isHotkey: (NSEvent) -> Bool = { event in
-            event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.control, .option, .command]
-                && event.charactersIgnoringModifiers?.lowercased() == "p"
-        }
-        globalHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard isHotkey(event) else { return }
-            MainActor.assumeIsolated { self?.fire() }
-        }
-        localHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if isHotkey(event) {
-                MainActor.assumeIsolated { self?.fire() }
-                return nil   // consume — don't let ⌃⌥⌘P fall through
-            }
-            return event
-        }
-        Log.info("PromptPolish: ⌃⌥⌘P monitors installed (global=\(globalHotkeyMonitor != nil), local=\(localHotkeyMonitor != nil))")
+    /// Register ⌃⌥⌘P through the host's hotkey service. Three modifiers so it
+    /// can't collide with a browser/app shortcut; the host handles conflict
+    /// registration and the Input Monitoring prompt.
+    private func registerHotkey() {
+        let ok = context.hotkeys?.register(
+            id: "polish", keyCode: UInt32(kVK_ANSI_P),
+            modifiers: [.control, .option, .command]
+        ) { [weak self] in
+            self?.fire()
+        } ?? false
+        Log.info("PromptPolish: ⌃⌥⌘P registered=\(ok)")
     }
 
     /// Cancel any prior polish, kick off a new one against the current selection.
@@ -191,7 +171,7 @@ final class PromptPolish: HalenPlugin {
     /// write-back so it survives the user editing the field mid-call.
     @discardableResult
     private func polishSelection(mode: PolishMode, tone: ToneTarget) -> Task<Void, Never>? {
-        guard let element = caretObserver?.currentElement else {
+        guard let element = context.text?.focusedElement else {
             Log.info("PromptPolish: ⌃⌥⌘P — no focused element")
             return nil
         }
@@ -297,7 +277,8 @@ final class PromptPolish: HalenPlugin {
         announcement: String
     ) -> Task<Void, Never> {
         let placeholder = "[…]"
-        _ = caretObserver?.replaceRange(range, with: placeholder, in: element)
+        _ = context.text?.replaceRange(range, with: placeholder, in: element,
+                                       describedAs: nil) ?? false
         let placeholderRange = NSRange(location: range.location,
                                        length: (placeholder as NSString).length)
 
@@ -311,12 +292,12 @@ final class PromptPolish: HalenPlugin {
             return .init(x: cocoa.minX, y: cocoa.minY, width: cocoa.width, height: cocoa.height)
         }()
 
-        return Task { @MainActor [services, overlayAnchor, weak self] in
+        return Task { @MainActor [context, overlayAnchor, weak self] in
             let source = "prompt-polish"
-            services.eventBus.publish(.inferenceActivity(.init(
+            context.events.publish(.inferenceActivity(.init(
                 phase: .started, source: source, anchor: overlayAnchor, timestamp: Date())))
             defer {
-                services.eventBus.publish(.inferenceActivity(.init(
+                context.events.publish(.inferenceActivity(.init(
                     phase: .finished, source: source, timestamp: Date())))
             }
 
@@ -328,7 +309,8 @@ final class PromptPolish: HalenPlugin {
                 guard let self,
                       let target = self.locatePlaceholder(lastWritten, expectedAt: writtenRange, in: element)
                 else { return false }
-                guard self.caretObserver?.replaceRange(target, with: snapshot, in: element) == true else {
+                guard context.text?.replaceRange(target, with: snapshot, in: element,
+                                                 describedAs: nil) == true else {
                     return false
                 }
                 lastWritten = snapshot
@@ -339,7 +321,7 @@ final class PromptPolish: HalenPlugin {
             var latest = ""
             var lastFlush = Date.distantPast
             do {
-                for try await snapshot in services.inference.stream(request) {
+                for try await snapshot in context.inference.stream(request) {
                     latest = snapshot
                     guard !snapshot.isEmpty else { continue }
                     // Throttle AX writes to ~11 fps — a per-token write storm
@@ -361,13 +343,14 @@ final class PromptPolish: HalenPlugin {
                 }
                 guard !cleaned.isEmpty else {
                     Log.warn("PromptPolish: empty response — restoring original")
-                    _ = self.caretObserver?.replaceRange(writeRange, with: restoreText, in: element)
+                    _ = context.text?.replaceRange(writeRange, with: restoreText, in: element,
+                                                   describedAs: nil) ?? false
                     return
                 }
                 let elapsed = Int(Date().timeIntervalSince(start) * 1000)
                 Log.info("PromptPolish: completed (\(elapsed)ms) len=\(cleaned.count)")
-                if self.caretObserver?.replaceRange(writeRange, with: cleaned, in: element,
-                                                    describedAs: announcement) != true {
+                if context.text?.replaceRange(writeRange, with: cleaned, in: element,
+                                              describedAs: announcement) != true {
                     Log.warn("PromptPolish: final AX write failed — target stale or unsupported")
                 }
             } catch is CancellationError {
@@ -377,7 +360,8 @@ final class PromptPolish: HalenPlugin {
                 guard let self,
                       let writeRange = self.locatePlaceholder(lastWritten, expectedAt: writtenRange, in: element)
                 else { return }
-                _ = self.caretObserver?.replaceRange(writeRange, with: restoreText, in: element)
+                _ = context.text?.replaceRange(writeRange, with: restoreText, in: element,
+                                               describedAs: nil) ?? false
             }
         }
     }
@@ -387,7 +371,7 @@ final class PromptPolish: HalenPlugin {
     /// the field can't be read, or nil if the text is gone (user deleted it).
     private func locatePlaceholder(_ placeholder: String, expectedAt expected: NSRange,
                                    in element: AXUIElement?) -> NSRange? {
-        guard let target = element ?? caretObserver?.currentElement,
+        guard let target = element ?? context.text?.focusedElement,
               let current = axReadString(target, kAXValueAttribute) else {
             return expected
         }
@@ -407,20 +391,9 @@ final class PromptPolish: HalenPlugin {
         return best
     }
 
-    /// Transient system notification — used for the "select a prompt first"
-    /// nudge. Mirrors EmailReplyDrafter.notify.
+    /// Transient toast — used for the "select a prompt first" nudge. No-ops
+    /// when the notifications grant is missing.
     private func notify(body: String) {
-        let content = UNMutableNotificationContent()
-        content.title = "Prompt Polish"
-        content.body = body
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false))
-        Task {
-            let center = UNUserNotificationCenter.current()
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
-            try? await center.add(request)
-        }
+        context.ui?.toast(title: "Prompt Polish", body: body)
     }
 }

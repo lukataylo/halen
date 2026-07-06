@@ -1,4 +1,5 @@
 import SwiftUI
+import HalenPluginAPI
 
 /// Settings + reference for Prompt Polish. The plugin itself is hotkey-driven
 /// (⌃⌥⌘P); this view picks which transform the hotkey applies and, for tone

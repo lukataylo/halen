@@ -1,5 +1,6 @@
 import Foundation
 import llama
+import HalenPluginAPI
 
 /// Thin Swift bridge over llama.cpp's C API for one-shot, non-streaming
 /// generation. An `actor` so a single model context is never touched

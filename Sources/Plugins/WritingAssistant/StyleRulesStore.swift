@@ -1,4 +1,5 @@
 import Foundation
+import HalenPluginAPI
 import Observation
 
 /// How a rule's `banned` field is matched against text.

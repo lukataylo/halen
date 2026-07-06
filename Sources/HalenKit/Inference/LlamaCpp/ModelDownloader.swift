@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import Observation
+import HalenPluginAPI
 
 /// Downloads a `ModelSpec`'s GGUF on demand from its pinned HuggingFace
 /// mirror into `ModelLocation.downloaded(for: spec)`. Resumable (HTTP Range
@@ -16,15 +17,15 @@ import Observation
 /// explicit Combine pipeline.
 @MainActor
 @Observable
-final class ModelDownloader {
+package final class ModelDownloader {
     /// The model this downloader manages. Frozen at init — one downloader
     /// per model spec.
-    let spec: ModelSpec
+    package let spec: ModelSpec
 
     /// Convenient access to spec fields used by call sites that don't want to
     /// drill through `.spec.*`.
-    var expectedSize: Int64 { spec.expectedSize }
-    var displayName: String { spec.displayName }
+    package var expectedSize: Int64 { spec.expectedSize }
+    package var displayName: String { spec.displayName }
 
     // MARK: - Tunables
 
@@ -38,7 +39,7 @@ final class ModelDownloader {
     /// on even a slow residential link — beyond that we'd rather fail loudly.
     private static let resourceTimeout: TimeInterval = 60 * 60
 
-    enum State: Equatable {
+    package enum State: Equatable {
         case notDownloaded
         case downloading(fraction: Double, bytes: Int64, total: Int64)
         case verifying
@@ -47,11 +48,11 @@ final class ModelDownloader {
         case failed(message: String)
     }
 
-    private(set) var state: State
+    package private(set) var state: State
 
     private var downloadTask: Task<Void, Never>?
 
-    init(spec: ModelSpec) {
+    package init(spec: ModelSpec) {
         self.spec = spec
         // On launch we trust the existence of the file; the (multi-second)
         // SHA-256 check only runs when the user explicitly triggers a verify
@@ -61,7 +62,7 @@ final class ModelDownloader {
 
     /// Start (or resume) the download. Idempotent — calling while a download
     /// is already in flight is a no-op.
-    func start() {
+    package func start() {
         if downloadTask != nil { return }
         guard let installPath = ModelLocation.downloaded(for: spec) else {
             state = .failed(message: "Couldn't resolve Application Support directory")
@@ -77,7 +78,7 @@ final class ModelDownloader {
     /// next `start()` resumes from where it stopped. The cancellation flows
     /// through `withTaskCancellationHandler` in `run(...)` into the detached
     /// download body, which winds down on its next `Task.checkCancellation()`.
-    func cancel() {
+    package func cancel() {
         downloadTask?.cancel()
         downloadTask = nil
         if case .downloading = state {
@@ -86,7 +87,7 @@ final class ModelDownloader {
     }
 
     /// Remove the downloaded model file. The bundled fallback (if any) stays.
-    func removeDownloaded() {
+    package func removeDownloaded() {
         cancel()
         if let path = ModelLocation.downloaded(for: spec) {
             try? FileManager.default.removeItem(at: path)
@@ -330,7 +331,7 @@ final class ModelDownloader {
     /// header doesn't match the canonical bytes-range form.
     /// `nonisolated static` so tests (and any future caller) can invoke it
     /// from any context — the function is pure.
-    nonisolated static func parseContentRange(_ header: String) -> (start: Int64, end: Int64, total: Int64?)? {
+    package nonisolated static func parseContentRange(_ header: String) -> (start: Int64, end: Int64, total: Int64?)? {
         // Canonical shape per RFC 7233: "bytes 1024-4977169567/4977169568"
         // or "bytes 1024-4977169567/*". Anything else (multipart, "bytes */N"
         // satisfiable-range responses, malformed) is rejected — we don't use

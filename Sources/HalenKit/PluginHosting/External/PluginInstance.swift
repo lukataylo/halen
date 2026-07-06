@@ -1,4 +1,5 @@
 import Foundation
+import HalenPluginAPI
 
 /// One running plugin process and the JSON-RPC pump for it. Owns:
 ///
@@ -80,7 +81,7 @@ final class PluginInstance {
             "protocolVersion": manifest.halenApiVersion,
             "hostInfo": [
                 "name": "Halen",
-                "version": "0.1.0"
+                "version": "0.4.0"
             ],
             "capabilities": [
                 "inference": ["streaming": false,

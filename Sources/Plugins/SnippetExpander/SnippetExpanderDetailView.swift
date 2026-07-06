@@ -1,4 +1,5 @@
 import SwiftUI
+import HalenPluginAPI
 
 @MainActor
 struct SnippetExpanderDetailView: View {

@@ -1,11 +1,12 @@
 import Foundation
+import HalenPluginAPI
 
 /// The single site that constructs the concrete backend set — and the only place
 /// `AppleFMBackend` is referenced, gated behind `#available` so the macOS-14
 /// deployment target is preserved (`AppleFMBackend` itself is `@available(macOS 26, *)`
 /// and `#if canImport(FoundationModels)`-guarded).
-enum InferenceBackends {
-    static func makeAll() -> [InferenceBackend] {
+package enum InferenceBackends {
+    package static func makeAll() -> [InferenceBackend] {
         // On macOS 26+ Apple Intelligence is the preferred default (zero
         // install, better model quality than bundled 1B Gemma). The bundled-
         // llama backends cover older macOS + Macs without Apple Intelligence,
@@ -44,7 +45,7 @@ enum InferenceBackends {
     /// Apple FM uses its own lightweight `prewarm()`. Backends that can't (or
     /// don't need to) prewarm are skipped silently.
     @MainActor
-    static func prewarmAll(_ backends: [InferenceBackend]) async {
+    package static func prewarmAll(_ backends: [InferenceBackend]) async {
         await withTaskGroup(of: Void.self) { group in
             for backend in backends {
                 if let llama = backend as? LlamaCppBackend {

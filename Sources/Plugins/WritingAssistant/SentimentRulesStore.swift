@@ -1,4 +1,5 @@
 import Foundation
+import HalenPluginAPI
 import Observation
 
 /// A single tone-detection rule. The `prompt` is fed to the classifier as the

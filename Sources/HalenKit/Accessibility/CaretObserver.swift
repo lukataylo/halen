@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
+import HalenPluginAPI
 
 /// Observes the user's currently focused text field and emits events on the bus:
 ///   - `app.focused` when the frontmost app changes
@@ -15,7 +16,7 @@ import Carbon.HIToolbox
 ///   - C callback is dispatched on the main run loop; we use `MainActor.assumeIsolated`
 ///     to hop back into actor-isolated code without an async detour.
 @MainActor
-final class CaretObserver {
+package final class CaretObserver {
     private let eventBus: EventBus
     private var workspaceToken: NSObjectProtocol?
 
@@ -37,7 +38,7 @@ final class CaretObserver {
     /// Cancelled on app-switch or teardown so we never leak the closure.
     private var focusRetryTask: Task<Void, Never>?
 
-    init(eventBus: EventBus) {
+    package init(eventBus: EventBus) {
         self.eventBus = eventBus
     }
 
@@ -57,7 +58,7 @@ final class CaretObserver {
         }
     }
 
-    func start() {
+    package func start() {
         workspaceToken = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
@@ -74,7 +75,7 @@ final class CaretObserver {
         }
     }
 
-    func stop() {
+    package func stop() {
         debounceTask?.cancel()
         caretMovedTask?.cancel()
         if let token = workspaceToken {
@@ -88,21 +89,21 @@ final class CaretObserver {
     /// to `replaceRange(_:with:in:)` later, so an async write (e.g. a Gemma
     /// response that arrives after the user alt-tabbed away) still lands in the
     /// field it was started from rather than whatever happens to be focused now.
-    var currentElement: AXUIElement? { focusedElement }
+    package var currentElement: AXUIElement? { focusedElement }
 
     /// Replace `range` (UTF-16 units) in the currently focused element with `replacement`.
     ///
     /// `describedAs` is a short, human-readable summary of *what changed*
     /// that, on a successful write, gets posted to VoiceOver via
     /// `AnnounceCenter`. Pass nil when the caller is going to post its own
-    /// announcement (e.g. AskHalen's "Answer inserted at cursor") to avoid
+    /// announcement (e.g. a plugin's "Answer inserted at cursor") to avoid
     /// double-speak; pass a brief clause like "Fixed 'teh' to 'the'" or
     /// "Expanded ;sig" otherwise. See `AnnounceCenter` for the rationale —
     /// VoiceOver users get no signal from a silent AX mutation otherwise.
     @discardableResult
-    func replaceRange(_ range: NSRange,
-                      with replacement: String,
-                      describedAs description: String? = nil) -> Bool {
+    package func replaceRange(_ range: NSRange,
+                              with replacement: String,
+                              describedAs description: String? = nil) -> Bool {
         guard let element = focusedElement else { return false }
         return replaceRange(range, with: replacement, in: element, describedAs: description)
     }
@@ -119,10 +120,10 @@ final class CaretObserver {
     /// hear that something changed at their cursor. nil = don't announce
     /// (the caller will post its own).
     @discardableResult
-    func replaceRange(_ range: NSRange,
-                      with replacement: String,
-                      in element: AXUIElement,
-                      describedAs description: String? = nil) -> Bool {
+    package func replaceRange(_ range: NSRange,
+                              with replacement: String,
+                              in element: AXUIElement,
+                              describedAs description: String? = nil) -> Bool {
         var cfRange = CFRange(location: range.location, length: range.length)
         guard let rangeValue: AXValue = withUnsafePointer(to: &cfRange, { ptr in
             AXValueCreate(.cfRange, UnsafeRawPointer(ptr))
@@ -179,7 +180,7 @@ final class CaretObserver {
     /// `await` hop. Keystroke synthesis already requires the Accessibility
     /// permission Halen has at launch.
     @discardableResult
-    nonisolated static func pasteFallback(text: String, deleteCount: Int) -> Bool {
+    package nonisolated static func pasteFallback(text: String, deleteCount: Int) -> Bool {
         let pasteboard = NSPasteboard.general
         let saved = savedPasteboardItems(pasteboard)
 

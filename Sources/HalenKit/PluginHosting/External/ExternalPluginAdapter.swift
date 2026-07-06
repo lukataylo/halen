@@ -1,10 +1,15 @@
 import SwiftUI
+import HalenPluginAPI
 
 /// `HalenPlugin` shim around a discovered external (JSON-RPC) plugin. Lets
 /// `PluginRegistry` treat external plugins exactly like first-party ones —
 /// they appear in the marketplace, get an enable/disable toggle, persist
 /// their on/off state in UserDefaults, and surface a detail view showing
-/// the manifest metadata + permission declarations.
+/// the manifest metadata + capability declarations.
+///
+/// Identity/display metadata (`id`, `name`, `icon`, …) come from the
+/// `HalenPlugin` protocol extension over `manifest` — no per-adapter
+/// overrides needed.
 ///
 /// `start()` / `stop()` round-trip into `PluginHost.spawn(...)` /
 /// `terminate(id:)` so the on/off toggle actually launches or polite-
@@ -12,43 +17,31 @@ import SwiftUI
 /// would run silently in the background with no UI surface at all — exactly
 /// the gap a v1 plugin platform shouldn't have.
 @MainActor
-final class ExternalPluginAdapter: HalenPlugin {
-    let manifest: PluginManifest
+package final class ExternalPluginAdapter: HalenPlugin {
+    package let manifest: PluginManifest
     let pluginDir: URL
     private weak var host: PluginHost?
 
-    var id: String      { manifest.id }
-    var name: String    { manifest.name }
-    var summary: String { manifest.summary ?? "External plugin." }
-    /// SF Symbol from the manifest, or a sensible "extension piece" fallback.
-    var icon: String    { manifest.icon ?? "puzzlepiece.extension" }
-    var category: PluginCategory {
-        if let raw = manifest.category, let cat = PluginCategory(rawValue: raw) {
-            return cat
-        }
-        return .productivity
-    }
-
-    init(manifest: PluginManifest, pluginDir: URL, host: PluginHost) {
+    package init(manifest: PluginManifest, pluginDir: URL, host: PluginHost) {
         self.manifest = manifest
         self.pluginDir = pluginDir
         self.host = host
     }
 
-    func start() {
+    package func start() {
         guard let host else { return }
         let dir = pluginDir
         let m = manifest
         Task { @MainActor in await host.spawn(at: dir, manifest: m) }
     }
 
-    func stop() {
+    package func stop() {
         guard let host else { return }
         let id = manifest.id
         Task { @MainActor in await host.terminate(id: id) }
     }
 
-    func makeDetailView() -> AnyView {
+    package func makeDetailView() -> AnyView {
         AnyView(ExternalPluginDetailView(manifest: manifest, pluginDir: pluginDir))
     }
 }
@@ -127,10 +120,10 @@ private struct ExternalPluginDetailView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
                 cardLabel("Plugin")
-                infoRow("ID",         manifest.id,            mono: true)
-                infoRow("Version",    manifest.version,       mono: true)
-                infoRow("Executable", manifest.executable,    mono: true)
-                infoRow("Directory",  pluginDir.path,         mono: true)
+                infoRow("ID",         manifest.id,                       mono: true)
+                infoRow("Version",    manifest.version,                  mono: true)
+                infoRow("Executable", manifest.executable ?? "(none)",   mono: true)
+                infoRow("Directory",  pluginDir.path,                    mono: true)
                 Button {
                     NSWorkspace.shared.activateFileViewerSelecting([pluginDir])
                 } label: {
@@ -146,10 +139,10 @@ private struct ExternalPluginDetailView: View {
     private var permissionsCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
-                cardLabel("Declared permissions")
-                let perms = manifest.permissions ?? []
+                cardLabel("Declared capabilities")
+                let perms = manifest.declaredCapabilityStrings
                 if perms.isEmpty {
-                    Text("This plugin declared no permissions.")
+                    Text("This plugin declared no capabilities.")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 } else {

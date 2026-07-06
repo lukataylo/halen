@@ -2,8 +2,8 @@ import Foundation
 import SwiftUI
 import AppKit
 import ApplicationServices
-import IOKit.hid
-import UserNotifications
+import Carbon.HIToolbox
+import HalenPluginAPI
 
 /// Type `;tag` followed by a separator (space / punctuation) and Halen swaps it
 /// for the snippet's content. Static snippets are instant; AI snippets show a
@@ -14,16 +14,22 @@ import UserNotifications
 /// triggers (which always act on the prior paragraph) because typing a
 /// trigger would destroy the highlight.
 @MainActor
-final class SnippetExpander: HalenPlugin {
-    let id = "com.halen.snippet-expander"
-    let name = "Snippet Expander"
-    let summary = "Type ;tag to expand. \u{2303}\u{2325}R to rewrite."
-    let icon = "text.bubble"
-    let category: PluginCategory = .productivity
+public final class SnippetExpander: HalenPlugin {
+    public static let pluginManifest = PluginManifest(
+        id: "com.halen.snippet-expander", name: "Snippet Expander",
+        summary: "Type ;tag to expand text, dates, and AI rewrites anywhere.",
+        version: "0.4.0",
+        events: ["text.pause", "caret.moved", "app.focused"],
+        capabilities: [.observeText, .observeKeystrokes, .insertText, .hotkeys,
+                       .notifications, .snippets, .toneProfiles, .clipboard],
+        icon: "text.bubble", category: .productivity)
 
-    let store: SnippetStore
-    private let services: HalenServices
-    private weak var caretObserver: CaretObserver?
+    public var manifest: PluginManifest { Self.pluginManifest }
+
+    private let context: PluginContext
+    /// Host-owned snippet library, granted via the `.snippets` capability.
+    /// nil means the grant was revoked — expansion no-ops (logged in start()).
+    private var store: SnippetStore? { context.snippets }
     private var task: Task<Void, Never>?
 
     /// Self-edit suppression: ignore our own write-backs on the next pause cycle.
@@ -38,17 +44,11 @@ final class SnippetExpander: HalenPlugin {
     /// web fields, Electron apps — with no browser extension required.
     private let keystrokeBuffer = KeystrokeBuffer()
 
-    /// NSEvent monitor handles for the ⌃⌥R rephrase-selection hotkey.
-    private var globalHotkeyMonitor: Any?
-    private var localHotkeyMonitor: Any?
-    /// NSEvent monitor handles for the ⌃⌥E email-reply hotkey. Lives
-    /// here (not in a separate plugin) since the Email Reply standalone
-    /// folded into Snippet Expander — it's surfaced as the `;reply`
-    /// built-in trigger plus this hotkey for users who prefer chords.
-    private var emailReplyGlobalMonitor: Any?
-    private var emailReplyLocalMonitor: Any?
     /// In-flight email reply draft Task. Cancelled by a subsequent
-    /// invocation so a second ⌃⌥E supersedes a slow first one.
+    /// invocation so a second ⌃⌥E supersedes a slow first one. The Email
+    /// Reply standalone plugin folded into Snippet Expander — it's surfaced
+    /// as the `;reply` built-in trigger plus the ⌃⌥E hotkey for users who
+    /// prefer chords.
     private var emailReplyInflight: Task<Void, Never>?
     /// Built-in trigger that fires the email-reply drafter instead of
     /// expanding a snippet. Special-cased in `handle(text:caretOffset:)`
@@ -61,17 +61,17 @@ final class SnippetExpander: HalenPlugin {
     /// `;` trigger (it starts with a NUL, which can't be typed).
     private static let rephraseHotkeyTrigger = "\u{0}rephrase-hotkey"
 
-    init(services: HalenServices) {
-        self.services = services
-        self.caretObserver = services.caretObserver
-        let dir = services.storageDirectory(for: "com.halen.snippet-expander")
-        self.store = SnippetStore(fileURL: dir.appending(path: "snippets.json"))
+    public init(context: PluginContext) {
+        self.context = context
     }
 
-    func start() {
+    public func start() {
         guard task == nil else { return }
-        task = Task { @MainActor [services, weak self] in
-            for await event in services.eventBus.subscribe() {
+        if context.snippets == nil {
+            Log.warn("SnippetExpander: snippets capability not granted — expansion disabled")
+        }
+        task = Task { @MainActor [context, weak self] in
+            for await event in context.events.subscribe() {
                 guard let self else { return }
                 switch event {
                 case .textPaused(let payload):
@@ -85,84 +85,54 @@ final class SnippetExpander: HalenPlugin {
                 }
             }
         }
-        installRephraseHotkey()
-        installEmailReplyHotkey()
+        registerHotkeys()
 
         // The keystroke buffer is the path that makes snippets work in text
         // boxes the Accessibility API can't see (Chromium web fields, Electron
         // apps): no `text.pause` event ever arrives for those, so trigger
         // detection is reconstructed from the global keystroke stream instead.
+        // The host owns the Input Monitoring TCC prompt — fire-and-forget the
+        // request here so first use triggers it.
+        Task { [context] in
+            _ = await context.permissions.request(.inputMonitoring)
+        }
         keystrokeBuffer.onTrigger = { [weak self] token, delimiter, preceding in
             self?.handleKeystrokeTrigger(token: token, delimiter: delimiter, preceding: preceding)
         }
         keystrokeBuffer.start()
     }
 
-    func stop() {
+    public func stop() {
         task?.cancel()
         task = nil
         recentWrites.removeAll()
         keystrokeBuffer.stop()
-        if let m = globalHotkeyMonitor { NSEvent.removeMonitor(m); globalHotkeyMonitor = nil }
-        if let m = localHotkeyMonitor  { NSEvent.removeMonitor(m); localHotkeyMonitor  = nil }
-        if let m = emailReplyGlobalMonitor { NSEvent.removeMonitor(m); emailReplyGlobalMonitor = nil }
-        if let m = emailReplyLocalMonitor  { NSEvent.removeMonitor(m); emailReplyLocalMonitor  = nil }
+        context.hotkeys?.unregisterAll()
         emailReplyInflight?.cancel()
         emailReplyInflight = nil
     }
 
-    // MARK: - Rephrase-selection hotkey (⌃⌥R)
+    // MARK: - Hotkeys (⌃⌥R rephrase, ⌃⌥E email reply)
 
-    /// Install global + local `.keyDown` monitors for ⌃⌥R. Same mechanism as
-    /// AskHalen's ⌃H — NSEvent monitors rather than Carbon, so the hotkey
-    /// fires regardless of which app is focused. Needs Input Monitoring;
-    /// `IOHIDRequestAccess` is idempotent if AskHalen already requested it.
-    private func installRephraseHotkey() {
-        _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
-
-        // ⌃⌥R: Control+Option held (and nothing else), key "r".
-        // `charactersIgnoringModifiers` returns "r" even with Option down,
-        // which would otherwise map the key to "®".
-        let isHotkey: (NSEvent) -> Bool = { event in
-            event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.control, .option]
-                && event.charactersIgnoringModifiers?.lowercased() == "r"
+    /// Register both chords through the host's hotkey service — the host owns
+    /// monitor installation, Input Monitoring prompts, and conflict
+    /// registration; the plugin just names the chords and reacts.
+    private func registerHotkeys() {
+        guard let hotkeys = context.hotkeys else {
+            Log.warn("SnippetExpander: hotkeys capability not granted — ⌃⌥R/⌃⌥E disabled")
+            return
         }
-        globalHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard isHotkey(event) else { return }
-            MainActor.assumeIsolated { self?.rephraseSelection() }
+        let rephraseOK = hotkeys.register(
+            id: "rephrase", keyCode: UInt32(kVK_ANSI_R), modifiers: [.control, .option]
+        ) { [weak self] in
+            self?.rephraseSelection()
         }
-        localHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if isHotkey(event) {
-                MainActor.assumeIsolated { self?.rephraseSelection() }
-                return nil   // consume — don't let ⌃⌥R fall through to Halen's own UI
-            }
-            return event
+        let emailOK = hotkeys.register(
+            id: "email-reply", keyCode: UInt32(kVK_ANSI_E), modifiers: [.control, .option]
+        ) { [weak self] in
+            self?.fireEmailReply()
         }
-        Log.info("SnippetExpander: ⌃⌥R rephrase-selection monitors installed (global=\(globalHotkeyMonitor != nil), local=\(localHotkeyMonitor != nil))")
-    }
-
-    /// Install global + local `.keyDown` monitors for ⌃⌥E. Mirrors the
-    /// rephrase-hotkey install above — same NSEvent path, same Input
-    /// Monitoring gating, distinct monitor handles so each chord can be
-    /// torn down independently. Fires `EmailReplyDrafter.draft` against
-    /// the current focused-app context.
-    private func installEmailReplyHotkey() {
-        let isHotkey: (NSEvent) -> Bool = { event in
-            event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.control, .option]
-                && event.charactersIgnoringModifiers?.lowercased() == "e"
-        }
-        emailReplyGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard isHotkey(event) else { return }
-            MainActor.assumeIsolated { self?.fireEmailReply() }
-        }
-        emailReplyLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if isHotkey(event) {
-                MainActor.assumeIsolated { self?.fireEmailReply() }
-                return nil
-            }
-            return event
-        }
-        Log.info("SnippetExpander: ⌃⌥E email-reply monitors installed (global=\(emailReplyGlobalMonitor != nil), local=\(emailReplyLocalMonitor != nil))")
+        Log.info("SnippetExpander: hotkeys registered (⌃⌥R=\(rephraseOK), ⌃⌥E=\(emailOK))")
     }
 
     /// Cancel any prior draft, kick off a new one. Wraps the static
@@ -170,8 +140,7 @@ final class SnippetExpander: HalenPlugin {
     /// plugin instance (the drafter itself is stateless).
     private func fireEmailReply() {
         emailReplyInflight?.cancel()
-        emailReplyInflight = EmailReplyDrafter.draft(services: services,
-                                                     caretObserver: caretObserver)
+        emailReplyInflight = EmailReplyDrafter.draft(context: context)
     }
 
     /// Rephrase whatever text is currently selected, in place. No-op when
@@ -179,7 +148,7 @@ final class SnippetExpander: HalenPlugin {
     /// highlight, by design). Mirrors `expandAI`'s placeholder + async
     /// write-back so it's robust to the user editing during the Gemma call.
     private func rephraseSelection() {
-        guard let element = caretObserver?.currentElement else {
+        guard let element = context.text?.focusedElement else {
             Log.info("SnippetExpander: ⌃⌥R — no focused element")
             return
         }
@@ -218,8 +187,11 @@ final class SnippetExpander: HalenPlugin {
         )
     }
 
-    func makeDetailView() -> AnyView {
-        AnyView(SnippetExpanderDetailView(store: store))
+    public func makeDetailView() -> AnyView {
+        guard let store = context.snippets else {
+            return AnyView(EmptyPluginDetailView(plugin: self))
+        }
+        return AnyView(SnippetExpanderDetailView(store: store))
     }
 
     // MARK: - Trigger detection
@@ -257,7 +229,7 @@ final class SnippetExpander: HalenPlugin {
             return
         }
 
-        guard let snippet = store.snippet(for: token) else { return }
+        guard let snippet = store?.snippet(for: token) else { return }
         expand(snippet, at: tokenRange, fullText: ns)
     }
 
@@ -353,7 +325,7 @@ final class SnippetExpander: HalenPlugin {
                                        temperature: 0.4, taskKind: .generation)
         runPlaceholderInference(
             range: replaceRange,
-            in: caretObserver?.currentElement,
+            in: context.text?.focusedElement,
             request: request,
             // On an empty / failed response, restore what was there: the prior
             // text for a replacesPrior snippet, else just the trigger.
@@ -407,14 +379,14 @@ final class SnippetExpander: HalenPlugin {
             return .init(x: cocoa.minX, y: cocoa.minY, width: cocoa.width, height: cocoa.height)
         }()
 
-        Task { @MainActor [services, overlayAnchor, weak self] in
+        Task { @MainActor [context, overlayAnchor, weak self] in
             // Tell the caret overlay we're working so the user sees a busy
             // indicator during the multi-second Gemma call. `defer` guarantees
             // the matching "finished" fires on every exit path below.
-            services.eventBus.publish(.inferenceActivity(.init(
+            context.events.publish(.inferenceActivity(.init(
                 phase: .started, source: source, anchor: overlayAnchor, timestamp: Date())))
             defer {
-                services.eventBus.publish(.inferenceActivity(.init(
+                context.events.publish(.inferenceActivity(.init(
                     phase: .finished, source: source, timestamp: Date())))
             }
 
@@ -449,7 +421,7 @@ final class SnippetExpander: HalenPlugin {
             var latest = ""
             var lastFlush = Date.distantPast
             do {
-                for try await snapshot in services.inference.stream(request) {
+                for try await snapshot in context.inference.stream(request) {
                     latest = snapshot
                     guard !snapshot.isEmpty else { continue }
                     // Throttle AX writes — a per-token write storm into a
@@ -472,7 +444,7 @@ final class SnippetExpander: HalenPlugin {
                 else {
                     Log.warn("SnippetExpander: \(label) streamed text gone from field — skipping final write")
                     if restoreIsUserText {
-                        self?.copyWithNotification(restoreText, reason: "Halen lost its place in the field")
+                        self?.copyWithToast(restoreText, reason: "Halen lost its place in the field")
                     }
                     return
                 }
@@ -501,7 +473,7 @@ final class SnippetExpander: HalenPlugin {
                       let writeRange = self.locatePlaceholder(lastWritten, expectedAt: writtenRange, in: element)
                 else {
                     if restoreIsUserText {
-                        self?.copyWithNotification(restoreText, reason: "Halen lost its place in the field")
+                        self?.copyWithToast(restoreText, reason: "Halen lost its place in the field")
                     }
                     return
                 }
@@ -518,7 +490,7 @@ final class SnippetExpander: HalenPlugin {
     /// if the text is gone (the user deleted it — don't write anything).
     private func locatePlaceholder(_ placeholder: String, expectedAt expected: NSRange,
                                    in element: AXUIElement?) -> NSRange? {
-        guard let target = element ?? caretObserver?.currentElement,
+        guard let target = element ?? context.text?.focusedElement,
               let current = axReadString(target, kAXValueAttribute) else {
             return expected
         }
@@ -552,11 +524,11 @@ final class SnippetExpander: HalenPlugin {
                                   announce: String? = nil) -> Bool {
         recentWrites.append(PendingWrite(trigger: trigger, timestamp: Date()))
         if let element {
-            return caretObserver?.replaceRange(range, with: replacement, in: element,
-                                               describedAs: announce) ?? false
+            return context.text?.replaceRange(range, with: replacement, in: element,
+                                              describedAs: announce) ?? false
         }
-        return caretObserver?.replaceRange(range, with: replacement,
-                                           describedAs: announce) ?? false
+        return context.text?.replaceRange(range, with: replacement,
+                                          describedAs: announce) ?? false
     }
 
     // MARK: - Keystroke-buffer expansion (works without Accessibility)
@@ -572,7 +544,7 @@ final class SnippetExpander: HalenPlugin {
         // in KeystrokeBuffer) didn't engage. A web password field the AX tree
         // can't see at all is undetectable from the keystroke stream; the buffer
         // mitigates that case by never logging it and resetting on navigation.
-        if let element = caretObserver?.currentElement,
+        if let element = context.text?.focusedElement,
            axReadString(element, kAXSubroleAttribute as String) == (kAXSecureTextFieldSubrole as String) {
             keystrokeBuffer.reset()
             return
@@ -592,7 +564,7 @@ final class SnippetExpander: HalenPlugin {
         recentWrites.removeAll { now.timeIntervalSince($0.timestamp) > 3 }
         if recentWrites.contains(where: { $0.trigger == token }) { return }
 
-        guard let snippet = store.snippet(for: token) else { return }
+        guard let snippet = store?.snippet(for: token) else { return }
 
         switch snippet.kind {
         case .staticText:
@@ -624,8 +596,10 @@ final class SnippetExpander: HalenPlugin {
         // give the focused app a beat to commit the separator that triggered
         // us before we backspace over it.
         keystrokeBuffer.suppress()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
-            _ = CaretObserver.pasteFallback(text: replacement, deleteCount: deleteCount)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+            MainActor.assumeIsolated {
+                _ = self?.context.text?.pasteFallback(text: replacement, deleteCount: deleteCount) ?? false
+            }
         }
         Log.info("SnippetExpander: keystroke-expanded \(token) (delete=\(deleteCount))")
     }
@@ -653,7 +627,7 @@ final class SnippetExpander: HalenPlugin {
         // of the field up to the trigger.
         var priorText = typed
         if priorText.isEmpty,
-           let element = caretObserver?.currentElement,
+           let element = context.text?.focusedElement,
            let axText = axReadString(element, kAXValueAttribute),
            let r = axText.range(of: token, options: .backwards) {
             priorText = String(axText[..<r.lowerBound])
@@ -669,7 +643,7 @@ final class SnippetExpander: HalenPlugin {
         // field. If the field can't be read, fall through and rewrite what we do
         // have (the current line) rather than nothing.
         if replacesPrior {
-            if let element = caretObserver?.currentElement,
+            if let element = context.text?.focusedElement,
                let axText = axReadString(element, kAXValueAttribute),
                let r = axText.range(of: token, options: .backwards) {
                 let fieldPrior = String(axText[..<r.lowerBound])
@@ -712,8 +686,10 @@ final class SnippetExpander: HalenPlugin {
         let placeholderLen = placeholder.count
 
         keystrokeBuffer.suppress(forMillis: 300)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
-            _ = CaretObserver.pasteFallback(text: pasteText, deleteCount: deleteCount)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+            MainActor.assumeIsolated {
+                _ = self?.context.text?.pasteFallback(text: pasteText, deleteCount: deleteCount) ?? false
+            }
         }
 
         let prompt = """
@@ -727,7 +703,7 @@ final class SnippetExpander: HalenPlugin {
                                        temperature: 0.4, taskKind: .generation)
         Log.info("SnippetExpander: \(token) — keystroke AI expand (replacesPrior=\(replacesPrior), priorChars=\(priorText.count))")
 
-        Task { @MainActor [services, weak self] in
+        Task { @MainActor [context, weak self] in
             // Let the placeholder write settle before baselining activity so
             // our own synthesized keystrokes aren't counted as the user typing.
             try? await Task.sleep(for: .milliseconds(120))
@@ -743,22 +719,22 @@ final class SnippetExpander: HalenPlugin {
                 if self.keystrokeBuffer.activityCount == activityBaseline {
                     self.recentWrites.append(PendingWrite(trigger: token, timestamp: Date()))
                     self.keystrokeBuffer.suppress(forMillis: 300)
-                    _ = CaretObserver.pasteFallback(text: priorText, deleteCount: placeholderLen)
+                    _ = context.text?.pasteFallback(text: priorText, deleteCount: placeholderLen) ?? false
                 } else {
                     // User moved on — a blind write would land wrong; hand the
                     // original back via the clipboard so it's never lost.
-                    self.copyWithNotification(priorText, reason: "Halen couldn't rewrite it")
+                    self.copyWithToast(priorText, reason: "Halen couldn't rewrite it")
                 }
             }
 
-            services.eventBus.publish(.inferenceActivity(.init(
+            context.events.publish(.inferenceActivity(.init(
                 phase: .started, source: "snippet-expander", timestamp: Date())))
             defer {
-                services.eventBus.publish(.inferenceActivity(.init(
+                context.events.publish(.inferenceActivity(.init(
                     phase: .finished, source: "snippet-expander", timestamp: Date())))
             }
             do {
-                let response = try await services.inference.complete(request)
+                let response = try await context.inference.complete(request)
                 let cleaned = response.text.unwrappedModelText
                 guard !cleaned.isEmpty else {
                     Log.warn("SnippetExpander: \(token) keystroke AI returned empty — restoring original")
@@ -770,13 +746,13 @@ final class SnippetExpander: HalenPlugin {
                     // before the caret, so backspace it and paste the result.
                     self.recentWrites.append(PendingWrite(trigger: token, timestamp: Date()))
                     self.keystrokeBuffer.suppress(forMillis: 300)
-                    _ = CaretObserver.pasteFallback(text: cleaned, deleteCount: placeholderLen)
+                    _ = context.text?.pasteFallback(text: cleaned, deleteCount: placeholderLen) ?? false
                     Log.info("SnippetExpander: \(token) keystroke AI wrote \(cleaned.count) chars")
                 } else {
                     // The user typed or clicked during the call — a blind
                     // write would land in the wrong place. Hand off via the
                     // clipboard so the response isn't lost.
-                    self.copyWithNotification(
+                    self.copyWithToast(
                         cleaned,
                         reason: "you kept working while Halen was thinking")
                     Log.info("SnippetExpander: \(token) keystroke AI — field changed, copied to clipboard")
@@ -788,24 +764,13 @@ final class SnippetExpander: HalenPlugin {
         }
     }
 
-    /// Put `text` on the clipboard and post a system notification — the
-    /// graceful fallback when a blind AI write can't be placed. Without the
-    /// toast the user would just see the palette-less response vanish.
-    private func copyWithNotification(_ text: String, reason: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        let content = UNMutableNotificationContent()
-        content.title = "Snippet result copied"
-        content.body = "Halen couldn't insert it (\(reason)). Press ⌘V to paste — you may need to delete the […] placeholder."
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
-        )
-        Task {
-            let center = UNUserNotificationCenter.current()
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
-            try? await center.add(request)
-        }
+    /// Put `text` on the clipboard and post a toast — the graceful fallback
+    /// when a blind AI write can't be placed. Without the toast the user
+    /// would just see the response vanish.
+    private func copyWithToast(_ text: String, reason: String) {
+        context.clipboard?.write(text)
+        context.ui?.toast(
+            title: "Snippet result copied",
+            body: "Halen couldn't insert it (\(reason)). Press ⌘V to paste — you may need to delete the […] placeholder.")
     }
 }

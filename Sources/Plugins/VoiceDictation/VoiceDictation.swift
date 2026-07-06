@@ -1,10 +1,8 @@
 import AppKit
 import SwiftUI
-import Speech
-import AVFoundation
 import Carbon.HIToolbox
 import ApplicationServices
-import UserNotifications
+import HalenPluginAPI
 
 /// Global-hotkey-driven dictation. ⌃⌥Space toggles recording. While listening, a
 /// floating indicator pulses near the caret. On stop, the transcription (local,
@@ -16,16 +14,20 @@ import UserNotifications
 /// streaming API that takes raw audio buffers. Gemma 4 E2B technically supports
 /// audio but Ollama's HTTP API doesn't expose audio input cleanly yet (May 2026).
 @MainActor
-final class VoiceDictation: HalenPlugin {
-    let id = "com.halen.voice-dictation"
-    let name = "Voice Dictation"
-    let summary = "Press \u{2303}\u{2325}Space. Speak. Press again."
-    let icon = "mic.fill"
-    let category: PluginCategory = .voice
+public final class VoiceDictation: HalenPlugin {
+    public static let pluginManifest = PluginManifest(
+        id: "com.halen.voice-dictation", name: "Voice Dictation",
+        summary: "Hold a hotkey, speak, get on-device text at your caret.",
+        version: "0.4.0",
+        events: ["caret.moved", "text.pause", "app.focused"],
+        capabilities: [.observeText, .insertText, .hotkeys, .microphone,
+                       .speechRecognition, .notifications, .popoverUI],
+        icon: "mic.fill", category: .voice)
 
-    private let services: HalenServices
+    public var manifest: PluginManifest { Self.pluginManifest }
+
+    private let context: PluginContext
     private var eventTask: Task<Void, Never>?
-    private let hotkey = HotkeyRegistrar()
     private var recorder: VoiceDictationRecorder?
     private var listeningPanel: NSPanel?
 
@@ -36,18 +38,19 @@ final class VoiceDictation: HalenPlugin {
     /// not wherever focus happens to be when it finishes.
     private var capturedElement: AXUIElement?
     private var capturedOffset: Int = 0
-    @ObservationIgnored private var isRecording = false
+    private var isRecording = false
     private(set) var state = VoiceDictationState()
 
-    init(services: HalenServices) {
-        self.services = services
+    public init(context: PluginContext) {
+        self.context = context
+        state.permissions = context.permissions
     }
 
-    func start() {
+    public func start() {
         guard eventTask == nil else { return }
         registerHotkey()
-        eventTask = Task { @MainActor [services, weak self] in
-            for await event in services.eventBus.subscribe() {
+        eventTask = Task { @MainActor [context, weak self] in
+            for await event in context.events.subscribe() {
                 guard let self else { return }
                 switch event {
                 case .caretMoved(let payload):
@@ -67,8 +70,8 @@ final class VoiceDictation: HalenPlugin {
         Log.info("VoiceDictation started (hotkey: \u{2303}\u{2325}Space)")
     }
 
-    func stop() {
-        unregisterHotkey()
+    public func stop() {
+        context.hotkeys?.unregisterAll()
         eventTask?.cancel()
         eventTask = nil
         if isRecording {
@@ -76,7 +79,7 @@ final class VoiceDictation: HalenPlugin {
         }
     }
 
-    func makeDetailView() -> AnyView {
+    public func makeDetailView() -> AnyView {
         AnyView(VoiceDictationDetailView(state: state))
     }
 
@@ -87,31 +90,25 @@ final class VoiceDictation: HalenPlugin {
         // and nothing on a stock macOS install claims it. Earlier attempts
         // and why they failed:
         //   - ⌥⌘H: macOS reserves it for "Hide Others"; the menu-bar
-        //     intercepts before Carbon's RegisterEventHotKey sees it.
+        //     intercepts it before any global registration sees it.
         //   - ⌃G: every Cocoa Edit menu binds it for "Find Next"; the
         //     frontmost app's menu shortcut wins against our global
         //     registration whenever a Cocoa app is active.
         // ⌃⌥Space is in neither category — no Cocoa menu uses Control+
         // Option chords with Space, and Spotlight (⌘Space) / Raycast
         // (default ⌘Space) don't collide.
-        let ctrlOpt = UInt32(controlKey | optionKey)
-        let space = UInt32(kVK_Space)
-        let ok = hotkey.register(keyCode: space, modifiers: ctrlOpt,
-                                 id: HotkeyID.voiceDictation.rawValue,
-                                 owner: name) { [weak self] in
+        let ok = context.hotkeys?.register(
+            id: "toggle-dictation", keyCode: UInt32(kVK_Space),
+            modifiers: [.control, .option]
+        ) { [weak self] in
             self?.toggleRecording()
-        }
+        } ?? false
         if !ok {
-            // Either Carbon refused the chord (another app owns it) or a
-            // Halen plugin loaded earlier already claimed it — the
-            // conflict registry handles the latter and the warning card
-            // in Settings surfaces both owners.
+            // Either the chord was refused (another plugin or app owns it)
+            // or the hotkeys grant was revoked — the host's conflict
+            // registry surfaces both owners in Settings.
             Log.warn("VoiceDictation: failed to register ⌃⌥Space — see Settings → Conflicting hotkeys")
         }
-    }
-
-    private func unregisterHotkey() {
-        hotkey.unregister()
     }
 
     // MARK: - Recording lifecycle
@@ -130,10 +127,11 @@ final class VoiceDictation: HalenPlugin {
 
         // Graceful denial: if either permission is `.denied`, don't even
         // start the recorder (it would fail silently inside AVAudioEngine).
-        // Surface a notification with a one-click jump to Settings so the
-        // user has a path forward. Before this, ⌃⌥Space just looked broken.
+        // Surface a toast and jump straight to the right System Settings
+        // pane so the user has a path forward. Before this, ⌃⌥Space just
+        // looked broken.
         if state.micPermission == .denied || state.speechPermission == .denied {
-            postPermissionDeniedNotification()
+            notifyPermissionDenied()
             Log.warn("VoiceDictation: hotkey suppressed — mic=\(state.micPermission), speech=\(state.speechPermission)")
             return
         }
@@ -141,10 +139,19 @@ final class VoiceDictation: HalenPlugin {
 
         // Capture the field + caret NOW — the transcript callback fires seconds
         // later, by which point focus or the caret may have moved.
-        capturedElement = services.caretObserver.currentElement
+        capturedElement = context.text?.focusedElement
         capturedOffset = capturedElement.flatMap { axReadSelectedRange($0)?.location } ?? lastCaretOffset
 
         let recorder = VoiceDictationRecorder()
+        // The host brokers every TCC prompt — the recorder never calls
+        // AVCaptureDevice/SFSpeechRecognizer request APIs itself.
+        let permissions = context.permissions
+        recorder.requestSpeechAuthorization = { @MainActor in
+            await permissions.request(.speechRecognition)
+        }
+        recorder.requestMicAccess = { @MainActor in
+            await permissions.request(.microphone)
+        }
         recorder.onTranscript = { [weak self] text in
             Task { @MainActor [weak self] in
                 self?.insertTranscript(text)
@@ -211,11 +218,11 @@ final class VoiceDictation: HalenPlugin {
         let announcement = "Dictation inserted"
         let wrote: Bool
         if let element = capturedElement {
-            wrote = services.caretObserver.replaceRange(range, with: payload, in: element,
-                                                        describedAs: announcement)
+            wrote = context.text?.replaceRange(range, with: payload, in: element,
+                                               describedAs: announcement) ?? false
         } else {
-            wrote = services.caretObserver.replaceRange(range, with: payload,
-                                                        describedAs: announcement)
+            wrote = context.text?.replaceRange(range, with: payload,
+                                               describedAs: announcement) ?? false
         }
         state.lastTranscript = trimmed
         Log.info("VoiceDictation inserted \(trimmed.count) chars at offset \(capturedOffset) wrote=\(wrote)")
@@ -223,17 +230,12 @@ final class VoiceDictation: HalenPlugin {
 
     // MARK: - Permission denial fallback
 
-    /// Posts a one-shot system notification when ⌃⌥Space is pressed but Mic or
-    /// Speech Recognition is denied. The notification body names which
-    /// permission needs flipping; the user clicks through to the right
-    /// pane of System Settings.
-    ///
-    /// Halen has the Notification permission only if the user has granted
-    /// it — Ask Halen and the Snippet Expander request it lazily. If none has
-    /// run, `add()` no-ops; we still log the missing permission so the
-    /// user can find it from the detail view's permission status.
-    private func postPermissionDeniedNotification() {
-        let mic   = state.micPermission == .denied
+    /// Posts a toast when ⌃⌥Space is pressed but Mic or Speech Recognition is
+    /// denied, naming which permission needs flipping — then deep-links the
+    /// exact Privacy & Security pane through the host's permission broker
+    /// (most users won't see the toast if Notifications was never granted).
+    private func notifyPermissionDenied() {
+        let mic    = state.micPermission == .denied
         let speech = state.speechPermission == .denied
         let what: String
         switch (mic, speech) {
@@ -243,30 +245,12 @@ final class VoiceDictation: HalenPlugin {
         default:             return     // nothing to nag about
         }
 
-        let content = UNMutableNotificationContent()
-        content.title = "Voice Dictation needs permission"
-        content.body  = "Halen can't hear you — \(what) was denied. Click to open System Settings."
-        content.sound = nil
-
-        let request = UNNotificationRequest(
-            identifier: "voice-dictation-denied-\(Int(Date().timeIntervalSince1970))",
-            content: content,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
-        )
-        Task {
-            let center = UNUserNotificationCenter.current()
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
-            try? await center.add(request)
-        }
-        // Also open Settings directly — most users won't see the
-        // notification banner if Halen's never been granted Notifications.
+        context.ui?.toast(
+            title: "Voice Dictation needs permission",
+            body: "Halen can't hear you — \(what) was denied. Flip it in System Settings.")
         // The deep link target is the privacy pane that actually contains
         // the toggle the user needs to flip.
-        if mic {
-            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
-        } else if speech {
-            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition")!)
-        }
+        context.permissions.openSystemSettings(for: mic ? .microphone : .speechRecognition)
     }
 
     // MARK: - Listening indicator
@@ -329,9 +313,14 @@ final class VoiceDictationState {
     enum Engine { case idle, listening, transcribing }
 
     var engine: Engine = .idle
-    var micPermission: PermissionState = .notDetermined
-    var speechPermission: PermissionState = .notDetermined
+    var micPermission: PermissionGrant = .notRequested
+    var speechPermission: PermissionGrant = .notRequested
     var lastTranscript: String?
+
+    /// Host permission broker, injected by the plugin. Status reads and the
+    /// System Settings deep link both go through it — the plugin never calls
+    /// TCC APIs directly.
+    @ObservationIgnored weak var permissions: (any PermissionService)?
 
     /// Rolling window of recent audio levels (0…1). Drives the live visualiser
     /// in the listening pill.
@@ -351,39 +340,13 @@ final class VoiceDictationState {
     }
 
     func refreshPermissions() {
-        micPermission = MicPermission.current
-        speechPermission = SpeechPermission.current
+        micPermission = permissions?.status(of: .microphone) ?? .notRequested
+        speechPermission = permissions?.status(of: .speechRecognition) ?? .notRequested
     }
-}
 
-// MARK: - Permission helpers
-
-enum PermissionState: Sendable {
-    case notDetermined
-    case granted
-    case denied
-}
-
-enum MicPermission {
-    static var current: PermissionState {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized:      return .granted
-        case .notDetermined:   return .notDetermined
-        case .denied,
-             .restricted:      return .denied
-        @unknown default:      return .notDetermined
-        }
-    }
-}
-
-enum SpeechPermission {
-    static var current: PermissionState {
-        switch SFSpeechRecognizer.authorizationStatus() {
-        case .authorized:    return .granted
-        case .notDetermined: return .notDetermined
-        case .denied,
-             .restricted:    return .denied
-        @unknown default:    return .notDetermined
-        }
+    /// Open the Privacy & Security pane for `permission` — surfaced from the
+    /// detail view's "Open Settings" affordance next to a denied row.
+    func openSystemSettings(for permission: SystemPermission) {
+        permissions?.openSystemSettings(for: permission)
     }
 }

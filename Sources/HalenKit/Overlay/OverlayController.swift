@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import HalenPluginAPI
 
 /// Two independent floating panels next to the focused text field:
 ///
@@ -15,7 +16,7 @@ import SwiftUI
 ///
 /// User can turn the whole thing off via Settings → Cursor overlay.
 @MainActor
-final class OverlayController {
+package final class OverlayController {
     private let eventBus: EventBus
     /// Shared observable state for the caret indicator (severity tint,
     /// hover state). Owned here; observed by `HalenCaretIndicator` so the
@@ -72,25 +73,25 @@ final class OverlayController {
     static let dotSize: CGFloat = 16
 
     /// UserDefaults key. Read on every `showCaret()` so the toggle takes effect live.
-    static let showDotKey = "halen.showOverlayDot"
+    package static let showDotKey = "halen.showOverlayDot"
 
     /// UserDefaults key for "minimal" indicator mode. When on (the default), the
     /// dot only appears for an active finding (sentiment/clarity) or while Halen
     /// is working (rewriting / classification) — not as an idle cursor-follower.
     /// Off restores the always-on dot that trails the caret while you type.
-    static let minimalDotKey = "halen.minimalOverlayDot"
+    package static let minimalDotKey = "halen.minimalOverlayDot"
 
     /// UserDefaults key for the indicator's visual style. Two values:
     /// `"solid"` (default — filled cobalt mark) and `"outline"` (white-filled
     /// speech bubble with a cobalt outline and eyes). `HalenCaretIndicator`
     /// reads this via `@AppStorage` so the toggle takes effect live.
-    static let dotStyleKey = "halen.overlayDotStyle"
+    package static let dotStyleKey = "halen.overlayDotStyle"
 
-    init(eventBus: EventBus) {
+    package init(eventBus: EventBus) {
         self.eventBus = eventBus
     }
 
-    func start() {
+    package func start() {
         // Caret indicator: the SwiftUI logo is the content view directly — no
         // container, no offset subview. This is the proven original layout.
         // The indicator panel stays at the original 16×16 size whether or
@@ -189,7 +190,7 @@ final class OverlayController {
         }
     }
 
-    func stop() {
+    package func stop() {
         subscribeTask?.cancel()
         hideTask?.cancel()
         hideTask = nil

@@ -1,3 +1,4 @@
+import HalenPluginAPI
 import SwiftUI
 
 @MainActor

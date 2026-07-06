@@ -1,4 +1,5 @@
 import AppKit
+import HalenPluginAPI
 import SwiftUI
 import Foundation
 
@@ -11,15 +12,12 @@ import Foundation
 /// Approved fingerprints persist to disk so the same text never re-flags across
 /// sessions.
 @MainActor
-final class SentimentGuard: HalenPlugin {
-    let id = "com.halen.sentiment-guard"
-    let name = "Sentiment Guard"
-    let summary = "Warns you before sending something that reads as angry or hostile."
-    let icon = "exclamationmark.bubble"
-    let category: PluginCategory = .writing
+final class SentimentGuard {
+    /// Event `source` id for findings — kept at the engine's old plugin id so
+    /// finding sources stay stable across the plugin-platform migration.
+    private let sourceId = "com.halen.sentiment-guard"
 
-    private let services: HalenServices
-    private weak var caretObserver: CaretObserver?
+    private let context: PluginContext
     let rulesStore: SentimentRulesStore
     private var task: Task<Void, Never>?
 
@@ -149,11 +147,13 @@ final class SentimentGuard: HalenPlugin {
     }
     private var pendingFindings: [String: ActiveFinding] = [:]
 
-    init(services: HalenServices) {
-        self.services = services
-        self.caretObserver = services.caretObserver
-        let storageDir = services.storageDirectory(for: "com.halen.sentiment-guard")
-        self.rulesStore = SentimentRulesStore(fileURL: storageDir.appending(path: "rules.json"))
+    init(context: PluginContext) {
+        self.context = context
+        // The engines share the Writing Assistant's single storage directory,
+        // so each store gets its own filename instead of the per-engine
+        // directory the old per-plugin ids provided.
+        let storageDir = context.storage.directory
+        self.rulesStore = SentimentRulesStore(fileURL: storageDir.appending(path: "sentiment-rules.json"))
         self.approvedHashes = ApprovedHashesStore(
             fileURL: storageDir.appending(path: "approved.json"),
             logPrefix: "SentimentGuard")
@@ -163,8 +163,8 @@ final class SentimentGuard: HalenPlugin {
         AnyView(
             SentimentGuardDetailView(
                 rulesStore: rulesStore,
-                toneProfiles: services.toneProfiles,
-                recentApps: services.recentApps,
+                toneProfiles: context.toneProfiles,
+                recentApps: context.recentApps,
                 approvedCount: approvedHashes.count,
                 flaggedCount: flaggedThisSession,
                 onClearApproved: { [weak self] in
@@ -176,8 +176,8 @@ final class SentimentGuard: HalenPlugin {
 
     func start() {
         guard task == nil else { return }
-        task = Task { @MainActor [services, weak self] in
-            for await event in services.eventBus.subscribe() {
+        task = Task { @MainActor [events = context.events, weak self] in
+            for await event in events.subscribe() {
                 guard let self else { return }
                 switch event {
                 case .caretMoved(let payload):
@@ -188,9 +188,9 @@ final class SentimentGuard: HalenPlugin {
                                                 caretOffset: payload.caretOffset,
                                                 appBundleId: payload.appBundleId)
                 case .findingActionRequested(let payload):
-                    // Only ours; other plugins (ClarityChecker, …) get their
+                    // Only ours; other engines (ClarityChecker, …) get their
                     // own events keyed by their own source id.
-                    guard payload.source == self.id else { break }
+                    guard payload.source == self.sourceId else { break }
                     self.handleAction(payload)
                 default:
                     break
@@ -261,7 +261,7 @@ final class SentimentGuard: HalenPlugin {
         // user may have moved the caret, scrolled, or switched fields, and
         // anchoring then would float the popup far from the text it's about.
         let anchorSnapshot = CaretAnchoredPanel.resolveAnchor(
-            caretObserver: caretObserver, cachedCaretRect: lastCaretRect)
+            element: context.text?.focusedElement, cachedCaretRect: lastCaretRect)
 
         let categoriesBlock = enabled
             .map { "- \($0.label.lowercased()): \($0.prompt)" }
@@ -276,8 +276,9 @@ final class SentimentGuard: HalenPlugin {
         let enabledLabels = Set(enabled.map { $0.label.lowercased() })
         let examplesBlock = Self.fewShotExamples(forLabels: enabledLabels)
         // Bias the classifier by the app's tone profile — a blunt Slack
-        // message shouldn't be judged the way a blunt email is.
-        let toneClause = services.toneProfiles.profile(for: appBundleId).promptClause
+        // message shouldn't be judged the way a blunt email is. When the
+        // tone-profiles capability is revoked, fall back to neutral.
+        let toneClause = (context.toneProfiles?.profile(for: appBundleId) ?? .neutral).promptClause
         // Sensitivity slider — strict/balanced/lax. Appended as a single
         // sentence; Qwen 0.5B doesn't expose logits we could threshold, so
         // we lean on the prompt to shift the bar instead.
@@ -305,7 +306,7 @@ final class SentimentGuard: HalenPlugin {
         let request = InferenceRequest(prompt: prompt, tier: .classifier, maxTokens: 12,
                                        temperature: 0.1, taskKind: .classification)
         do {
-            let response = try await services.inference.complete(request)
+            let response = try await context.inference.complete(request)
             let label = response.text.modelLabelToken
             Log.info("SentimentGuard: \(label) (\(response.latencyMs)ms)")
             // Conciseness check — a zero-cost rule-based scan that runs
@@ -319,9 +320,12 @@ final class SentimentGuard: HalenPlugin {
             // register assigned. Apps left Neutral are skipped entirely.
             // On "lax", skip the register pass entirely — the user only wants
             // unambiguous flags, and a one-label register guess is too noisy.
+            // With the tone-profiles capability revoked there's no target
+            // register to check against, so the whole pass is skipped.
             var mismatch: ToneMismatch? = nil
-            if matched == nil, Self.enforceToneEnabled, Self.sensitivity != .lax {
-                let target = services.toneProfiles.profile(for: appBundleId)
+            if matched == nil, Self.enforceToneEnabled, Self.sensitivity != .lax,
+               let toneProfiles = context.toneProfiles {
+                let target = toneProfiles.profile(for: appBundleId)
                 if target.enforcesTarget {
                     mismatch = await classifyRegisterMismatch(paragraph: paragraph, target: target)
                 }
@@ -342,8 +346,8 @@ final class SentimentGuard: HalenPlugin {
                 // any prior finding the overlay was still showing, and drop its
                 // cached context so a late action can't reopen stale text.
                 pendingFindings.removeAll()
-                services.eventBus.publish(.findingsCleared(.init(
-                    source: id, id: nil, timestamp: Date())))
+                context.events.publish(.findingsCleared(.init(
+                    source: sourceId, id: nil, timestamp: Date())))
             }
         } catch {
             Log.warn("SentimentGuard: inference failed: \(error)")
@@ -369,7 +373,7 @@ final class SentimentGuard: HalenPlugin {
         let request = InferenceRequest(prompt: prompt, tier: .classifier, maxTokens: 8,
                                        temperature: 0.0, taskKind: .classification)
         do {
-            let response = try await services.inference.complete(request)
+            let response = try await context.inference.complete(request)
             guard !Task.isCancelled else { return nil }
             // Exact-token parse via the shared helper. It returns nil for
             // "neutral", "informal", or any off-list reply — so a clean message,
@@ -417,7 +421,7 @@ final class SentimentGuard: HalenPlugin {
             summary = "\(fillers.count) wordy phrases"
         }
         let hash = sha256Hex(paragraph)
-        let findingId = "\(id):\(hash.prefix(12))"
+        let findingId = "\(sourceId):\(hash.prefix(12))"
         let anchorRect = anchor.map { Event.CaretRect(
             x: $0.rect.minX, y: $0.rect.minY,
             width: $0.rect.width, height: $0.rect.height) }
@@ -431,9 +435,9 @@ final class SentimentGuard: HalenPlugin {
             paragraph: paragraph, anchor: anchor, appBundleId: appBundleId,
             rule: rule, mismatch: mismatch, fillers: fillers, hash: hash)
 
-        services.eventBus.publish(.findingDetected(.init(
+        context.events.publish(.findingDetected(.init(
             id: findingId,
-            source: id,
+            source: sourceId,
             severity: severity,
             summary: summary,
             anchor: anchorRect,
@@ -462,8 +466,8 @@ final class SentimentGuard: HalenPlugin {
             approve(hash: context.hash)
             Log.info("SentimentGuard: approved finding \(request.findingId)")
             pendingFindings.removeValue(forKey: request.findingId)
-            services.eventBus.publish(.findingsCleared(.init(
-                source: id, id: request.findingId, timestamp: Date())))
+            context.events.publish(.findingsCleared(.init(
+                source: sourceId, id: request.findingId, timestamp: Date())))
         case .rephrase:
             Log.info("SentimentGuard: rephrase requested for \(request.findingId)")
             // Reopen the legacy streaming popup to host the rewrite. It
@@ -478,8 +482,8 @@ final class SentimentGuard: HalenPlugin {
                       appBundleId: context.appBundleId,
                       anchor: context.anchor)
             pendingFindings.removeValue(forKey: request.findingId)
-            services.eventBus.publish(.findingsCleared(.init(
-                source: id, id: request.findingId, timestamp: Date())))
+            context.events.publish(.findingsCleared(.init(
+                source: sourceId, id: request.findingId, timestamp: Date())))
             // Kick off streaming immediately — the user's intent is already
             // "Rephrase," no need to make them click another button. For a
             // register mismatch we rewrite toward the app's target tone.
@@ -569,7 +573,7 @@ final class SentimentGuard: HalenPlugin {
         // Cache it on `activeAnchor` so `resizePopup` can re-clamp the frame
         // to the same screen when the panel grows for the streaming pane.
         let resolved = anchor ?? CaretAnchoredPanel.resolveAnchor(
-            caretObserver: caretObserver, cachedCaretRect: lastCaretRect)
+            element: context.text?.focusedElement, cachedCaretRect: lastCaretRect)
         activeAnchor = resolved
         panel.setFrame(CaretAnchoredPanel.frame(for: resolved,
                                                 size: CGSize(width: Self.popupIdleSize.width,
@@ -647,9 +651,9 @@ final class SentimentGuard: HalenPlugin {
         let request = InferenceRequest(prompt: prompt, tier: .medium, maxTokens: 400,
                                        temperature: 0.5, taskKind: .generation)
 
-        rephraseTask = Task { @MainActor [services, weak self] in
+        rephraseTask = Task { @MainActor [inference = context.inference, weak self] in
             do {
-                for try await snapshot in services.inference.stream(request) {
+                for try await snapshot in inference.stream(request) {
                     guard !Task.isCancelled, let state = self?.rephraseState else { return }
                     state.rewrite = snapshot
                 }
@@ -672,8 +676,13 @@ final class SentimentGuard: HalenPlugin {
     /// Copy the streamed rewrite to the clipboard and close the popup.
     private func copyRephrase() {
         guard let rewrite = rephraseState?.rewrite, !rewrite.isEmpty else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(rewrite, forType: .string)
+        guard let clipboard = context.clipboard else {
+            // Capability revoked mid-flight — the copy simply doesn't happen.
+            Log.warn("SentimentGuard: clipboard capability revoked — rewrite not copied")
+            closePanel()
+            return
+        }
+        clipboard.write(rewrite)
         Log.info("SentimentGuard: rephrase copied to clipboard")
         // VoiceOver bridge — the popup just vanished and the rewrite landed
         // on the clipboard; sighted users see the action complete, VO users
