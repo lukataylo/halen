@@ -457,13 +457,15 @@ final class SentimentGuard {
     ///     live. Clears the finding once the popup is in place — the
     ///     popup is now the primary surface.
     private func handleAction(_ request: Event.FindingActionRequested) {
-        guard let context = pendingFindings[request.findingId] else {
+        // Named `finding`, not `context` — the plugin's PluginContext
+        // property must stay reachable for the publish calls below.
+        guard let finding = pendingFindings[request.findingId] else {
             Log.warn("SentimentGuard: action \(request.action.rawValue) for unknown finding \(request.findingId)")
             return
         }
         switch request.action {
         case .approve:
-            approve(hash: context.hash)
+            approve(hash: finding.hash)
             Log.info("SentimentGuard: approved finding \(request.findingId)")
             pendingFindings.removeValue(forKey: request.findingId)
             context.events.publish(.findingsCleared(.init(
@@ -474,21 +476,21 @@ final class SentimentGuard {
             // owns the FindingsPopover + StreamingRewriteState plumbing and
             // wires Copy/Close cleanly. Clear the indicator's tint — the
             // popup is now where the user's attention should be.
-            showPopup(text: context.paragraph,
-                      rule: context.rule,
-                      mismatch: context.mismatch,
-                      fillers: context.fillers,
-                      hash: context.hash,
-                      appBundleId: context.appBundleId,
-                      anchor: context.anchor)
+            showPopup(text: finding.paragraph,
+                      rule: finding.rule,
+                      mismatch: finding.mismatch,
+                      fillers: finding.fillers,
+                      hash: finding.hash,
+                      appBundleId: finding.appBundleId,
+                      anchor: finding.anchor)
             pendingFindings.removeValue(forKey: request.findingId)
             context.events.publish(.findingsCleared(.init(
                 source: sourceId, id: request.findingId, timestamp: Date())))
             // Kick off streaming immediately — the user's intent is already
             // "Rephrase," no need to make them click another button. For a
             // register mismatch we rewrite toward the app's target tone.
-            beginRephrase(originalText: context.paragraph,
-                          targetTone: context.mismatch?.target)
+            beginRephrase(originalText: finding.paragraph,
+                          targetTone: finding.mismatch?.target)
         }
     }
 
