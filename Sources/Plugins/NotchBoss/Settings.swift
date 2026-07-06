@@ -609,6 +609,17 @@ struct PluginCard: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(descriptor.accentColor)
                 .buttonStyle(.plain)
+
+                // NotchBar exposed removal via its menu bar ("Remove
+                // Connection"); the menu is gone, so it lives here now.
+                if integrationInstalled {
+                    Button(descriptor.removeActionTitle) {
+                        _ = ProviderManager.shared?.controller(for: descriptor.id)?.removeIntegration()
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
