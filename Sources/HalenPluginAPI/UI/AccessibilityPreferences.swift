@@ -159,6 +159,7 @@ extension View {
     /// Honors macOS's "Reduce transparency" accessibility pref. Use in place
     /// of a raw `.background(<Material>)` on glassy surfaces so low-vision
     /// users get an opaque, high-contrast fallback.
+    @MainActor
     public func adaptiveMaterial(
         _ material: Material,
         fallback: Color = Color(nsColor: .windowBackgroundColor)

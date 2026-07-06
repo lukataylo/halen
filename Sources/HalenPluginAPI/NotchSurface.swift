@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Identity + geometry of one screen the notch surface renders on.
-public struct NotchScreenInfo: Hashable, Sendable {
+public struct NotchScreenInfo: Equatable, Hashable, Sendable {
     public let screenID: CGDirectDisplayID
     /// True when the screen has a physical notch (safe-area inset at top).
     public let hasNotch: Bool
@@ -12,6 +12,16 @@ public struct NotchScreenInfo: Hashable, Sendable {
         self.screenID = screenID
         self.hasNotch = hasNotch
         self.frame = frame
+    }
+
+    // CGRect isn't Hashable, so synthesis fails; hash the components.
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(screenID)
+        hasher.combine(hasNotch)
+        hasher.combine(frame.origin.x)
+        hasher.combine(frame.origin.y)
+        hasher.combine(frame.size.width)
+        hasher.combine(frame.size.height)
     }
 }
 
