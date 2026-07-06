@@ -14,12 +14,12 @@ import ApplicationServices
 /// establishes a process default; setting it on an app element overrides for
 /// that app. Children inherit from their app. We do both — global at startup,
 /// per-app on focus change — so no AX call can outrun the budget.
-let axMessagingTimeoutSeconds: Float = 0.5
+public let axMessagingTimeoutSeconds: Float = 0.5
 
 /// Apply `axMessagingTimeoutSeconds` as the process-wide default. Call once
 /// from `AppCoordinator.start()`. Safe to call again; `AXUIElementSetMessagingTimeout`
 /// is idempotent.
-func axInstallGlobalMessagingTimeout() {
+public func axInstallGlobalMessagingTimeout() {
     let systemWide = AXUIElementCreateSystemWide()
     let status = AXUIElementSetMessagingTimeout(systemWide, axMessagingTimeoutSeconds)
     if status != .success {
@@ -28,15 +28,15 @@ func axInstallGlobalMessagingTimeout() {
 }
 
 /// Apply the timeout to a specific app element. Child elements (focused field,
-/// windows) inherit from the app. Call from `CaretObserver.switchToApp` after
+/// windows) inherit from the app. Call from the host's caret observer after
 /// `AXUIElementCreateApplication`. Errors are logged but non-fatal — the
 /// global timeout is the backstop.
-func axApplyMessagingTimeout(to element: AXUIElement) {
+public func axApplyMessagingTimeout(to element: AXUIElement) {
     _ = AXUIElementSetMessagingTimeout(element, axMessagingTimeoutSeconds)
 }
 
 /// Read a string-valued AX attribute, returning `nil` if absent or wrong type.
-func axReadString(_ element: AXUIElement, _ name: String) -> String? {
+public func axReadString(_ element: AXUIElement, _ name: String) -> String? {
     var value: CFTypeRef?
     let result = AXUIElementCopyAttributeValue(element, name as CFString, &value)
     guard result == .success, let v = value as? String else { return nil }
@@ -79,7 +79,7 @@ private func axAsAXValue(_ value: CFTypeRef) -> AXValue? {
 }
 
 /// Read the focused UI element from an application element.
-func axReadFocusedElement(_ appElement: AXUIElement) -> AXUIElement? {
+public func axReadFocusedElement(_ appElement: AXUIElement) -> AXUIElement? {
     var value: CFTypeRef?
     let result = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &value)
     guard result == .success, let v = value else { return nil }
@@ -87,7 +87,7 @@ func axReadFocusedElement(_ appElement: AXUIElement) -> AXUIElement? {
 }
 
 /// Read `kAXSelectedTextRangeAttribute` as a `CFRange` (location is the caret offset when length == 0).
-func axReadSelectedRange(_ element: AXUIElement) -> CFRange? {
+public func axReadSelectedRange(_ element: AXUIElement) -> CFRange? {
     var value: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &value) == .success,
           let v = value, let axValue = axAsAXValue(v) else { return nil }
@@ -100,14 +100,14 @@ func axReadSelectedRange(_ element: AXUIElement) -> CFRange? {
 /// an empty string when there is no selection (caret only) — callers should
 /// pair this with `axReadSelectedRange` and check the range length to tell
 /// "nothing selected" apart from "selection is genuinely empty".
-func axReadSelectedText(_ element: AXUIElement) -> String {
+public func axReadSelectedText(_ element: AXUIElement) -> String {
     axReadString(element, kAXSelectedTextAttribute) ?? ""
 }
 
 /// On-screen bounding rect of an arbitrary text range via
 /// `kAXBoundsForRangeParameterizedAttribute`. Rect is in AX coordinates
 /// (top-left origin, primary-display space) — use `axRectToCocoa` to convert.
-func axReadBounds(_ element: AXUIElement, range: CFRange) -> CGRect? {
+public func axReadBounds(_ element: AXUIElement, range: CFRange) -> CGRect? {
     var cfRange = range
     guard let axRange: AXValue = withUnsafePointer(to: &cfRange, { ptr in
         AXValueCreate(.cfRange, UnsafeRawPointer(ptr))
@@ -128,7 +128,7 @@ func axReadBounds(_ element: AXUIElement, range: CFRange) -> CGRect? {
 
 /// Resolve the on-screen bounding rect of the caret (a zero-length range at the
 /// current caret offset). See `axReadBounds`.
-func axReadCaretBounds(_ element: AXUIElement) -> CGRect? {
+public func axReadCaretBounds(_ element: AXUIElement) -> CGRect? {
     guard let selection = axReadSelectedRange(element) else { return nil }
     return axReadBounds(element, range: CFRange(location: selection.location, length: 0))
 }
@@ -138,7 +138,7 @@ func axReadCaretBounds(_ element: AXUIElement) -> CGRect? {
 /// isn't supported by the element (Electron, most browser text fields) and
 /// we just need *somewhere reasonable* to anchor UI relative to the field
 /// the user is typing in. Returns AX coords — convert via `axRectToCocoa`.
-func axReadFrame(_ element: AXUIElement) -> CGRect? {
+public func axReadFrame(_ element: AXUIElement) -> CGRect? {
     var value: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, "AXFrame" as CFString, &value) == .success,
           let v = value, let axValue = axAsAXValue(v) else { return nil }
@@ -151,7 +151,7 @@ func axReadFrame(_ element: AXUIElement) -> CGRect? {
 /// its on-screen frame. The window frame is the broadest fallback that's
 /// still the right *region of the screen* (vs. pinning to a screen corner)
 /// when neither caret bounds nor element frame are available.
-func axReadContainingWindowFrame(_ element: AXUIElement) -> CGRect? {
+public func axReadContainingWindowFrame(_ element: AXUIElement) -> CGRect? {
     var windowRef: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, kAXWindowAttribute as CFString, &windowRef) == .success,
           let win = windowRef, let windowElement = axAsAXUIElement(win) else { return nil }
@@ -194,7 +194,7 @@ private enum PrimaryScreen {
 /// (bottom-left origin). Multi-monitor setups with displays above the primary need extra
 /// work — handled in a later milestone.
 @MainActor
-func axRectToCocoa(_ axRect: CGRect) -> CGRect {
+public func axRectToCocoa(_ axRect: CGRect) -> CGRect {
     let primaryHeight = PrimaryScreen.height
     guard primaryHeight > 0 else { return axRect }
     return CGRect(

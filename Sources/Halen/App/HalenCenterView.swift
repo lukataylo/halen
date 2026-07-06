@@ -1,5 +1,7 @@
 import SwiftUI
 import Observation
+import HalenKit
+import HalenPluginAPI
 
 /// The plugin marketplace / control center shown when the user clicks the menubar icon.
 /// Native materials, category-grouped plugin cards, per-plugin toggles, footer with
@@ -8,29 +10,25 @@ enum CenterNav: Equatable {
     case marketplace
     case plugin(String)
     case settings
+    case permissions
 }
 
 @MainActor
 struct HalenCenterView: View {
+    /// The coordinator itself — the Permissions screen needs the manifest
+    /// table, the grant broker, and plugin reload.
+    let coordinator: AppCoordinator
     @Bindable var state: AppState
     let registry: PluginRegistry
     @Bindable var inferenceSettings: InferenceSettings
     let router: RouterInferenceClient
     @Bindable var modelDownloader: ModelDownloader
-    /// Optional — only present once `AppCoordinator.startObservers()` has run
-    /// (which happens after Accessibility is granted). The Settings card hides
-    /// the WS section while it's nil to avoid a half-rendered control.
-    let webSocketBridge: WebSocketBridge?
     /// Owned by AppCoordinator so its observable status survives the menubar
     /// popup closing — passed through to SettingsView's startup card.
     @Bindable var launchAtLogin: LaunchAtLoginController
     /// Process-wide hotkey conflict tracker. Observed by SettingsView so a
     /// collision detected at plugin startup renders a warning card.
     @Bindable var hotkeyConflicts: HotkeyConflictRegistry
-    /// Opens the Plugin Store. It's a standalone window (not a sheet on this
-    /// dropdown) so it survives the menubar popover closing — see
-    /// `PluginStoreWindowController`.
-    let onOpenStore: () -> Void
     /// Re-trigger the first-run setup walkthrough. Wired through to
     /// `AppCoordinator.onboardingWindow.presentAgain()`. Surfaced in
     /// SettingsView's About card.
@@ -62,12 +60,18 @@ struct HalenCenterView: View {
                     inferenceSettings: inferenceSettings,
                     router: router,
                     modelDownloader: modelDownloader,
-                    webSocketBridge: webSocketBridge,
                     launchAtLogin: launchAtLogin,
                     hotkeyConflicts: hotkeyConflicts,
                     onBack: { back() },
                     onRunSetupAgain: onRunSetupAgain,
                     updater: updater
+                )
+                .transition(navTransition(from: .trailing))
+            case .permissions:
+                PermissionsView(
+                    coordinator: coordinator,
+                    broker: coordinator.broker,
+                    onBack: { back() }
                 )
                 .transition(navTransition(from: .trailing))
             }
@@ -137,18 +141,19 @@ struct HalenCenterView: View {
 
             Spacer()
 
-            // Opens the Plugin Store in its own standalone window — kept
-            // out of the plugin list so "browse/install plugins" reads as a
-            // distinct action, not another plugin row.
-            Button(action: onOpenStore) {
-                Image(systemName: "puzzlepiece.extension.fill")
+            // The permissions screen is one tap from the front door on
+            // purpose — seeing exactly what touches your text is the brand.
+            Button {
+                push(.permissions)
+            } label: {
+                Image(systemName: "checkmark.shield.fill")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Plugin Store")
+            .help("Permissions")
 
             Button {
                 push(.settings)
@@ -283,9 +288,9 @@ struct HalenCenterView: View {
     private var footer: some View {
         HStack(spacing: 4) {
             Button {
-                AXPermissions.openSettings()
+                push(.permissions)
             } label: {
-                Label("Accessibility", systemImage: "checkmark.shield")
+                Label("Permissions", systemImage: "checkmark.shield")
                     .labelStyle(.titleAndIcon)
             }
             .buttonStyle(.borderless)
@@ -371,4 +376,19 @@ struct PluginRow: View {
     }
 
     private var tint: Color { pluginCategoryTint(plugin.category) }
+}
+
+
+/// Tint for a plugin category's icon badge. Lived in the Plugin Store view
+/// before the store was removed; the row badges still use it.
+@MainActor
+func pluginCategoryTint(_ category: PluginCategory) -> Color {
+    switch category {
+    case .writing:      return Color.halenCobalt
+    case .voice:        return .purple
+    case .scheduling:   return .teal
+    case .focus:        return .orange
+    case .productivity: return .indigo
+    case .agents:       return .pink
+    }
 }

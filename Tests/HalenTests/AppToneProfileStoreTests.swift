@@ -1,5 +1,5 @@
 import XCTest
-@testable import Halen
+@testable import HalenPluginAPI
 
 /// Tone Profiles is the host service Sentiment Guard and Clarity Checker read
 /// to decide whether a given app's text is "formal" or "casual." A drift in

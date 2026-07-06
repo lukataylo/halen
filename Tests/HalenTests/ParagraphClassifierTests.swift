@@ -1,5 +1,5 @@
 import XCTest
-@testable import Halen
+@testable import HalenPluginAPI
 
 /// Behavioural tests for `ParagraphClassifier`'s LRU dedup. The class's other
 /// responsibilities (settle debounce, paragraph extraction) are covered

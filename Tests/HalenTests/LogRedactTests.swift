@@ -1,5 +1,5 @@
 import XCTest
-@testable import Halen
+@testable import HalenPluginAPI
 
 final class LogRedactTests: XCTestCase {
     /// The whole point of redaction is that the original text never appears

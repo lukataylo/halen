@@ -11,7 +11,7 @@ import AppKit
 /// factory is the single definition; the per-site differences that *matter*
 /// (level, shadow, whether it takes clicks) are explicit parameters,
 /// everything else is uniform and correct.
-enum HalenFloatingPanel {
+public enum HalenFloatingPanel {
 
     /// Build a configured borderless floating panel. The caller still owns
     /// `contentView` and positioning (`setFrame`/`orderFront…`).
@@ -25,10 +25,10 @@ enum HalenFloatingPanel {
     /// - shadow: drop shadow. Off for the tiny caret indicator (a shadow
     ///   under a 16 pt mark just smudges it), on for popovers.
     @MainActor
-    static func make(size: NSSize,
-                     level: NSWindow.Level,
-                     interactive: Bool,
-                     shadow: Bool) -> NSPanel {
+    public static func make(size: NSSize,
+                            level: NSWindow.Level,
+                            interactive: Bool,
+                            shadow: Bool) -> NSPanel {
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],

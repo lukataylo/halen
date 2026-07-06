@@ -21,7 +21,7 @@ import Foundation
 /// with the label, persistent allowlists — lives in the per-call `classify`
 /// closure.
 @MainActor
-final class ParagraphClassifier {
+public final class ParagraphClassifier {
     private let minLength: Int
     /// Upper bound on paragraph size in characters. A multi-KB paste is
     /// almost always something the user doesn't want classified (a code
@@ -43,10 +43,10 @@ final class ParagraphClassifier {
     /// skipped forever after one cancellation.
     private var seenLRU: [String] = []
 
-    init(minLength: Int = 60,
-         maxLength: Int = 4_000,
-         settleDelay: TimeInterval = 1.0,
-         maxCacheSize: Int = 256) {
+    public init(minLength: Int = 60,
+                maxLength: Int = 4_000,
+                settleDelay: TimeInterval = 1.0,
+                maxCacheSize: Int = 256) {
         self.minLength = minLength
         self.maxLength = maxLength
         self.settleDelay = settleDelay
@@ -62,10 +62,10 @@ final class ParagraphClassifier {
     /// time of typing, for example) without changing the classifier's API.
     /// Calling `schedule` again before the prior settle elapses cancels the
     /// pending work — only the most-recent paragraph gets classified.
-    func schedule(text: String,
-                  caretOffset: Int,
-                  eligibility: @escaping @MainActor (String) -> Bool = { _ in true },
-                  classify: @escaping @MainActor (String) async -> Void) {
+    public func schedule(text: String,
+                         caretOffset: Int,
+                         eligibility: @escaping @MainActor (String) -> Bool = { _ in true },
+                         classify: @escaping @MainActor (String) async -> Void) {
         task?.cancel()
         task = Task { @MainActor [weak self, settleDelay] in
             try? await Task.sleep(for: .seconds(settleDelay))
@@ -76,7 +76,7 @@ final class ParagraphClassifier {
     }
 
     /// Cancel any pending settle. Plugins should call from `stop()`.
-    func cancel() {
+    public func cancel() {
         task?.cancel()
         task = nil
     }

@@ -1,5 +1,6 @@
 import XCTest
-@testable import Halen
+@testable import HalenKit
+import HalenPluginAPI
 
 /// The Content-Range parser is the security boundary between trusting an
 /// HTTP 206 response (server claims it's resuming our partial transfer at

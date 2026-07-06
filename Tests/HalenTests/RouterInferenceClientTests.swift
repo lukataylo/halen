@@ -1,5 +1,6 @@
 import XCTest
-@testable import Halen
+@testable import HalenKit
+import HalenPluginAPI
 
 // MARK: - Test double
 

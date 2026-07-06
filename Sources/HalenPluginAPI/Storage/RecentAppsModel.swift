@@ -10,16 +10,23 @@ import Observation
 /// plugin happens to be alive at the moment.
 @Observable
 @MainActor
-final class RecentAppsModel {
-    struct App: Identifiable, Sendable {
-        var id: String { bundleId }
-        let bundleId: String
-        var name: String
+public final class RecentAppsModel {
+    public struct App: Identifiable, Sendable {
+        public var id: String { bundleId }
+        public let bundleId: String
+        public var name: String
+
+        public init(bundleId: String, name: String) {
+            self.bundleId = bundleId
+            self.name = name
+        }
     }
 
-    private(set) var apps: [App] = []
+    public private(set) var apps: [App] = []
 
-    func note(bundleId: String, name: String) {
+    public init() {}
+
+    public func note(bundleId: String, name: String) {
         guard !bundleId.isEmpty else { return }
         if let idx = apps.firstIndex(where: { $0.bundleId == bundleId }) {
             apps[idx].name = name

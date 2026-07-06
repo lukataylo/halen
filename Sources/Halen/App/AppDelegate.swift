@@ -1,4 +1,6 @@
 import AppKit
+import HalenKit
+import HalenPluginAPI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {

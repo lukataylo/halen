@@ -1,0 +1,13 @@
+{
+  "id": "com.example.clipboard-cleaner",
+  "name": "Clipboard Cleaner",
+  "summary": "Press ⌃⌥⇧V to strip tracking junk and messy whitespace from your clipboard.",
+  "version": "1.0.0",
+  "halenApiVersion": "0.1",
+  "executable": "/usr/bin/python3",
+  "args": ["plugin.py"],
+  "events": ["hotkey.fired"],
+  "capabilities": ["clipboard", "hotkeys", "notifications"],
+  "icon": "doc.on.clipboard",
+  "category": "productivity"
+}

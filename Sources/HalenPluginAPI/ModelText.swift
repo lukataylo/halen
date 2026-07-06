@@ -21,7 +21,7 @@ extension String {
     /// then re-trim whitespace the unwrap exposed (`" hello "` → `hello`).
     /// Interior and *trailing* punctuation is preserved — a rewritten
     /// paragraph keeps its full stop.
-    var unwrappedModelText: String {
+    public var unwrappedModelText: String {
         trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: Self.modelWrapperChars)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -32,7 +32,7 @@ extension String {
     /// punctuation (`"Irritated."` → `irritated`, `"\"yes\""` → `yes`), then
     /// takes the first whitespace-delimited word. For yes/no and
     /// single-label classification prompts — never for generative output.
-    var modelLabelToken: String {
+    public var modelLabelToken: String {
         let strip = Self.modelWrapperChars.union(CharacterSet(charactersIn: ".,!?:; "))
         return lowercased()
             .trimmingCharacters(in: .whitespacesAndNewlines)

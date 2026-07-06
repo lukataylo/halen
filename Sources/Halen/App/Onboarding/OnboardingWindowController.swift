@@ -1,5 +1,7 @@
 import AppKit
 import SwiftUI
+import HalenKit
+import HalenPluginAPI
 
 /// Floats the `OnboardingFlow` in its own borderless, translucent window on
 /// first launch — and any time the user re-triggers it from Settings.

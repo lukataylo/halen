@@ -1,7 +1,7 @@
 import Foundation
 
 /// Resolves Halen's user-data directory once and exposes a single safe entry
-/// point everything else builds on (`HalenServices.appSupportDir`, plugin
+/// point everything else builds on (the host's app-support dir, plugin
 /// scratch dirs, the typo store, the per-app tone profile store, etc.).
 ///
 /// Pre-extraction, three call sites force-unwrapped
@@ -13,11 +13,11 @@ import Foundation
 /// OS doesn't hand one over, we fall back to a deterministic location in
 /// `NSTemporaryDirectory()`, log loudly, and the app keeps running with
 /// non-persistent state instead of crashing.
-enum HalenSupportDirectory {
+public enum HalenSupportDirectory {
     /// `~/Library/Application Support/Halen/` — created if missing.
     /// Returns the temp-dir fallback when Application Support is somehow
     /// unavailable (vanishingly rare; logged at `.error` if it happens).
-    static let root: URL = {
+    public static let root: URL = {
         let fm = FileManager.default
         let candidate: URL
         if let support = fm.urls(for: .applicationSupportDirectory,
@@ -44,7 +44,7 @@ enum HalenSupportDirectory {
 
     /// `root/<subpath>` with the directory created on first call.
     /// Used by plugin storage, the model downloader, and the rule stores.
-    static func subdirectory(_ subpath: String) -> URL {
+    public static func subdirectory(_ subpath: String) -> URL {
         let url = root.appending(path: subpath)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url

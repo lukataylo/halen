@@ -1,5 +1,7 @@
 import SwiftUI
 import AppKit
+import HalenKit
+import HalenPluginAPI
 
 /// App-level settings: Accessibility permission status, the inference backend
 /// picker (priority order + live availability of Apple Intelligence / Ollama /
@@ -11,7 +13,6 @@ struct SettingsView: View {
     @Bindable var inferenceSettings: InferenceSettings
     let router: RouterInferenceClient
     @Bindable var modelDownloader: ModelDownloader
-    let webSocketBridge: WebSocketBridge?
     @Bindable var launchAtLogin: LaunchAtLoginController
     /// Process-wide registry of hotkey conflicts. Observed so the warning
     /// card appears/disappears live as plugins are toggled on or off.
@@ -28,8 +29,6 @@ struct SettingsView: View {
 
     @State private var pollTask: Task<Void, Never>?
     @State private var confirmingModelRemove = false
-    @State private var confirmingTokenRotate = false
-    @State private var tokenCopied = false
     /// Owned at view scope — the data is cheap to re-query and shouldn't
     /// be retained across menubar-popup close/reopen where it could go
     /// stale under us. `refresh()` runs on every `onAppear`.
@@ -37,9 +36,6 @@ struct SettingsView: View {
     @AppStorage(OverlayController.showDotKey) private var showCaretIndicator: Bool = true
     @AppStorage(OverlayController.minimalDotKey) private var minimalCaretIndicator: Bool = true
     @AppStorage(OverlayController.dotStyleKey) private var overlayDotStyle: String = "solid"
-    /// Two-way binding to the WS bridge's enabled preference. Toggling
-    /// here also calls into the bridge to actually start/stop it live.
-    @AppStorage(WebSocketBridge.enabledKey) private var webSocketEnabled: Bool = true
     /// Persisted Ollama endpoint. The TextField edits `ollamaURLDraft` and
     /// only writes through to this key on commit — typing "http://localh"
     /// mid-edit shouldn't put a half-URL into UserDefaults.
@@ -59,7 +55,6 @@ struct SettingsView: View {
                     aiCard
                     ollamaCard
                     builtInModelCard
-                    if webSocketBridge != nil { webSocketCard }
                     hotkeyConflictCard
                     aboutCard
                 }
@@ -766,112 +761,6 @@ struct SettingsView: View {
             return String(format: "%.1f GB", mb / 1024)
         }
         return String(format: "%.0f MB", mb)
-    }
-
-    // MARK: - WebSocket bridge card
-
-    @ViewBuilder
-    private var webSocketCard: some View {
-        if let bridge = webSocketBridge {
-            GlassCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        cardLabel("Browser & companion bridge")
-                        Spacer()
-                        Toggle("", isOn: $webSocketEnabled)
-                            .toggleStyle(.switch)
-                            .controlSize(.regular)
-                            .labelsHidden()
-                            .accessibilityLabel("Browser bridge")
-                            .accessibilityHint("Starts the local WebSocket so the Halen browser extension can connect.")
-                            .onChange(of: webSocketEnabled) { _, newValue in
-                                // Live start/stop so the user doesn't have to
-                                // restart Halen for the toggle to take effect.
-                                if newValue { bridge.start() } else { bridge.stop() }
-                            }
-                    }
-                    HStack(spacing: 10) {
-                        statusDot(bridge.isListening ? .ok : .neutral)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(bridge.isListening
-                                 ? "127.0.0.1:\(WebSocketBridge.defaultPort)"
-                                 : "Off")
-                                .font(.system(.callout, design: .monospaced))
-                            Text(bridgeStatusDetail(bridge))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer()
-                    }
-                    // Combine: dot is decorative, the surrounding text is
-                    // what VoiceOver should read.
-                    .accessibilityElement(children: .combine)
-                    Text("Lets the browser extension report text from apps the system can't reach.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Divider().padding(.vertical, 2)
-
-                    HStack(spacing: 8) {
-                        Text("Pairing token")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button(tokenCopied ? "Copied!" : "Copy") {
-                            if let token = BridgeTokenStore.tokenOrCreate() {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(token, forType: .string)
-                                tokenCopied = true
-                                Task { @MainActor in
-                                    try? await Task.sleep(for: .seconds(1.5))
-                                    tokenCopied = false
-                                }
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .accessibilityLabel("Copy pairing token")
-                        .accessibilityHint("Copies the bridge token to the clipboard so you can paste it into the browser extension.")
-                        Button("Regenerate") { confirmingTokenRotate = true }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            .foregroundStyle(.red)
-                            .accessibilityHint("Issues a new pairing token and disconnects every currently paired client.")
-                            .confirmationDialog("Regenerate the bridge token?",
-                                                isPresented: $confirmingTokenRotate,
-                                                titleVisibility: .visible) {
-                                Button("Regenerate", role: .destructive) {
-                                    _ = BridgeTokenStore.regenerate()
-                                    // Drop every connected client — they'll
-                                    // need to re-pair with the new token.
-                                    bridge.stop()
-                                    if webSocketEnabled { bridge.start() }
-                                }
-                                Button("Cancel", role: .cancel) {}
-                            } message: {
-                                Text("Paired clients will need to enter the new token.")
-                            }
-                    }
-                    Text("Browser extension: open its popup, paste this token, click Save.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-    }
-
-    private func bridgeStatusDetail(_ bridge: WebSocketBridge) -> String {
-        guard bridge.isListening else {
-            return "Browser extension can't connect while off."
-        }
-        switch bridge.clientCount {
-        case 0:  return "Listening — no clients connected."
-        case 1:  return "1 client connected."
-        default: return "\(bridge.clientCount) clients connected."
-        }
     }
 
     /// Warning card listing every hotkey collision detected since launch.

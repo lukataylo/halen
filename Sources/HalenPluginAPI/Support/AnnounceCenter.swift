@@ -20,7 +20,7 @@ import ApplicationServices
 /// `@MainActor` because `NSAccessibility.post` must come from the main
 /// thread; AppKit's accessibility plumbing isn't thread-safe.
 @MainActor
-enum AnnounceCenter {
+public enum AnnounceCenter {
     /// Speak `message` through VoiceOver if it is running. Silent no-op
     /// when VO is off — there's no listener to receive the notification
     /// and `NSAccessibility.post` short-circuits internally.
@@ -30,8 +30,8 @@ enum AnnounceCenter {
     /// for seconds and frustrate the user. "Fixed 'teh' to 'the'" good;
     /// "Halen has fixed your typo by replacing 'teh' with 'the' in your
     /// current document" bad.
-    static func say(_ message: String,
-                    priority: NSAccessibilityPriorityLevel = .medium) {
+    public static func say(_ message: String,
+                           priority: NSAccessibilityPriorityLevel = .medium) {
         guard !message.isEmpty else { return }
 
         // Prefer the app's key window when available — VoiceOver routes

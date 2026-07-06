@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-enum Log {
+public enum Log {
     static let logger = Logger(subsystem: "com.dadiani.halen", category: "halen")
 
     /// Mirror every log line to a flat file *in addition* to os_log. The
@@ -65,22 +65,22 @@ enum Log {
         traceQueue.async { try? handle.write(contentsOf: data) }
     }
 
-    static func info(_ message: String) {
+    public static func info(_ message: String) {
         logger.info("\(message, privacy: .public)")
         appendTrace("info", message)
     }
 
-    static func debug(_ message: String) {
+    public static func debug(_ message: String) {
         logger.debug("\(message, privacy: .public)")
         appendTrace("debug", message)
     }
 
-    static func warn(_ message: String) {
+    public static func warn(_ message: String) {
         logger.warning("\(message, privacy: .public)")
         appendTrace("warn", message)
     }
 
-    static func error(_ message: String) {
+    public static func error(_ message: String) {
         logger.error("\(message, privacy: .public)")
         appendTrace("error", message)
     }
@@ -94,7 +94,7 @@ enum Log {
     /// `<len=N #abcd1234>` instead. Reversing requires brute force of every
     /// plausible string of length N against SHA-256 — practically impossible
     /// for any non-trivial content.
-    static func redact(_ text: String) -> String {
+    public static func redact(_ text: String) -> String {
         let hash = sha256Hex(text).prefix(8)
         return "<len=\(text.count) #\(hash)>"
     }

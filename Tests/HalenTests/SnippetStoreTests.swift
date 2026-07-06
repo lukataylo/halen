@@ -1,5 +1,5 @@
 import XCTest
-@testable import Halen
+@testable import HalenPluginAPI
 
 /// `SnippetStore` is the data layer behind Snippet Expander. The runtime that
 /// consumes it (caret pause → trigger match → inline rewrite) needs AX + a

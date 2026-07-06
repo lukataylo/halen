@@ -5,18 +5,26 @@ import Foundation
 /// boundaries so single-character edits inside a word still report the
 /// surrounding word (e.g., "teh " → "the " is reported as "teh" → "the",
 /// not "eh" → "he").
-struct StringDiff: Equatable {
-    var oldText: String     // empty for a pure insertion
-    var newText: String     // empty for a pure deletion
-    var positionInOld: Int  // UTF-16 offset where the change begins in the old string
-    var positionInNew: Int  // UTF-16 offset where the change begins in the new string
+public struct StringDiff: Equatable {
+    public var oldText: String     // empty for a pure insertion
+    public var newText: String     // empty for a pure deletion
+    public var positionInOld: Int  // UTF-16 offset where the change begins in the old string
+    public var positionInNew: Int  // UTF-16 offset where the change begins in the new string
 
-    var isPureDeletion: Bool { newText.isEmpty && !oldText.isEmpty }
-    var isPureInsertion: Bool { oldText.isEmpty && !newText.isEmpty }
-    var isSubstitution: Bool { !oldText.isEmpty && !newText.isEmpty }
+    public var isPureDeletion: Bool { newText.isEmpty && !oldText.isEmpty }
+    public var isPureInsertion: Bool { oldText.isEmpty && !newText.isEmpty }
+    public var isSubstitution: Bool { !oldText.isEmpty && !newText.isEmpty }
+
+    public init(oldText: String, newText: String,
+                positionInOld: Int, positionInNew: Int) {
+        self.oldText = oldText
+        self.newText = newText
+        self.positionInOld = positionInOld
+        self.positionInNew = positionInNew
+    }
 }
 
-func computeDiff(old: NSString, new: NSString) -> StringDiff? {
+public func computeDiff(old: NSString, new: NSString) -> StringDiff? {
     let oldLen = old.length
     let newLen = new.length
     if oldLen == newLen, old.isEqual(to: new as String) { return nil }
@@ -82,7 +90,7 @@ private func isSeparator(_ codeUnit: unichar) -> Bool {
 
 /// Standard Levenshtein edit distance, case-sensitive. Used as a sanity check
 /// before recording a substitution as a correction candidate.
-func levenshtein(_ a: String, _ b: String) -> Int {
+public func levenshtein(_ a: String, _ b: String) -> Int {
     if a == b { return 0 }
     let s = Array(a), t = Array(b)
     let m = s.count, n = t.count
@@ -105,7 +113,7 @@ func levenshtein(_ a: String, _ b: String) -> Int {
 /// to `2 * radius`. Also returns the new caret offset relative to the substring.
 /// Used to cap event-bus payloads and Gemma prompts when the focused field has a
 /// huge buffer (terminal scrollback, long documents).
-func windowAroundCaret(text: String, offset: Int, radius: Int) -> (text: String, offset: Int) {
+public func windowAroundCaret(text: String, offset: Int, radius: Int) -> (text: String, offset: Int) {
     let ns = text as NSString
     let len = ns.length
     if len <= radius * 2 {
@@ -128,7 +136,7 @@ func windowAroundCaret(text: String, offset: Int, radius: Int) -> (text: String,
 ///      previous unrelated paragraphs) taints the current sentence's verdict.
 ///   2. The window boundary lands inside a word, leaking fragments like "ity"
 ///      into the popup body.
-func paragraphAroundCaret(text: String, caretOffset: Int) -> String {
+public func paragraphAroundCaret(text: String, caretOffset: Int) -> String {
     let ns = text as NSString
     let length = ns.length
     let caret = max(0, min(caretOffset, length))
@@ -148,7 +156,7 @@ func paragraphAroundCaret(text: String, caretOffset: Int) -> String {
 /// if the index is out of bounds or the unit is half of a surrogate pair (and
 /// therefore not a valid Unicode scalar by itself). Used by trigger-detection
 /// and word-boundary scans in SnippetExpander and TypoFixer.
-func character(_ ns: NSString, at index: Int) -> Character? {
+public func character(_ ns: NSString, at index: Int) -> Character? {
     guard index >= 0, index < ns.length else { return nil }
     guard let scalar = Unicode.Scalar(ns.character(at: index)) else { return nil }
     return Character(scalar)
@@ -165,7 +173,7 @@ func character(_ ns: NSString, at index: Int) -> Character? {
 /// SnippetExpander (the `;trigger` token, which then extends one char left
 /// to swallow the `;` sentinel). Both used to carry an identical hand-rolled
 /// copy of this scan with comments cross-referencing each other.
-func wordRange(in ns: NSString, endingBefore caretOffset: Int) -> NSRange? {
+public func wordRange(in ns: NSString, endingBefore caretOffset: Int) -> NSRange? {
     guard caretOffset > 0, caretOffset <= ns.length else { return nil }
     guard let last = character(ns, at: caretOffset - 1),
           last.isWhitespace || last.isPunctuation else { return nil }
@@ -187,7 +195,7 @@ func wordRange(in ns: NSString, endingBefore caretOffset: Int) -> NSRange? {
 /// What we consider a "word" for correction-learning purposes: 3–30 chars,
 /// only letters (plus apostrophes and hyphens). Filters out single letters,
 /// numbers, code identifiers, and other false-positive sources.
-func looksLikeWord(_ s: String) -> Bool {
+public func looksLikeWord(_ s: String) -> Bool {
     guard s.count >= 3, s.count <= 30 else { return false }
     for ch in s {
         if ch.isLetter { continue }

@@ -91,6 +91,17 @@ for variant in HalenLogo.png HalenLogo@2x.png HalenLogo@3x.png \
     fi
 done
 
+# SwiftPM resource bundles (Bundle.module). Any target that declares
+# `resources:` in Package.swift produces a `Halen_<Target>.bundle` next to
+# the binary — Notch Boss ships its dot-matrix font this way. Copy them all
+# so Bundle.module resolves inside the assembled .app.
+shopt -s nullglob
+for bundle in "$BIN_DIR"/*.bundle; do
+    echo "→ embedding $(basename "$bundle")"
+    ditto "$bundle" "$RESOURCES/$(basename "$bundle")"
+done
+shopt -u nullglob
+
 # Embed the llama.cpp dynamic framework. `swift build` links the binary against
 # @rpath/llama.framework/...; without this the assembled bundle fails to launch
 # with a dyld "Library not loaded" error.

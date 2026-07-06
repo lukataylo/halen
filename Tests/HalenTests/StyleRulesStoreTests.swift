@@ -1,5 +1,6 @@
 import XCTest
-@testable import Halen
+@testable import WritingAssistantPlugin
+import HalenPluginAPI
 
 /// Locks in the word-boundary semantics of `StyleRulesStore.wordRange`. The
 /// risk this guards against: banning "form" and accidentally flagging

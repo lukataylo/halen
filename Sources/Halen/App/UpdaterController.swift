@@ -1,6 +1,8 @@
 import Foundation
 import AppKit
 import Sparkle
+import HalenKit
+import HalenPluginAPI
 
 /// Thin wrapper around Sparkle's `SPUStandardUpdaterController` so the rest of
 /// the codebase doesn't import Sparkle directly, and so the controller can be

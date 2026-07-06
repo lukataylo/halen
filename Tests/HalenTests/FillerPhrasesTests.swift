@@ -1,5 +1,5 @@
 import XCTest
-@testable import Halen
+@testable import WritingAssistantPlugin
 
 /// `FillerPhrases.scan` is the zero-cost regex-y scan Sentiment Guard runs
 /// alongside the tone classifier — conciseness isn't a tone, so it can't

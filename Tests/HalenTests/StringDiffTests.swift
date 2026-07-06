@@ -1,5 +1,5 @@
 import XCTest
-@testable import Halen
+@testable import HalenPluginAPI
 
 final class StringDiffTests: XCTestCase {
     func testIdenticalStringsReturnNil() {

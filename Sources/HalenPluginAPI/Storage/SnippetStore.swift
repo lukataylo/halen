@@ -5,11 +5,11 @@ import Observation
 /// so future additions ship without overwriting user customisations.
 @Observable
 @MainActor
-final class SnippetStore {
-    private(set) var snippets: [Snippet] = []
+public final class SnippetStore {
+    public private(set) var snippets: [Snippet] = []
     private let fileURL: URL
 
-    init(fileURL: URL) {
+    public init(fileURL: URL) {
         self.fileURL = fileURL
         load()
         ensureBuiltins()
@@ -18,9 +18,9 @@ final class SnippetStore {
     /// The built-in email-reply action's trigger. Lives here (the model layer)
     /// so the expander's detection path and the settings UI share one source of
     /// truth rather than each hard-coding ";reply".
-    static let emailReplyTrigger = ";reply"
+    public static let emailReplyTrigger = ";reply"
 
-    static let builtins: [Snippet] = [
+    public static let builtins: [Snippet] = [
         Snippet(trigger: ";sig",      kind: .staticText, value: "— Sent via Halen, my local writing agent",
                 displayName: "Signature", builtin: true),
         Snippet(trigger: ";today",    kind: .dynamic,    value: "today",
@@ -55,7 +55,7 @@ final class SnippetStore {
 
     // MARK: - Lookup
 
-    func snippet(for trigger: String) -> Snippet? {
+    public func snippet(for trigger: String) -> Snippet? {
         snippets.first(where: { $0.trigger.lowercased() == trigger.lowercased() })
     }
 
@@ -65,11 +65,11 @@ final class SnippetStore {
     /// validation in `SnippetExpanderDetailView`. Re-checked here so a
     /// future caller path that bypasses the form (sync, JSON import,
     /// programmatic API) can't drop a 50KB prompt into the store.
-    static let triggerMaxLength = 32        // matches view + room for sigil
-    static let triggerMinChars  = 2         // ";" + at least one letter
-    static let valueMaxLength   = 4_000
+    public static let triggerMaxLength = 32        // matches view + room for sigil
+    public static let triggerMinChars  = 2         // ";" + at least one letter
+    public static let valueMaxLength   = 4_000
 
-    func addCustom(trigger: String, kind: Snippet.Kind, value: String, displayName: String) {
+    public func addCustom(trigger: String, kind: Snippet.Kind, value: String, displayName: String) {
         let normalisedTrigger = normalise(trigger)
         guard !normalisedTrigger.isEmpty,
               normalisedTrigger.count >= Self.triggerMinChars,
@@ -125,11 +125,11 @@ final class SnippetStore {
     /// converts it to a custom override — the original prompt-engineered
     /// builtin is suppressed at load time as long as the override exists.
     /// `resetToBuiltin(trigger:)` restores the original.
-    func update(trigger: String, kind: Snippet.Kind, value: String, displayName: String) {
+    public func update(trigger: String, kind: Snippet.Kind, value: String, displayName: String) {
         addCustom(trigger: trigger, kind: kind, value: value, displayName: displayName)
     }
 
-    func remove(_ trigger: String) {
+    public func remove(_ trigger: String) {
         guard let idx = snippets.firstIndex(where: { $0.trigger == trigger }) else { return }
         guard !snippets[idx].builtin else { return }
         snippets.remove(at: idx)
@@ -139,7 +139,7 @@ final class SnippetStore {
     /// True when `snippet` is a user override of a shipped builtin (same
     /// trigger, `builtin == false`). Such a snippet can be reset to its
     /// original via `resetToBuiltin`; a genuinely custom snippet cannot.
-    func isOverriddenBuiltin(_ snippet: Snippet) -> Bool {
+    public func isOverriddenBuiltin(_ snippet: Snippet) -> Bool {
         !snippet.builtin && Self.builtins.contains {
             $0.trigger.lowercased() == snippet.trigger.lowercased()
         }
@@ -148,7 +148,7 @@ final class SnippetStore {
     /// Drop a user's override of a builtin so the shipped definition comes
     /// back. No-op for a trigger that was never a builtin (use `remove` for a
     /// genuinely custom snippet).
-    func resetToBuiltin(trigger: String) {
+    public func resetToBuiltin(trigger: String) {
         let t = trigger.lowercased()
         guard Self.builtins.contains(where: { $0.trigger.lowercased() == t }) else { return }
         snippets.removeAll { $0.trigger.lowercased() == t && !$0.builtin }
@@ -158,13 +158,13 @@ final class SnippetStore {
     }
 
     /// Wipe everything and restore the shipped builtins.
-    func reset() {
+    public func reset() {
         snippets.removeAll()
         ensureBuiltins()
     }
 
     /// Sort built-ins first, then by trigger.
-    var sorted: [Snippet] {
+    public var sorted: [Snippet] {
         snippets.sorted { lhs, rhs in
             if lhs.builtin != rhs.builtin { return lhs.builtin && !rhs.builtin }
             return lhs.trigger.lowercased() < rhs.trigger.lowercased()

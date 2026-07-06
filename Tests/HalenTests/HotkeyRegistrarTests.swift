@@ -1,6 +1,6 @@
 import XCTest
 import Carbon.HIToolbox
-@testable import Halen
+@testable import HalenKit
 
 /// Exercises the process-wide `HotkeyConflictRegistry`. We don't drive the
 /// real Carbon `RegisterEventHotKey` here — the registry's job is to

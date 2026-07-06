@@ -1,5 +1,7 @@
 import SwiftUI
 import AppKit
+import HalenKit
+import HalenPluginAPI
 
 /// First-run setup walkthrough. Three steps in a fixed-size floating
 /// window, glassmorphic chrome to match the menubar dropdown:

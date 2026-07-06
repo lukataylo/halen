@@ -1,5 +1,13 @@
 import Foundation
 import Observation
+import HalenKit
+import HalenPluginAPI
+import WritingAssistantPlugin
+import SnippetExpanderPlugin
+import VoiceDictationPlugin
+import PromptPolishPlugin
+import MotherPlugin
+import NotchBossPlugin
 
 @Observable
 final class AppState {
@@ -25,37 +33,23 @@ final class AppCoordinator {
     /// sub-second range. Same SwiftUI-observable shape as `modelDownloader`.
     let classifierDownloader = ModelDownloader(spec: .qwen25_05B_Q4_K_M)
     let inference: RouterInferenceClient
-    let typoStore = TypoStore()
-    /// Per-app tone profiles — a host service (passed into `HalenServices`),
-    /// not a plugin-owned store, so every writing plugin reads the same data.
+    /// The one permission layer: capability grants per plugin + every TCC
+    /// prompt. Surfaced to the Permissions screen.
+    let broker = PermissionBroker()
+    /// Per-app tone profiles — host-owned so every writing plugin reads the
+    /// same data. Handed to plugins via the `tone-profiles` capability.
     let toneProfileStore = AppToneProfileStore()
-    /// In-memory list of apps focused this session. Powers the "add an app"
-    /// picker in the Writing Assistant → Tone tab's per-app tone editor.
-    /// App-coordinator scope so it accumulates across the panel's open/close
-    /// cycle and survives the user navigating away.
+    /// In-memory list of apps focused this session, for the per-app tone
+    /// picker. App-coordinator scope so it accumulates across panel opens.
     let recentApps = RecentAppsModel()
-    private var recentAppsTask: Task<Void, Never>?
+    /// Host-owned snippet library, handed to plugins via the `snippets`
+    /// capability.
+    let snippetStore = SnippetStore()
     let registry = PluginRegistry()
     /// Surfaced to Settings via HalenApp → HalenCenterView. Lives at app
     /// scope (not view scope) so its observable status survives the
     /// menubar popup closing and re-opening.
     let launchAtLogin = LaunchAtLoginController()
-
-    /// Backs the Plugin Store. App-scoped so its fetched registry and
-    /// in-progress install state survive the menubar popup closing. A freshly
-    /// installed plugin is handed straight back to `registerInstalledPlugin`
-    /// so it goes live without an app restart.
-    lazy var pluginStoreModel: PluginStoreModel = {
-        PluginStoreModel(registry: registry) { [weak self] dir, manifest in
-            self?.registerInstalledPlugin(directory: dir, manifest: manifest)
-        }
-    }()
-
-    /// The Plugin Store's standalone window — opened from the dropdown's
-    /// header button, lives independently of the menubar popover.
-    lazy var pluginStoreWindow: PluginStoreWindowController = {
-        PluginStoreWindowController(registry: registry, model: pluginStoreModel)
-    }()
 
     /// First-run setup walkthrough. Lazy because building the SwiftUI
     /// hosting view shouldn't run on every launch — only when we actually
@@ -83,10 +77,15 @@ final class AppCoordinator {
     private var caretObserver: CaretObserver?
     private var overlay: OverlayController?
     private var pluginHost: PluginHost?
-    /// `private(set)` so the Settings UI can observe `isListening` /
-    /// `clientCount` and call `start()`/`stop()` when the user toggles
-    /// the bridge on or off.
-    private(set) var webSocketBridge: WebSocketBridge?
+    /// Built in `startObservers()` once the caret observer exists; mints the
+    /// capability-gated context for every plugin. Exposed to the Permissions
+    /// screen so a grant toggle can rebuild the affected plugin.
+    private(set) var hostServices: HostServices?
+
+    /// First-party plugin recipes, so a plugin can be rebuilt with a fresh
+    /// context after a capability grant changes.
+    private var pluginFactories: [(manifest: PluginManifest,
+                                   make: @MainActor (PluginContext) -> any HalenPlugin)] = []
 
     private var permissionPollTask: Task<Void, Never>?
     private var eventLogTask: Task<Void, Never>?
@@ -109,13 +108,10 @@ final class AppCoordinator {
         axInstallGlobalMessagingTimeout()
         startEventLogger()
         // Eagerly load both bundled models (Qwen 0.5B classifier + Gemma 4
-        // E4B generation) in parallel so the first user-facing inference —
-        // typo classify, snippet expansion, sentiment / clarity check, Ask
-        // Halen — doesn't pay the multi-second weight-load latency in front
-        // of the user. Apple FM is prewarmed in the same task group.
-        // Triggers downloads in the background too if either model is missing
-        // (state surfaces through `modelDownloader.state` /
-        // `classifierDownloader.state` for the Settings UI).
+        // E4B generation) in parallel so the first user-facing inference
+        // doesn't pay the multi-second weight-load latency in front of the
+        // user. Apple FM is prewarmed in the same task group. Triggers
+        // downloads in the background too if either model is missing.
         Task { @MainActor [backends, modelDownloader, classifierDownloader] in
             if modelDownloader.state == .notDownloaded { modelDownloader.start() }
             if classifierDownloader.state == .notDownloaded { classifierDownloader.start() }
@@ -153,7 +149,7 @@ final class AppCoordinator {
 
     /// Synchronous teardown — kept for backwards compatibility with the
     /// in-process pieces that don't need async work. Out-of-process cleanup
-    /// (plugin host, WS clients) requires `shutdown()` below.
+    /// (plugin host) requires `shutdown()` below.
     func stop() {
         Log.info("Halen stopping")
         isStopped = true
@@ -164,7 +160,6 @@ final class AppCoordinator {
         for plugin in registry.plugins {
             plugin.stop()
         }
-        webSocketBridge?.stop()
         caretObserver?.stop()
         overlay?.stop()
     }
@@ -187,11 +182,8 @@ final class AppCoordinator {
     private func startObservers() {
         guard !isStopped else { return }
         // Re-entrancy guard: `start()` and the permission-poll path can both
-        // race to call this if AX permission flips during launch. Without the
-        // guard the previous CaretObserver, OverlayController and all six
-        // registered plugins would silently leak (the old refs overwritten,
-        // their AXObserver run-loop sources and event-subscription tasks still
-        // running). One call is enough.
+        // race to call this if AX permission flips during launch. One call
+        // is enough — see the leak analysis on the original implementation.
         guard caretObserver == nil else { return }
         Log.info("Starting observers and plugin registry")
 
@@ -203,63 +195,51 @@ final class AppCoordinator {
         overlayCtrl.start()
         overlay = overlayCtrl
 
-        let services = HalenServices(
+        let host = HostServices(
             eventBus: eventBus,
             inference: inference,
             caretObserver: observer,
-            calendar: CalendarService(),
+            broker: broker,
             toneProfiles: toneProfileStore,
             recentApps: recentApps,
-            appSupportDir: HalenServices.defaultAppSupportDir()
+            snippets: snippetStore,
+            calendar: CalendarService(),
+            appSupportDir: HalenSupportDirectory.root
         )
+        hostServices = host
 
-        // Register first-party plugins. Optional add-ons (Reasoning Compactor,
-        // Mother, Desktop Buddy) aren't built in — they ship as out-of-process
-        // plugins under plugins/, installable from the Plugin Store, with any
-        // privileged work behind the JSON-RPC boundary like any third-party plugin.
-        registry.register(AskHalen(services: services))
-        // Writing Assistant is the single "Grammarly-esque" writing surface —
-        // it merges Word Replacements (typo fixes + term swaps) and Writing
-        // Coach (tone + clarity) into one plugin with one on/off switch. Each
-        // engine stays a distinct internal object so its UX model (silent
-        // inline / popover) survives; the wrapper starts/stops them together
-        // and hosts a tabbed detail view.
-        // (Halen's focus moved to model orchestration; writing help is now one
-        // consolidated feature rather than three independent toggles.)
-        registry.register(WritingAssistant(services: services, typoStore: typoStore))
-        registry.register(VoiceDictation(services: services))
-        // Snippet Expander now also handles the email-reply action — see
-        // EmailReplyDrafter + the ;reply built-in trigger + the ⌃⌥E
-        // hotkey installed in SnippetExpander.start().
-        registry.register(SnippetExpander(services: services))
-        // Prompt Polish — ⌃⌥⌘P rewrites the selected prompt in place with
-        // word-level edits tuned for modern LLMs (improve / set-tone /
-        // summarise / coding). Hotkey-only; no text-event subscription.
-        registry.register(PromptPolish(services: services))
+        // Adopt NotchBar users: if the separate app's droppings exist and the
+        // user has never touched the Notch Boss toggle, default it on so
+        // their approval doorbell keeps ringing after the migration.
+        if UserDefaults.standard.object(forKey: "plugin.com.halen.notch-boss.enabled") == nil,
+           FileManager.default.fileExists(atPath: NSHomeDirectory() + "/.notchbar") {
+            Log.info("NotchBar install detected — enabling Notch Boss by default")
+            UserDefaults.standard.set(true, forKey: "plugin.com.halen.notch-boss.enabled")
+        }
+
+        // First-party plugins. Each is just another manifest + factory; the
+        // context it receives is capability-gated exactly like an external
+        // plugin's RPC surface.
+        registerFirstParty(WritingAssistant.pluginManifest) { WritingAssistant(context: $0) }
+        registerFirstParty(VoiceDictation.pluginManifest) { VoiceDictation(context: $0) }
+        registerFirstParty(SnippetExpander.pluginManifest) { SnippetExpander(context: $0) }
+        registerFirstParty(PromptPolish.pluginManifest) { PromptPolish(context: $0) }
+        registerFirstParty(Mother.pluginManifest) { Mother(context: $0) }
+        registerFirstParty(NotchBoss.pluginManifest) { NotchBoss(context: $0) }
 
         // Out-of-process plugins under ~/Library/Application Support/Halen/Plugins/.
-        // Discover manifests synchronously (just filesystem scan + JSON parse),
-        // register each as an `ExternalPluginAdapter` so the marketplace
-        // shows them with toggle + permissions + status alongside first-
+        // Discover manifests synchronously (filesystem scan + JSON parse),
+        // register each as an `ExternalPluginAdapter` so the plugin list
+        // shows them with toggle + capabilities + status alongside first-
         // party plugins. The actual subprocess spawn happens via the
-        // registry's `start()` call on each adapter, which routes to
-        // `PluginHost.spawn(...)`.
-        let host = PluginHost(services: services)
-        pluginHost = host
-        for (dir, manifest) in host.discoverManifests() {
-            let adapter = ExternalPluginAdapter(manifest: manifest, pluginDir: dir, host: host)
+        // registry's `start()` call on each adapter.
+        let external = PluginHost(services: host)
+        pluginHost = external
+        for (dir, manifest) in external.discoverManifests() {
+            let adapter = ExternalPluginAdapter(manifest: manifest, pluginDir: dir, host: external)
             registry.register(adapter)
         }
-        host.startEventDispatcher()
-
-        // Browser extensions (and any future loopback client) connect over
-        // this WS server. Bound to 127.0.0.1 only. The user can turn the
-        // bridge off in Settings — start only when enabled.
-        let ws = WebSocketBridge(services: services)
-        webSocketBridge = ws
-        if WebSocketBridge.isEnabledInDefaults {
-            ws.start()
-        }
+        external.startEventDispatcher()
 
         // First-run setup walkthrough. The registry is now populated, so
         // the "Pick what's on" step has live data to render. Defer one tick
@@ -273,20 +253,37 @@ final class AppCoordinator {
         }
     }
 
-    /// Register a freshly-installed external plugin live, without an app
-    /// restart. Called by the Plugin Store after `PluginInstaller` has
-    /// downloaded, unpacked, and validated the plugin into the install root.
-    /// No-op if the plugin host hasn't been created yet (Accessibility not
-    /// granted) — in that path the plugin is picked up by the normal
-    /// `discoverManifests()` scan once observers start.
-    func registerInstalledPlugin(directory: URL, manifest: PluginManifest) {
-        guard let pluginHost else {
-            Log.warn("AppCoordinator: plugin host not ready; \(manifest.id) will load on next launch")
-            return
+    private func registerFirstParty(_ manifest: PluginManifest,
+                                    make: @escaping @MainActor (PluginContext) -> any HalenPlugin) {
+        guard let hostServices else { return }
+        pluginFactories.append((manifest, make))
+        registry.register(make(hostServices.makeContext(for: manifest)))
+    }
+
+    /// Rebuild one first-party plugin with a freshly minted context. Called
+    /// by the Permissions screen after a capability grant changes, so the
+    /// plugin's services always match the grant table. External plugins
+    /// don't need this — their capability set is re-read on every RPC call.
+    func reloadPlugin(id: String) {
+        guard let hostServices,
+              let entry = pluginFactories.first(where: { $0.manifest.id == id }) else { return }
+        registry.unregister(id)
+        registry.register(entry.make(hostServices.makeContext(for: entry.manifest)))
+    }
+
+    /// Every registered plugin's manifest, for the Permissions screen.
+    /// First-party manifests come from the factory table (present even
+    /// before observers start); external ones from the registry.
+    var allManifests: [PluginManifest] {
+        var seen = Set<String>()
+        var result: [PluginManifest] = []
+        for entry in pluginFactories where seen.insert(entry.manifest.id).inserted {
+            result.append(entry.manifest)
         }
-        guard !registry.contains(manifest.id) else { return }
-        let adapter = ExternalPluginAdapter(manifest: manifest, pluginDir: directory, host: pluginHost)
-        registry.register(adapter)
+        for plugin in registry.plugins where seen.insert(plugin.manifest.id).inserted {
+            result.append(plugin.manifest)
+        }
+        return result
     }
 
     private func startEventLogger() {
@@ -297,8 +294,7 @@ final class AppCoordinator {
                     Log.info("evt app.focused \(payload.appName)")
                     // Feed the recently-focused-apps list used by the
                     // Tone tab's per-app tone editor. Lives on the
-                    // coordinator (previously inside the ToneProfiles
-                    // plugin) so it accumulates whether or not the
+                    // coordinator so it accumulates whether or not the
                     // editor is open.
                     self?.recentApps.note(bundleId: payload.appBundleId,
                                           name: payload.appName)
@@ -311,9 +307,7 @@ final class AppCoordinator {
                 case .caretMoved(let payload):
                     // `.debug` — this fires on every typing burst; keeping it
                     // at `.info` put a log line in the unified system log per
-                    // keystroke-group, a measurable idle cost. The overlay
-                    // indicator is confirmed working; `caret.moved skipped`
-                    // in CaretObserver still logs at `.info` if bounds fail.
+                    // keystroke-group, a measurable idle cost.
                     Log.debug("evt caret.moved \(Int(payload.rect.x)),\(Int(payload.rect.y)) \(Int(payload.rect.width))x\(Int(payload.rect.height))")
                 case .inferenceActivity(let payload):
                     Log.debug("evt inference.activity \(payload.phase.rawValue) source=\(payload.source)")

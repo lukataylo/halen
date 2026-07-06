@@ -1,5 +1,6 @@
 import XCTest
-@testable import Halen
+@testable import WritingAssistantPlugin
+import HalenPluginAPI
 
 /// `SentimentRulesStore` mirrors `ClarityRulesStore` — built-ins seed on
 /// first launch, user-added rules persist, removes skip built-ins. These

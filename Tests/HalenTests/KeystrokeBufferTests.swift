@@ -1,5 +1,5 @@
 import XCTest
-@testable import Halen
+@testable import SnippetExpanderPlugin
 
 /// Covers `parseKeystrokeTrigger` — the pure trigger-detection logic behind
 /// snippet expansion in text boxes the Accessibility API can't read.

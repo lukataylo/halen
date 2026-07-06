@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import HalenKit
 
 @main
 struct HalenApp: App {
@@ -8,15 +9,14 @@ struct HalenApp: App {
     var body: some Scene {
         MenuBarExtra {
             HalenCenterView(
+                coordinator: appDelegate.coordinator,
                 state: appDelegate.coordinator.state,
                 registry: appDelegate.coordinator.registry,
                 inferenceSettings: appDelegate.coordinator.inferenceSettings,
                 router: appDelegate.coordinator.inference,
                 modelDownloader: appDelegate.coordinator.modelDownloader,
-                webSocketBridge: appDelegate.coordinator.webSocketBridge,
                 launchAtLogin: appDelegate.coordinator.launchAtLogin,
                 hotkeyConflicts: appDelegate.coordinator.hotkeyConflicts,
-                onOpenStore: { appDelegate.coordinator.pluginStoreWindow.show() },
                 onRunSetupAgain: { appDelegate.coordinator.onboardingWindow.presentAgain() },
                 updater: appDelegate.coordinator.updater
             )

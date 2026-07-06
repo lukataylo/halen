@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="assets/readme-header.png" alt="Halen — Local AI at your cursor. Floating product mockups of email composer, project brief editor, notes app, snippets and tone suggestions, all on a cobalt background." />
+  <img src="assets/readme-header.png" alt="Halen — your local model, with plugins. Floating product mockups on a cobalt background." />
 </p>
 
 <p align="center">
-  <strong>Writing AI that never leaves your Mac.</strong><br>
-  No cloud. No accounts. No telemetry.<br>
-  <a href="https://halen.dev">halen.dev</a> · <a href="https://halen.dev/changelog.html">Changelog</a> · <a href="https://halen.dev/privacy.html">Privacy</a>
+  <strong>Your local model, with plugins.</strong><br>
+  No cloud. No accounts. No telemetry. Everything runs on your Mac.<br>
+  <a href="https://halen.dev">halen.dev</a> · <a href="https://halen.dev/changelog.html">Changelog</a> · <a href="https://halen.dev/privacy.html">Privacy</a> · <a href="PLUGINS.md">Write a plugin</a>
 </p>
 
 <p align="center">
@@ -18,13 +18,32 @@
 
 ---
 
-Halen is a writing assistant that lives in your menubar. It catches angry-sounding messages before you send them. It fixes your typos as you type. It expands shortcuts. It rewrites paragraphs. It drafts replies.
+Halen is a plugin platform for one on-device model. The host owns the model,
+the permission layer, the hotkeys, and the storage; everything you actually
+*use* — the writing assistant, voice dictation, snippet expansion, the
+coding-agent dashboard in your notch — is a plugin. A plugin is a folder and
+a manifest:
 
-Every model runs on your Mac. Your text never goes to a server.
+```json
+{
+  "id": "com.example.clipboard-cleaner",
+  "name": "Clipboard Cleaner",
+  "summary": "Press ⌃⌥⇧V to strip tracking junk from your clipboard.",
+  "version": "1.0.0",
+  "halenApiVersion": "0.1",
+  "executable": "/usr/bin/python3",
+  "args": ["plugin.py"],
+  "events": ["hotkey.fired"],
+  "capabilities": ["clipboard", "hotkeys", "notifications"]
+}
+```
 
-<p align="center">
-  <img src="assets/screenshot-writing-coach.png" alt="Halen catching a hostile sentence in Notes. A popover headed 'This reads as Hostile' shows a suggested rewrite that softens the tone, with Close and Copy buttons." width="780"/>
-</p>
+That `capabilities` list is the whole trust model. Every plugin declares up
+front what it observes (your text, the frontmost app, your screen, local
+processes) and what it can do (insert text, show a popover, speak, run a
+shortcut). The host enforces it, and one permissions screen shows every
+plugin × every capability, each individually revocable. You can see exactly
+what touches your text — that's the product.
 
 ## Install
 
@@ -32,76 +51,86 @@ Every model runs on your Mac. Your text never goes to a server.
 
 1. Open the DMG.
 2. Drag Halen to **Applications**.
-3. Launch it. Grant Accessibility and Input Monitoring when asked.
+3. Launch it. Grant Accessibility when asked.
 
 Halen updates itself. You'll never need to come back to this page.
 
-## What it does
+**Coming from NotchBar?** Halen absorbs it: enable the Notch Boss plugin and
+your settings, Claude Code hooks, and approval socket carry over unchanged.
+Quit the old NotchBar app first.
+
+## The bundled plugins
+
+Six plugins ship in the box. Each compiles against the same public API a
+third-party plugin would use — no back doors, which is how we know the API
+is honest.
 
 | Plugin | What it does |
 |---|---|
-| ✨ **Ask Halen** | Press ⌃H. Ask anything. Halen knows what's on screen. |
-| ✍️ **Writing Assistant** | Fixes typos and flags tone & clarity as you type, with per-app target tones and a one-tap rewrite. |
-| 💬 **Snippet Expander** | Type `;sig`, `;today`, `;summary`, `;reply`. Or ⌃⌥R to rewrite a selection. |
-| 🎙️ **Voice Dictation** | Press ⌃⌥Space. Speak. Press again. Apple's on-device transcription. |
-| 🪄 **Prompt Polish** | Press ⌃⌥⌘P. Rewrites the selected prompt in place with word-level edits for modern LLMs. |
+| **Writing Assistant** | Inline typo fixes, banned-term swaps, tone and clarity coaching with per-app formality targets. |
+| **Snippet Expander** | `;tag` text expansion — static, dynamic (`;today`), and AI snippets that stream into place. `;reply` drafts email replies. |
+| **Voice Dictation** | ⌃⌥Space, speak, on-device transcription lands at your caret. |
+| **Prompt Polish** | ⌃⌥⌘P rewrites the selected prompt in place, tuned for LLMs. |
+| **Mother** | A loving but firm app blocker for your focus hours. |
+| **Notch Boss** | Your coding agents, live in the notch: session cards, the approval doorbell with diff preview, tool timeline, token/cost tracking, and a multi-agent file-conflict detector with an MCP coordination server. The former [NotchBar](https://github.com/lukataylo/NotchBar) app, now a plugin. |
 
-Plus add-ons you can install from the Plugin Store: **Reasoning Compactor** (compacts verbose LLM chain-of-thought on-device to save tokens, ⌃⌥K), **Desktop Buddy**, and **Mother** (hardcore, local discipline that keeps you off the apps and sites you blocked — and means it).
+Voice Dictation, Mother, and Notch Boss are off by default — flip them on in
+the menubar. (Notch Boss turns itself on if it finds an existing NotchBar
+install to inherit.)
 
-<p align="center">
-  <img src="assets/screenshot-plugins.png" alt="Halen's menubar dropdown showing the five bundled plugins with toggles — Ask Halen, Writing Assistant, Voice Dictation, and Snippet Expander all enabled." width="500"/>
-</p>
+## One model, shared
+
+Plugins don't bundle models; they call the host's. Requests route across
+whatever is available — Apple Intelligence when the OS offers it, the
+bundled Gemma 4 E4B and Qwen 2.5 0.5B (llama.cpp, Metal), or your own
+Ollama daemon — with one queue and two priorities, so a background
+classifier never adds latency to the rewrite you're waiting on. All local,
+always.
 
 ## Why local
 
-Cloud writing tools see everything you type. Halen doesn't. Three reasons that matters:
+- **Privacy** — your text is the product's input, never its export. The only
+  network traffic is the daily update check and the one-time model download.
+- **Speed** — the classifier answers in under 100 ms warm. No round trip
+  beats no round trip.
+- **Trust** — MIT-licensed, open source, and the permission layer is a
+  screen, not a policy document.
 
-**Privacy.** Your half-finished resignation letter, your angry reply, your password reset email — none of it leaves your Mac. Not for processing, not for "improving the model", not for ads.
+## Write a plugin
 
-**Speed.** Round-trips to OpenAI take a second or two. Halen's classifier is under 100ms warm. Rewrites stream in real time.
+Read [PLUGINS.md](PLUGINS.md). The short version: a folder, a JSON manifest,
+and newline-delimited JSON-RPC over stdio in any language. The complete
+example — a clipboard cleaner in ~100 lines of dependency-free Python —
+lives in [`examples/clipboard-cleaner/`](examples/clipboard-cleaner/).
 
-**Trust.** Halen is open source under MIT. You can read every line of code, build it yourself, and run it disconnected from the internet.
+There is deliberately no plugin store, no submissions, no payment rails.
+The plugin directory is a folder. If you build something, open an issue and
+show us.
 
-## How models run
-
-Halen picks the best available model on your Mac, automatically:
-
-- **Apple Intelligence** if you have it (macOS 26+, supported Macs).
-- A small local model — Gemma 4 E4B, plus Qwen 2.5 for classification — downloaded once on first use, if you don't.
-- Your own [Ollama](https://ollama.com) daemon, if you've installed one.
-
-Nothing to configure. The model picker in Settings is there if you want to.
-
-## Hotkeys
-
-| | |
-|---|---|
-| **⌃H** | Ask Halen |
-| **⌃⌥R** | Rewrite the selected text |
-| **⌃⌥E** | Draft a reply to the focused email |
-| **⌃⌥⌘P** | Polish the selected prompt in place |
-| **⌃⌥Space** | Start dictation |
-
-## Privacy
-
-Halen never sends your text anywhere. Inference is on-device. The only network requests Halen makes are: an update check once a day (Sparkle) and an optional one-time model download from Hugging Face if you opt in. No analytics, no telemetry, no crash reports. Read the full [privacy page](docs/wiki/privacy.md).
-
-## Demo
-
-A scripted 1-minute walkthrough is in [`docs/DEMO.md`](docs/DEMO.md). The web demo at [halen.dev](https://halen.dev) runs the same beats inline in your browser.
-
-## Build from source
-
-Halen is open source. If you want to build it yourself, contribute, or write a plugin:
+## Building from source
 
 ```bash
-git clone https://github.com/lukataylo/halen.git
-cd halen
-./scripts/run-dev.sh
+git clone https://github.com/lukataylo/halen.git && cd halen
+./scripts/fetch-assets.sh   # llama.xcframework + the bundled model
+swift build && swift test
+./scripts/run-dev.sh        # build, sign for dev, relaunch with logs
 ```
 
-[Architecture](docs/wiki/architecture.md) · [Plugin protocol](plugins/README.md) · [Contributing](CONTRIBUTING.md) · [Roadmap](ROADMAP.md) · [Changelog](CHANGELOG.md)
+Architecture in one breath: `Sources/HalenPluginAPI` is the public plugin
+surface, `Sources/HalenKit` is the host (model lifecycle, inference queue,
+permission broker, plugin runtime), `Sources/Plugins/*` are the bundled
+plugins (each depends on the API target only — the compiler enforces it),
+and `Sources/Halen` is the menubar shell. See `docs/wiki/architecture.md`.
 
-## License
+## The covenant
 
-MIT — see [LICENSE](LICENSE). Model weights aren't bundled; they download from Hugging Face under their own licences ([Gemma](https://ai.google.dev/gemma/terms), [Qwen](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/main/LICENSE)).
+Not on the roadmap, and probably never:
+
+- No cloud sync. Not even opt-in.
+- No online account.
+- No telemetry, no analytics, no crash uploads.
+- No closed-source components inside the app.
+- No subscription. If that ever changes, the last free version keeps working
+  and stays up.
+
+MIT. Made for people who type all day.

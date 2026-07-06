@@ -1,5 +1,7 @@
 import AppKit
 import ServiceManagement
+import HalenKit
+import HalenPluginAPI
 
 /// Wraps `SMAppService.mainApp` for the launch-at-login toggle in Settings.
 ///

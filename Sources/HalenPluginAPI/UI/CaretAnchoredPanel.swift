@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 
 /// Caret-anchored placement for transient overlay panels — resolves *where* to
 /// float a popover relative to the user's text caret, trying progressively
@@ -10,28 +11,34 @@ import AppKit
 /// plugins — Sentiment Guard, Clarity Checker, Style Guide — share one
 /// implementation instead of copy-pasting ~100 lines of anchor maths.
 @MainActor
-enum CaretAnchoredPanel {
+public enum CaretAnchoredPanel {
 
     /// A resolved anchor. The *kind* of region changes the placement strategy
     /// (a caret gets a popup directly below it; an element/window anchor gets
     /// the popup near the field's content area).
-    struct Anchor {
-        let rect: CGRect
-        let kind: Kind
-        enum Kind { case caret, element, window }
+    public struct Anchor {
+        public let rect: CGRect
+        public let kind: Kind
+        public enum Kind { case caret, element, window }
+
+        public init(rect: CGRect, kind: Kind) {
+            self.rect = rect
+            self.kind = kind
+        }
     }
 
-    /// Resolve where to anchor a popover. `cachedCaretRect` is the most recent
-    /// `caret.moved` rect the caller has seen (plugins that track it pass it
-    /// in); pass `nil` when unavailable.
+    /// Resolve where to anchor a popover. `element` is the focused text
+    /// element the caller is tracking (pass `nil` when none). `cachedCaretRect`
+    /// is the most recent `caret.moved` rect the caller has seen (plugins that
+    /// track it pass it in); pass `nil` when unavailable.
     ///
     /// Each step's rect is validated against the screen list because some apps
     /// misreport AX bounds in window-local coords; pinning to those would put
     /// the popup at (0,0).
-    static func resolveAnchor(caretObserver: CaretObserver?,
-                              cachedCaretRect: CGRect?) -> Anchor? {
+    public static func resolveAnchor(element: AXUIElement?,
+                                     cachedCaretRect: CGRect?) -> Anchor? {
         // 1. Exact caret bounds — the ideal: popup pops right below the caret.
-        if let element = caretObserver?.currentElement,
+        if let element,
            let axRect = axReadCaretBounds(element) {
             let cocoa = axRectToCocoa(axRect)
             if rectIsOnScreen(cocoa) { return Anchor(rect: cocoa, kind: .caret) }
@@ -43,14 +50,14 @@ enum CaretAnchoredPanel {
         }
         // 3. The focused element's frame. Electron / web text fields refuse to
         //    expose caret bounds but almost always expose AXFrame on the field.
-        if let element = caretObserver?.currentElement,
+        if let element,
            let axFrame = axReadFrame(element) {
             let cocoa = axRectToCocoa(axFrame)
             if rectIsOnScreen(cocoa) { return Anchor(rect: cocoa, kind: .element) }
         }
         // 4. The containing window's frame — last resort: at minimum we land on
         //    the app the user is in, not a different display's corner.
-        if let element = caretObserver?.currentElement,
+        if let element,
            let axWindow = axReadContainingWindowFrame(element) {
             let cocoa = axRectToCocoa(axWindow)
             if rectIsOnScreen(cocoa) { return Anchor(rect: cocoa, kind: .window) }
@@ -58,7 +65,7 @@ enum CaretAnchoredPanel {
         return nil
     }
 
-    static func rectIsOnScreen(_ rect: CGRect) -> Bool {
+    public static func rectIsOnScreen(_ rect: CGRect) -> Bool {
         NSScreen.screens.contains(where: { $0.frame.intersects(rect) })
     }
 
@@ -78,7 +85,7 @@ enum CaretAnchoredPanel {
     ///   - `.window`: nestled in the window's bottom-left inset.
     /// With no anchor at all it lands at the centre of the main screen, never
     /// the corner (a corner reads as "system notification" — wrong model).
-    static func frame(for anchor: Anchor?, size: CGSize) -> NSRect {
+    public static func frame(for anchor: Anchor?, size: CGSize) -> NSRect {
         if let anchor, let screen = screenContaining(anchor.rect) {
             let visible = screen.visibleFrame
             var x = anchor.rect.minX

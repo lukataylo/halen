@@ -12,20 +12,25 @@ import Foundation
 /// reliably with class generics + `@MainActor`, and the resulting boilerplate-
 /// on-the-subclass undoes the win. A bag of free functions is mundane but
 /// keeps the call sites in each store legible.
-enum JSONRuleStoreSupport {
+public enum JSONRuleStoreSupport {
     /// Wire format every rule store shares — `version` exists so we can
     /// migrate the on-disk shape later without breaking existing files.
-    struct Payload<Rule: Codable>: Codable {
-        var version: Int
-        var rules: [Rule]
+    public struct Payload<Rule: Codable>: Codable {
+        public var version: Int
+        public var rules: [Rule]
+
+        public init(version: Int, rules: [Rule]) {
+            self.version = version
+            self.rules = rules
+        }
     }
 
     /// Read `Rule`s from `fileURL`. Returns `nil` on first-launch / corrupted
     /// file — callers should fall back to their builtins via `ensureDefaults`.
     /// `storeName` is logged so missing/corrupt persistence shows up keyed by
     /// plugin (otherwise three identical log lines from three stores blur).
-    static func load<Rule: Codable>(_: Rule.Type, from fileURL: URL,
-                                    storeName: String) -> [Rule]? {
+    public static func load<Rule: Codable>(_: Rule.Type, from fileURL: URL,
+                                           storeName: String) -> [Rule]? {
         do {
             let data = try Data(contentsOf: fileURL)
             let payload = try JSONDecoder().decode(Payload<Rule>.self, from: data)
@@ -41,8 +46,8 @@ enum JSONRuleStoreSupport {
     /// pretty-printed + sorted for human-readable diffs, replaces the file
     /// in one step. Logs at `.error` on failure (was a silent `try?` in the
     /// pre-refactor stores; one of the P2b cleanups rolled in here).
-    static func save<Rule: Codable>(_ rules: [Rule], to fileURL: URL,
-                                    storeName: String) {
+    public static func save<Rule: Codable>(_ rules: [Rule], to fileURL: URL,
+                                           storeName: String) {
         do {
             let payload = Payload<Rule>(version: 1, rules: rules)
             let encoder = JSONEncoder()
@@ -61,7 +66,7 @@ enum JSONRuleStoreSupport {
     /// spaces → underscores, stripped of anything non-alphanumeric, then
     /// suffixed with a short UUID slice so two custom rules with the same
     /// label don't collide.
-    static func slugId(from text: String) -> String {
+    public static func slugId(from text: String) -> String {
         let slug = text
             .lowercased()
             .replacingOccurrences(of: " ", with: "_")

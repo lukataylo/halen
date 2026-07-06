@@ -5,15 +5,15 @@ import Observation
 /// company wiki reads formal. Read by Writing Coach (tone + clarity
 /// classifiers) and Snippet Expander's email-reply action so a blunt
 /// Slack message isn't judged the way a blunt email is.
-enum ToneProfile: String, Codable, CaseIterable, Sendable, Identifiable {
+public enum ToneProfile: String, Codable, CaseIterable, Sendable, Identifiable {
     case formal
     case businessCasual
     case casual
     case neutral
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .formal:         return "Formal"
         case .businessCasual: return "Business casual"
@@ -24,7 +24,7 @@ enum ToneProfile: String, Codable, CaseIterable, Sendable, Identifiable {
 
     /// A clause describing the register, dropped into classification / rewrite
     /// prompts so the model judges text against the right bar.
-    var promptClause: String {
+    public var promptClause: String {
         switch self {
         case .formal:
             return "The user writes in a formal, professional register in this app; hold the text to a polished, measured standard."
@@ -39,12 +39,12 @@ enum ToneProfile: String, Codable, CaseIterable, Sendable, Identifiable {
 
     /// Whether this profile sets an *expected* register the message can be
     /// checked against. Neutral imposes no target — it's "no preference".
-    var enforcesTarget: Bool { self != .neutral }
+    public var enforcesTarget: Bool { self != .neutral }
 
     /// Ordering of registers by formality, so detection can flag only when a
     /// message is *less* formal than the app expects (a stiff message in a
     /// casual app isn't worth a nag). Higher = more formal.
-    var formalityRank: Int {
+    public var formalityRank: Int {
         switch self {
         case .formal:         return 3
         case .businessCasual: return 2
@@ -56,7 +56,7 @@ enum ToneProfile: String, Codable, CaseIterable, Sendable, Identifiable {
     /// One-line descriptor of the expected register, dropped into the
     /// register-classification prompt so the model knows what each label means.
     /// `nil` for neutral (there's nothing to match against).
-    var targetDescriptor: String? {
+    public var targetDescriptor: String? {
         switch self {
         case .formal:
             return "formal — polished and professional, complete sentences, no slang or contractions-heavy phrasing"
@@ -70,7 +70,7 @@ enum ToneProfile: String, Codable, CaseIterable, Sendable, Identifiable {
     }
 
     /// The lowercase token the register classifier emits for this profile.
-    var classifierToken: String {
+    public var classifierToken: String {
         switch self {
         case .formal:         return "formal"
         case .businessCasual: return "business-casual"
@@ -84,7 +84,7 @@ enum ToneProfile: String, Codable, CaseIterable, Sendable, Identifiable {
     /// left when a first-token parse clips "business casual"). Returns nil for
     /// anything that isn't one of the three register labels — crucially
     /// including "neutral" and "informal", so an off-list reply never flags.
-    static func fromClassifierToken(_ token: String) -> ToneProfile? {
+    public static func fromClassifierToken(_ token: String) -> ToneProfile? {
         switch token.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) {
         case "formal":                                       return .formal
         case "business-casual", "business casual", "businesscasual", "business":
@@ -96,18 +96,18 @@ enum ToneProfile: String, Codable, CaseIterable, Sendable, Identifiable {
 }
 
 /// Host service: per-app tone profiles keyed by bundle id. Owned by the host
-/// and exposed through `HalenServices.toneProfiles` so any plugin can read a
+/// and exposed through `PluginContext.toneProfiles` so any plugin can read a
 /// consistent profile for the app the user is currently in. The editor
 /// lives at Settings → App tone profiles (`ToneProfilesDetailView`); every
 /// other touch is a read.
 @Observable
 @MainActor
-final class AppToneProfileStore {
-    private(set) var profiles: [String: ToneProfile] = [:]
+public final class AppToneProfileStore {
+    public private(set) var profiles: [String: ToneProfile] = [:]
 
     private let fileURL: URL
 
-    init(fileURL: URL? = nil) {
+    public init(fileURL: URL? = nil) {
         self.fileURL = fileURL ?? Self.defaultFileURL()
         load()
     }
@@ -119,12 +119,12 @@ final class AppToneProfileStore {
     }
 
     /// Resolved profile for `bundleId`, defaulting to `.neutral`.
-    func profile(for bundleId: String?) -> ToneProfile {
+    public func profile(for bundleId: String?) -> ToneProfile {
         guard let bundleId else { return .neutral }
         return profiles[bundleId] ?? .neutral
     }
 
-    func setProfile(_ profile: ToneProfile, for bundleId: String) {
+    public func setProfile(_ profile: ToneProfile, for bundleId: String) {
         let trimmed = bundleId.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         if profile == .neutral {
@@ -136,13 +136,13 @@ final class AppToneProfileStore {
         save()
     }
 
-    func removeProfile(for bundleId: String) {
+    public func removeProfile(for bundleId: String) {
         guard profiles.removeValue(forKey: bundleId) != nil else { return }
         save()
     }
 
     /// Assigned profiles sorted by bundle id, for a stable editor list.
-    var sortedEntries: [(bundleId: String, profile: ToneProfile)] {
+    public var sortedEntries: [(bundleId: String, profile: ToneProfile)] {
         profiles.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
     }
 

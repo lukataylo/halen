@@ -4,6 +4,55 @@ All notable changes to Halen are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning is [semver](https://semver.org/).
 
+## [0.4.0] — 2026-07-06
+
+Halen is now a plugin platform. One on-device model, one permission layer,
+one plugin runtime — and everything you use, including the writing
+assistant, is a plugin on top of it.
+
+### The platform
+- **HalenPluginAPI** — the public plugin surface, now a separate module.
+  Bundled plugins compile against it and nothing else; the SwiftPM
+  dependency graph enforces that no plugin can touch host internals.
+- **Capabilities** — every plugin declares up front what it observes
+  (text, frontmost app, keystrokes, screen, local processes) and does
+  (insert text, popovers, speech, shortcuts, hotkeys, clipboard, calendar,
+  automation, the notch). Declarations are enforced at the API boundary —
+  previously most RPC methods were open to any installed plugin.
+- **One permissions screen** — every plugin × every capability, each
+  individually revocable, plus all macOS permission states, one tap from
+  the menubar.
+- **Priority inference queue** — requests carry `userInitiated` or
+  `background` priority; a queued background classification never delays a
+  rewrite you're waiting on. The classifier and generation models no longer
+  serialize against each other.
+- **PLUGINS.md** — the external plugin API, documented, with a complete
+  ~100-line example plugin (`examples/clipboard-cleaner/`).
+
+### Notch Boss (NotchBar, absorbed)
+- The NotchBar app is now the **Notch Boss** plugin: live coding-agent
+  session cards, the approval doorbell with diff preview, tool timeline,
+  token/cost tracking, embedded terminal sessions, and the multi-agent
+  conflict detector with its MCP coordination server.
+- The Claude Code socket (`~/.notchbar/notchbar.sock`), hook scripts, and
+  `~/.claude/settings.json` entries are byte-compatible — existing hooks
+  keep working. NotchBar settings import automatically on first run, and
+  Notch Boss enables itself when it finds a NotchBar install.
+
+### Plugin lineup
+- **Mother** is now first-party (was a Python add-on): the focus-hours app
+  blocker, same config format, now with a real settings view.
+- **Ask Halen** retired. The palette predated the platform; its context
+  capture lives on inside Snippet Expander's email reply.
+- **Plugin Store removed** — the plugin directory is a folder and a JSON
+  manifest (`~/Library/Application Support/Halen/Plugins/`). No store, no
+  submissions, until strangers ask for more.
+- **Browser extension + WebSocket bridge removed** — orphaned by the pivot;
+  the stdio plugin runtime is the one plugin transport.
+
+### The covenant
+Unchanged: no cloud, no accounts, no telemetry, everything runs on the Mac.
+
 ## [0.3.0] — 2026-05-25
 
 Six plugins, down from ten. Same features, simpler marketplace.
@@ -125,6 +174,7 @@ Open. Bundled seven first-party plugins: Ask Halen, Typo Fixer,
 Sentiment Guard, Voice Dictation, Snippet Expander, Burnout Copilot,
 Meeting Prep.
 
-[Unreleased]: https://github.com/lukataylo/halen/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/lukataylo/halen/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/lukataylo/halen/compare/v0.3.0...v0.4.0
 [0.2.0]: https://github.com/lukataylo/halen/releases/tag/v0.2.0
 [0.1.0-alpha]: https://github.com/lukataylo/halen/releases/tag/v0.1.0-alpha

@@ -11,9 +11,9 @@
     <key>CFBundleExecutable</key>
     <string>halen</string>
     <key>CFBundleVersion</key>
-    <string>3</string>
+    <string>4</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.3.0</string>
+    <string>0.4.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleIconFile</key>
@@ -23,15 +23,15 @@
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Halen captures audio when you press ⌥⌘H so it can transcribe your speech locally and insert it at your cursor. Audio never leaves this Mac.</string>
+    <string>Voice Dictation captures audio when you press ⌃⌥Space so it can transcribe your speech locally and insert it at your cursor. Audio never leaves this Mac.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Halen uses Apple's on-device speech recognition to convert your dictation to text. Recognition is offline; nothing is sent to the cloud.</string>
     <key>NSCalendarsUsageDescription</key>
-    <string>Halen reads your upcoming events to suggest breaks (Burnout Copilot) and prepare briefings before meetings (Meeting Prep). Calendar data is read locally only.</string>
+    <string>Plugins that declare the calendar capability can read your upcoming events and create new ones. Calendar data is read locally only.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>Halen reads your upcoming events to suggest breaks (Burnout Copilot) and prepare briefings before meetings (Meeting Prep). Calendar data is read locally only.</string>
+    <string>Plugins that declare the calendar capability can read your upcoming events and create new ones. Calendar data is read locally only.</string>
     <key>NSInputMonitoringUsageDescription</key>
-    <string>Halen listens for the ⌃H hotkey so the Ask Halen palette can open in any app. Only the hotkey is matched; no other keystrokes are recorded.</string>
+    <string>Halen listens for plugin hotkeys (like ⌃⌥Space for dictation) in any app, and Snippet Expander reconstructs triggers in fields accessibility can't read. Nothing is stored or transmitted.</string>
     <!-- Sparkle 2.x auto-updater. SUFeedURL points at the public appcast hosted
          on halen.dev (GitHub Pages); SUPublicEDKey is the EdDSA public half
          of the keypair stored in the maintainer's keychain. Update payloads

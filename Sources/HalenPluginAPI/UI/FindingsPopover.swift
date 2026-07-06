@@ -3,20 +3,20 @@ import SwiftUI
 /// One actionable item in a `FindingsPopover` — a tone match, a clarity issue,
 /// a style-rule violation. `onFix` is the per-item one-tap action; `nil` when
 /// the finding is informational only.
-struct Finding: Identifiable {
-    let id: String
-    let title: String
-    let detail: String?
-    let colorName: String
-    let fixLabel: String?
-    let onFix: (() -> Void)?
+public struct Finding: Identifiable {
+    public let id: String
+    public let title: String
+    public let detail: String?
+    public let colorName: String
+    public let fixLabel: String?
+    public let onFix: (() -> Void)?
 
-    init(id: String = UUID().uuidString,
-         title: String,
-         detail: String? = nil,
-         colorName: String = "blue",
-         fixLabel: String? = nil,
-         onFix: (() -> Void)? = nil) {
+    public init(id: String = UUID().uuidString,
+                title: String,
+                detail: String? = nil,
+                colorName: String = "blue",
+                fixLabel: String? = nil,
+                onFix: (() -> Void)? = nil) {
         self.id = id
         self.title = title
         self.detail = detail
@@ -35,11 +35,13 @@ struct Finding: Identifiable {
 /// fails to re-render text inside an `NSHostingView`-backed `NSPanel`, while
 /// `@Published` + `@ObservedObject` is reliable there.
 @MainActor
-final class StreamingRewriteState: ObservableObject {
-    enum Phase: Equatable { case idle, streaming, done, failed }
-    @Published var phase: Phase = .idle
+public final class StreamingRewriteState: ObservableObject {
+    public enum Phase: Equatable { case idle, streaming, done, failed }
+    @Published public var phase: Phase = .idle
     /// Cumulative rewrite text — updated on every streamed snapshot.
-    @Published var rewrite: String = ""
+    @Published public var rewrite: String = ""
+
+    public init() {}
 }
 
 /// Caret-anchored popover that lists one or more `Finding`s with optional
@@ -56,35 +58,61 @@ final class StreamingRewriteState: ObservableObject {
 /// the host `NSPanel` separately when it starts streaming — the SwiftUI view
 /// fills the available height.
 @MainActor
-struct FindingsPopover: View {
+public struct FindingsPopover: View {
     /// Identifies the focusable controls inside the popover. SwiftUI's
     /// `@FocusState` enum form lets us point the focus at exactly one button
     /// on appear so keyboard / VoiceOver users land on the primary action
     /// instead of the popover container.
-    enum Field: Hashable { case primary, approve }
+    public enum Field: Hashable { case primary, approve }
 
-    let icon: String
-    let headline: String
-    let headlineColorName: String
+    public let icon: String
+    public let headline: String
+    public let headlineColorName: String
     /// Flagged source text, shown as a muted preview. `nil` to omit.
-    var contextPreview: String? = nil
-    var findings: [Finding] = []
+    public var contextPreview: String? = nil
+    public var findings: [Finding] = []
     /// Generative action label, e.g. "Rewrite via Gemma 4". `nil` hides it.
-    var primaryActionLabel: String? = nil
-    var onPrimaryAction: (() -> Void)? = nil
+    public var primaryActionLabel: String? = nil
+    public var onPrimaryAction: (() -> Void)? = nil
     /// Dismiss-and-remember label, e.g. "Looks fine". `nil` hides it.
-    var approveLabel: String? = nil
-    var onApprove: (() -> Void)? = nil
+    public var approveLabel: String? = nil
+    public var onApprove: (() -> Void)? = nil
     /// Streaming-rewrite state. When non-nil the popover renders the streaming
     /// pane whenever `streaming.phase != .idle`.
-    var streaming: StreamingRewriteState? = nil
+    public var streaming: StreamingRewriteState? = nil
     /// "Copy" action for the streaming pane. Required if `streaming` is set.
-    var onCopy: (() -> Void)? = nil
-    let onDismiss: () -> Void
+    public var onCopy: (() -> Void)? = nil
+    public let onDismiss: () -> Void
 
     @FocusState private var focusedField: Field?
 
-    var body: some View {
+    public init(icon: String,
+                headline: String,
+                headlineColorName: String,
+                contextPreview: String? = nil,
+                findings: [Finding] = [],
+                primaryActionLabel: String? = nil,
+                onPrimaryAction: (() -> Void)? = nil,
+                approveLabel: String? = nil,
+                onApprove: (() -> Void)? = nil,
+                streaming: StreamingRewriteState? = nil,
+                onCopy: (() -> Void)? = nil,
+                onDismiss: @escaping () -> Void) {
+        self.icon = icon
+        self.headline = headline
+        self.headlineColorName = headlineColorName
+        self.contextPreview = contextPreview
+        self.findings = findings
+        self.primaryActionLabel = primaryActionLabel
+        self.onPrimaryAction = onPrimaryAction
+        self.approveLabel = approveLabel
+        self.onApprove = onApprove
+        self.streaming = streaming
+        self.onCopy = onCopy
+        self.onDismiss = onDismiss
+    }
+
+    public var body: some View {
         if let streaming {
             FindingsPopoverStreamingBody(
                 icon: icon,

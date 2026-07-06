@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Plugin JSON-RPC handshake smoke test — non-agentic, no model, no GUI.
 
-For every bundled plugin under plugins/<id>/halen-plugin.json this spawns the
+For every example plugin under examples/<id>/halen-plugin.json this spawns the
 plugin process exactly as the host does (manifest `executable` + `args`), drives
 the real NDJSON `initialize` -> response handshake, asserts a well-formed
 JSON-RPC 2.0 response with no error, then closes stdin and confirms the process
@@ -19,7 +19,7 @@ import sys
 import threading
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PLUGINS_DIR = os.path.join(ROOT, "plugins")
+PLUGINS_DIR = os.path.join(ROOT, "examples")
 
 INIT = {
     "jsonrpc": "2.0", "id": 1, "method": "initialize",

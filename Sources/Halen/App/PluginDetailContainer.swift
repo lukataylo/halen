@@ -1,4 +1,6 @@
 import SwiftUI
+import HalenKit
+import HalenPluginAPI
 
 /// Shell view rendered when the user taps a plugin in the marketplace. Holds the
 /// back-button header and renders the plugin's own detail content underneath.

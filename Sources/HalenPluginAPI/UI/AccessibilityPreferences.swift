@@ -22,22 +22,22 @@ import Observation
 /// main thread, and the observer also fires there.
 @MainActor
 @Observable
-final class AccessibilityPreferences {
+public final class AccessibilityPreferences {
     /// Shared instance. Use this from SwiftUI views — there's no reason to
     /// construct your own; the values are global to the running app anyway.
-    static let shared = AccessibilityPreferences()
+    public static let shared = AccessibilityPreferences()
 
     /// True when macOS's "Reduce motion" pref is on. UI animations
     /// (spinners, slide transitions, breathing glows) should be replaced
     /// with static equivalents — vestibular-disorder users get motion
     /// sickness from large rotating or sliding elements.
-    private(set) var reduceMotion: Bool
+    public private(set) var reduceMotion: Bool
 
     /// True when macOS's "Reduce transparency" pref is on. Translucent
     /// `.regularMaterial` / `.thinMaterial` / `.ultraThinMaterial`
     /// backgrounds should fall back to an opaque colour — low-vision users
     /// need solid surfaces for legible contrast.
-    private(set) var reduceTransparency: Bool
+    public private(set) var reduceTransparency: Bool
 
     /// Held strong so we can `removeObserver` on deinit. AppKit's
     /// addObserver(forName:…) returns an opaque token that's the only way
@@ -133,13 +133,18 @@ import SwiftUI
 /// Honors `AccessibilityPreferences.shared.reduceTransparency` live — flip
 /// the pref in System Settings and the view restyles without restart.
 @MainActor
-struct AdaptiveMaterial: ViewModifier {
-    let material: Material
-    let fallback: Color
+public struct AdaptiveMaterial: ViewModifier {
+    public let material: Material
+    public let fallback: Color
 
     @State private var prefs = AccessibilityPreferences.shared
 
-    func body(content: Content) -> some View {
+    public init(material: Material, fallback: Color) {
+        self.material = material
+        self.fallback = fallback
+    }
+
+    public func body(content: Content) -> some View {
         if prefs.reduceTransparency {
             // Opaque surface — windowBackgroundColor adapts to light/dark
             // mode automatically, so we don't need a separate dark variant.
@@ -154,7 +159,7 @@ extension View {
     /// Honors macOS's "Reduce transparency" accessibility pref. Use in place
     /// of a raw `.background(<Material>)` on glassy surfaces so low-vision
     /// users get an opaque, high-contrast fallback.
-    func adaptiveMaterial(
+    public func adaptiveMaterial(
         _ material: Material,
         fallback: Color = Color(nsColor: .windowBackgroundColor)
     ) -> some View {

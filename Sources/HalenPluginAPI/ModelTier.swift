@@ -14,13 +14,13 @@ import Foundation
 /// model that's good enough at multi-label classification — so paragraph-pause
 /// → popover lands in well under 2 s, instead of waiting for the 4 B Gemma.
 /// Rewrites/generation stay on `.medium`.
-enum ModelTier: String, Sendable, Codable {
+public enum ModelTier: String, Sendable, Codable {
     case classifier
     case small
     case medium
     case large
 
-    var defaultModelId: String {
+    public var defaultModelId: String {
         switch self {
         case .classifier: return "Qwen/Qwen2.5-0.5B-Instruct"
         case .small:      return "google/gemma-4-E2B-it"

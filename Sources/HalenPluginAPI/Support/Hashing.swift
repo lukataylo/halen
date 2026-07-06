@@ -12,7 +12,7 @@ import CryptoKit
 /// per call (32 two-char fragments + the join buffer plus format-string
 /// overhead); this version allocates exactly one `String` and never touches
 /// `String(format:)`.
-func sha256Hex(_ text: String) -> String {
+public func sha256Hex(_ text: String) -> String {
     let digest = SHA256.hash(data: Data(text.utf8))
     // Lookup table: byte → two lowercase hex ASCII chars. Keeping it as a
     // `[UInt8]` (not a `String`) means each lookup is a single byte read.

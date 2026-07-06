@@ -1,5 +1,6 @@
 import XCTest
-@testable import Halen
+@testable import WritingAssistantPlugin
+import HalenPluginAPI
 
 /// `ClarityRulesStore` is the rule-set Clarity Checker feeds into its
 /// multi-label classification prompt. Modeled identically to

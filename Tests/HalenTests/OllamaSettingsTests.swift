@@ -1,5 +1,5 @@
 import XCTest
-@testable import Halen
+@testable import HalenKit
 
 final class OllamaSettingsValidationTests: XCTestCase {
     func testValidatesCanonicalDefault() {
