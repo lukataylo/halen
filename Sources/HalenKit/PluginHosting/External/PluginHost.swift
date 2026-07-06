@@ -79,8 +79,8 @@ package final class PluginHost {
             // Per-plugin methods (hotkey/*) need plugin identity to route
             // fired events back; intercept them here before falling
             // through to the shared bridge. Every other RPC goes through
-            // the single `HostBridge` shared with the WebSocket transport,
-            // so the surface is identical and can't drift.
+            // the single shared `HostBridge`, so the surface is identical
+            // for every client and can't drift.
             switch method {
             case "hotkey/register", "hotkey/unregister":
                 guard let self else {
