@@ -10,7 +10,7 @@ hits the network.
 ## Hotkey: Carbon `RegisterEventHotKey`
 
 Defined in
-[`HotkeyRegistrar.swift`](../../../Sources/Plugins/VoiceDictation/HotkeyRegistrar.swift).
+[`HotkeyRegistrar.swift`](../../../Sources/HalenKit/Hotkeys/HotkeyRegistrar.swift).
 
 Why Carbon instead of `NSEvent.addGlobalMonitorForEvents`: the NSEvent
 global-monitor path didn't fire reliably for the shortcut, and it needs Input

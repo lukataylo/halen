@@ -82,7 +82,7 @@ already.
 ## The three snippet kinds
 
 Defined in
-[`Snippet.swift`](../../../Sources/Plugins/SnippetExpander/Snippet.swift):
+[`Snippet.swift`](../../../Sources/HalenPluginAPI/Storage/Snippet.swift):
 
 ```swift
 enum Kind: String, Codable, Sendable {
@@ -146,7 +146,7 @@ enum Kind: String, Codable, Sendable {
 ## Built-in snippets
 
 Defined in
-[`SnippetStore.builtins`](../../../Sources/Plugins/SnippetExpander/SnippetStore.swift):
+[`SnippetStore.builtins`](../../../Sources/HalenPluginAPI/Storage/SnippetStore.swift):
 
 | Trigger     | Kind         | Behaviour |
 |-------------|--------------|-----------|
