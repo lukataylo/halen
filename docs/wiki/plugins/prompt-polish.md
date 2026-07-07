@@ -1,7 +1,7 @@
 # Prompt Polish
 
 > Plugin id: `com.halen.prompt-polish` · Category: Productivity · Code:
-> [`Sources/Halen/Features/PromptPolish/`](../../../Sources/Halen/Features/PromptPolish/)
+> [`Sources/Plugins/PromptPolish/`](../../../Sources/Plugins/PromptPolish/)
 
 Select the prompt you're about to send to an AI — in any app, including a
 ChatGPT, Claude, or Gemini text box — and press **⌃⌥⌘P**. Halen rewrites it in

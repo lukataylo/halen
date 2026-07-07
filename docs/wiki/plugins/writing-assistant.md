@@ -1,7 +1,7 @@
 # Writing Assistant
 
 > Plugin id: `com.halen.writing-assistant` · Category: Writing · Code:
-> [`Sources/Halen/Features/`](../../../Sources/Halen/Features/)
+> [`Sources/Plugins/`](../../../Sources/Plugins/)
 >
 > Runs **in-process** inside the menubar binary. One marketplace row, one
 > on/off switch, on by default. No hotkey of its own — its engines react
@@ -22,11 +22,11 @@ one detail panel instead of separate rows competing for the same paragraph.
 
 Two replacement engines:
 
-- **Auto typos** ([`TypoFixer`](../../../Sources/Halen/Features/TypoFixer/TypoFixer.swift))
+- **Auto typos** ([`TypoFixer`](../../../Sources/Plugins/WritingAssistant/TypoFixer.swift))
   learns from how you correct yourself and replaces a known typo inline
   when you finish the word. Backspace + retype within 60 s of an auto-fix
   demotes the entry forever. Pre-seeded with 32 common slips.
-- **Preferences** ([`StyleGuide`](../../../Sources/Halen/Features/StyleGuide/StyleGuide.swift))
+- **Preferences** ([`StyleGuide`](../../../Sources/Plugins/WritingAssistant/StyleGuide.swift))
   is a pure rule engine — no inference. Literal, regex, and prohibition
   rules scan each settled paragraph; matches surface in a popover with a
   single-tap **Replace** button.
@@ -37,10 +37,10 @@ Two paragraph-level classifiers, both built on the
 [`ParagraphClassifier`](../../../Sources/Halen/Support/ParagraphClassifier.swift)
 scaffold:
 
-- **Tone** ([`SentimentGuard`](../../../Sources/Halen/Features/SentimentGuard/SentimentGuard.swift))
+- **Tone** ([`SentimentGuard`](../../../Sources/Plugins/WritingAssistant/SentimentGuard.swift))
   flags hostile, irritated, passive-aggressive language. Lower-priority
   labels (anxious, overly corporate) opt in.
-- **Clarity** ([`ClarityChecker`](../../../Sources/Halen/Features/ClarityChecker/ClarityChecker.swift))
+- **Clarity** ([`ClarityChecker`](../../../Sources/Plugins/WritingAssistant/ClarityChecker.swift))
   flags passive voice, run-on sentences, and vague pronouns.
 
 Tone routes to a dedicated Qwen 2.5 0.5B model (`.classifier` tier,

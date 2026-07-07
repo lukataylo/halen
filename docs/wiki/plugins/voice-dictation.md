@@ -1,7 +1,7 @@
 # Voice Dictation
 
 > Plugin id: `com.halen.voice-dictation` · Category: Voice · Code:
-> [`Sources/Halen/Features/VoiceDictation/`](../../../Sources/Halen/Features/VoiceDictation/)
+> [`Sources/Plugins/VoiceDictation/`](../../../Sources/Plugins/VoiceDictation/)
 
 Press **⌃⌥Space**, speak, press again — the transcription appears at your
 cursor. Apple's on-device recogniser does the speech-to-text; nothing
@@ -10,7 +10,7 @@ hits the network.
 ## Hotkey: Carbon `RegisterEventHotKey`
 
 Defined in
-[`HotkeyRegistrar.swift`](../../../Sources/Halen/Features/VoiceDictation/HotkeyRegistrar.swift).
+[`HotkeyRegistrar.swift`](../../../Sources/Plugins/VoiceDictation/HotkeyRegistrar.swift).
 
 Why Carbon instead of `NSEvent.addGlobalMonitorForEvents`: the NSEvent
 global-monitor path didn't fire reliably for the shortcut, and it needs Input
@@ -41,7 +41,7 @@ back to a Swift closure on the main queue. On failure
 ## Recorder: AVAudioEngine + SFSpeechRecognizer
 
 Defined in
-[`VoiceDictationRecorder.swift`](../../../Sources/Halen/Features/VoiceDictation/VoiceDictationRecorder.swift).
+[`VoiceDictationRecorder.swift`](../../../Sources/Plugins/VoiceDictation/VoiceDictationRecorder.swift).
 
 ```swift
 let req = SFSpeechAudioBufferRecognitionRequest()

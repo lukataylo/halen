@@ -1,7 +1,7 @@
 # Snippet Expander
 
 > Plugin id: `com.halen.snippet-expander` · Category: Productivity · Code:
-> [`Sources/Halen/Features/SnippetExpander/`](../../../Sources/Halen/Features/SnippetExpander/)
+> [`Sources/Plugins/SnippetExpander/`](../../../Sources/Plugins/SnippetExpander/)
 
 A TextExpander-style sentinel trigger, with a twist: snippets can be
 **AI-backed**, where the snippet's stored value is a system prompt sent
@@ -56,7 +56,7 @@ and concisely" prompt.
 
 Drafts a reply to the focused email. Fires either by pressing ⌃⌥E or by
 typing `;reply` in a message body. Both routes call the same helper:
-[`EmailReplyDrafter`](../../../Sources/Halen/Features/SnippetExpander/EmailReplyDrafter.swift).
+[`EmailReplyDrafter`](../../../Sources/Plugins/SnippetExpander/EmailReplyDrafter.swift).
 
 Behaviour:
 
@@ -82,7 +82,7 @@ already.
 ## The three snippet kinds
 
 Defined in
-[`Snippet.swift`](../../../Sources/Halen/Features/SnippetExpander/Snippet.swift):
+[`Snippet.swift`](../../../Sources/Plugins/SnippetExpander/Snippet.swift):
 
 ```swift
 enum Kind: String, Codable, Sendable {
@@ -146,7 +146,7 @@ enum Kind: String, Codable, Sendable {
 ## Built-in snippets
 
 Defined in
-[`SnippetStore.builtins`](../../../Sources/Halen/Features/SnippetExpander/SnippetStore.swift):
+[`SnippetStore.builtins`](../../../Sources/Plugins/SnippetExpander/SnippetStore.swift):
 
 | Trigger     | Kind         | Behaviour |
 |-------------|--------------|-----------|

@@ -135,7 +135,7 @@ req.requiresOnDeviceRecognition = true
 ```
 
 Set in
-[`VoiceDictationRecorder.swift`](../../Sources/Halen/Features/VoiceDictation/VoiceDictationRecorder.swift).
+[`VoiceDictationRecorder.swift`](../../Sources/Plugins/VoiceDictation/VoiceDictationRecorder.swift).
 
 When `requiresOnDeviceRecognition = true`, Apple's recogniser refuses to
 fall back to a server-side path: if the on-device model for your locale
