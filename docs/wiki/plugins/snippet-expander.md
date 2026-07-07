@@ -41,10 +41,10 @@ rewrites just that selection in place. It's a distinct mechanism because
 typing a `;` trigger would destroy the highlight.
 
 `installRephraseHotkey()` registers global + local `NSEvent` `.keyDown`
-monitors (same approach as Ask Halen's ⌃H, not Carbon) matching
+monitors (not Carbon) matching
 Control+Option held with the "r" key. It calls `IOHIDRequestAccess` so the
 hotkey can fire system-wide — Input Monitoring is needed for that, and the
-request is idempotent if Ask Halen already asked.
+request is idempotent if another plugin already asked.
 
 `rephraseSelection()` reads the focused element's selected range and text via
 AX, no-ops when nothing is selected, and runs the same placeholder + async

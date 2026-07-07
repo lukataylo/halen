@@ -4,13 +4,13 @@
 > [`plugins/mother/`](../../../plugins/mother/)
 >
 > **Runs out-of-process** as a JSON-RPC plugin over stdio, like Reasoning
-> Compactor and Desktop Buddy. The menubar app brokers `app.focused` events
+> The menubar app brokers `app.focused` events
 > to it and proxies the notifications and modal prompts it asks for
 > (`ui/toast`, `ui/prompt`). Quitting an app and closing a browser tab is
 > done by Mother's own `osascript` subprocess — a subprocess the plugin
 > spawns itself rather than a host capability. Mother holds no macOS
 > entitlements of her own. See
-> [plugins/README.md](../../../plugins/README.md) for the protocol.
+> [PLUGINS.md](../../../PLUGINS.md) for the protocol.
 
 Mother is a discipline enforcer. You give her a blocklist of apps and
 websites; she keeps you off them. Everything is local — no network, no

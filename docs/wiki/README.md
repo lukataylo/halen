@@ -13,8 +13,8 @@ Your text never leaves your Mac.
   they never touch AX themselves.
 - **Same contract, in-process or out.** Event names are JSON-RPC
   method names. In-process plugins call them via Swift. External
-  plugins read NDJSON over stdio (Reasoning Compactor, Mother,
-  Desktop Buddy); bundled plugins live inside the menubar app.
+  plugins read NDJSON over stdio (see PLUGINS.md and
+  examples/clipboard-cleaner); bundled plugins live inside the menubar app.
 - **Tier-based, multi-backend inference.** Plugins ask for
   `classifier`, `small`, `medium`, or `large`. `RouterInferenceClient`
   picks a backend and falls through on failure. The `.classifier`
@@ -45,7 +45,6 @@ toggles them on or off and opens their detail panel.
 
 | Plugin | Category | Default | What it does |
 |---|---|---|---|
-| Ask Halen | Productivity | On | ⌃H opens a floating palette. One question, with your focused app + selection + clipboard as context. |
 | [Writing Assistant](plugins/writing-assistant.md) | Writing | On | Fixes typos and flags tone & clarity as you type. Per-app target tones; one-tap rewrite on a finding. |
 | [Snippet Expander](plugins/snippet-expander.md) | Productivity | On | `;tag` expands. `;reply` or ⌃⌥E drafts an email. ⌃⌥R rewrites a selection. |
 | [Voice Dictation](plugins/voice-dictation.md) | Voice | Off | ⌃⌥Space opens a listening pill. Apple's on-device transcription writes at your caret. |
@@ -60,8 +59,8 @@ into `~/Library/Application Support/Halen/Plugins/`.
 | Plugin | Category | What it does |
 |---|---|---|
 | [Mother](plugins/mother.md) | Focus | Hardcore local discipline. Quits blocklisted apps and closes blocklisted browser tabs during your focus hours. No network. |
-| [Reasoning Compactor](plugins/reasoning-compactor.md) | Productivity | ⌃⌥K compacts a verbose LLM chain-of-thought on-device — keeps the load-bearing steps and final answer, drops the filler. Copies the result to the clipboard. |
-| [Desktop Buddy](plugins/desktop-buddy.md) | Productivity | A Gemma-powered character on your desktop; ⌃⌥B to focus it. **Pre-alpha — not in the Plugin Store**; needs its companion binary built via `build.sh`. |
+| [Mother](plugins/mother.md) | Focus | Now bundled first-party — the focus-hours app and site blocker. |
+| [Notch Boss](plugins/notch-boss.md) | Agents | The former NotchBar app: coding-agent session cards, approval doorbell, cost tracking, conflict detection — in your notch. |
 
 ## Source pointers
 

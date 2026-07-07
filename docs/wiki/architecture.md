@@ -1,88 +1,106 @@
 # Architecture
 
-One AX pipeline. One event bus. One inference router. Many plugins.
+One model. One permission layer. One plugin runtime. Everything you actually
+use is a plugin on top of them.
 
-That's the whole shape. A single Swift Package menubar app
-(`LSUIElement = true`) hosts the first-party plugins in-process and
-spawns third-party plugins as JSON-RPC subprocesses over stdio. ~20k
-lines of Swift, 169 unit tests under `Tests/HalenTests/`. Everything
-flows through three seams: AX → events → inference. Plugins plug into
-the middle one.
+Halen is a single Swift Package menubar app (`LSUIElement = true`). The
+SwiftPM target graph *is* the architecture — the dependency lists in
+`Package.swift` are the honesty proof:
+
+```
+HalenPluginAPI    the public plugin surface: HalenPlugin, PluginManifest,
+                  Capability, PluginContext + service protocols, Event,
+                  InferenceClient (tiers + priorities), the notch surface
+                  types, and the shared stores (snippets, tone profiles).
+                  Depends on nothing.
+
+HalenKit          the host: model lifecycle, the priority inference queue,
+                  the permission broker, the hotkey registry, the AX
+                  pipeline, the notch panel manager, and the plugin runtime
+                  (in-process + external stdio). Depends on HalenPluginAPI
+                  (and the llama binary target) and implements its services.
+
+Sources/Plugins/* the six bundled plugins: WritingAssistant,
+                  SnippetExpander, VoiceDictation, PromptPolish, Mother,
+                  NotchBoss. Each depends on HalenPluginAPI ONLY (NotchBoss
+                  additionally on SwiftTerm for its embedded terminal) — a
+                  first-party plugin physically cannot import host internals.
+
+Sources/Halen     the app shell: menubar UI, settings, the permissions
+                  screen, onboarding, Sparkle updater. Wires HalenKit to
+                  the plugin modules.
+```
 
 ## Top-level layout
 
 ```
-Sources/Halen/
-  App/               # SwiftUI App, AppDelegate, AppCoordinator, MenuBarExtra UI
-  Accessibility/     # AX permission, caret observer, AX attribute helpers
-  Events/            # In-process pub/sub + typed event payloads
-  Inference/         # RouterInferenceClient + protocol, ModelTier, backends
-                     #   (Apple FM / llama.cpp / Ollama), ModelDownloader
-  Overlay/           # Caret-anchored NSWindow shell
-  Plugins/           # HalenPlugin protocol, HalenServices DI container, registry,
-                     #   External/ — out-of-process plugin host + WebSocket bridge
-  Features/          # The ten in-process first-party plugins
-                     #   (out-of-process plugins live in /plugins at the repo root)
-  Support/           # Logging, string diff, hashing, paragraph classifier
+Sources/HalenPluginAPI/   # the API — read PluginContext.swift first
+Sources/HalenKit/
+  Accessibility/          # AX permission, CaretObserver, TCC status model
+  Events/                 # EventBus (in-process pub/sub)
+  Hotkeys/                # NSEvent-backed registrar + conflict registry
+  Inference/              # RouterInferenceClient, backends (Apple FM /
+                          #   llama.cpp / Ollama), AsyncSemaphore,
+                          #   ModelDownloader
+  Notch/                  # NotchPanelManager (one panel per screen)
+  Overlay/                # caret-anchored overlay windows
+  PluginHosting/          # HostServices, PermissionBroker, PluginRegistry,
+                          #   CalendarService
+    External/             # stdio JSON-RPC plugin host (PluginHost,
+                          #   PluginInstance, HostBridge, PluginRPC)
+Sources/Plugins/          # WritingAssistant, SnippetExpander, VoiceDictation,
+                          #   PromptPolish, Mother, NotchBoss
+Sources/Halen/App/        # HalenApp, AppDelegate, AppCoordinator, menubar +
+                          #   settings + permissions views, onboarding
+Tests/HalenTests/         # unit tests across all targets
 ```
 
 ## The big picture
 
 ```
-       ┌──────────────────────────────────────────────────────────────┐
-       │                          AppCoordinator                      │
-       │  ┌────────────────────────────────────────────────────────┐  │
-       │  │            CaretObserver (AX → events)                 │  │
-       │  └────────────────────┬───────────────────────────────────┘  │
-       │                       │ publishes                            │
-       │                       ▼                                      │
-       │  ┌────────────────────────────────────────────────────────┐  │
-       │  │                    EventBus                            │  │
-       │  │  text.pause · caret.moved · app.focused · …            │  │
-       │  └─┬─────────────┬─────────────┬─────────────┬────────────┘  │
-       │    │             │             │             │               │
-       │    ▼             ▼             ▼             ▼               │
-       │  AskHalen  TypoFixer  SentimentGuard  SnippetExpander        │
-       │  ClarityChecker  VoiceDictation  WritingAssistant            │
-       │  EmailReply  ToneProfiles                                    │
-       │                       │            Reasoning Compactor ─┐    │
-       │                       │            Mother · Desktop Buddy┤ stdio │
-       │                       │ async calls                     ─┘ JSON-RPC│
-       │                       ▼                                      │
-       │  ┌────────────────────────────────────────────────────────┐  │
-       │  │              RouterInferenceClient                     │  │
-       │  │   routes per request, falls through on failure:        │  │
-       │  │   Apple FM · bundled Gemma 4 (llama.cpp) · Ollama      │  │
-       │  └────────────────────────────────────────────────────────┘  │
-       └──────────────────────────────────────────────────────────────┘
+      ┌────────────────────────────────────────────────────────────────┐
+      │                        AppCoordinator                          │
+      │   CaretObserver (AX) ──► EventBus                              │
+      │        text.pause · caret.moved · app.focused · finding.*      │
+      │                             │  filtered per manifest + grants  │
+      │                             ▼                                  │
+      │   WritingAssistant  SnippetExpander  VoiceDictation            │
+      │   PromptPolish      Mother           NotchBoss                 │
+      │   external plugins (stdio JSON-RPC) ─────────────┐             │
+      │                             │                    │             │
+      │            PluginContext / HostBridge (capability-gated)       │
+      │                             │                                  │
+      │                             ▼                                  │
+      │   RouterInferenceClient — priority queue per backend instance  │
+      │   Apple FM · bundled llama.cpp (Gemma 4, Qwen 0.5B) · Ollama   │
+      └────────────────────────────────────────────────────────────────┘
 ```
 
-The arrows flow one way: AX events fan out to plugins; plugins write back
-through `CaretObserver.replaceRange(_:with:)` or through their own UI panels.
+The arrows flow one way: the host observes the system and fans events out to
+plugins; plugins act back through their capability-gated services (text
+write-back, popovers, hotkeys, the notch).
 
 ## Host vs plugins
 
 The **host** owns:
 
 - AX capture (focused element, caret rect, debounced text snapshots).
-- The shared inference runtime (`RouterInferenceClient`, which serializes
-  per-backend requests and falls through across Apple FM / llama.cpp / Ollama).
-- Per-plugin storage roots (`~/Library/Application Support/Halen/<pluginId>/`).
-- Permission UI (Accessibility, Calendar, Mic, Speech, Notifications).
-- The marketplace UI (`HalenCenterView`) and plugin lifecycle.
-- The out-of-process plugin host (`Plugins/External/`) and the loopback
-  WebSocket bridge the browser extension connects to.
+- The shared inference runtime and both bundled model downloads.
+- The permission layer (`PermissionBroker`): capability grants per plugin
+  plus every macOS TCC prompt.
+- The hotkey registry with process-wide conflict detection.
+- Per-plugin storage roots (`~/Library/Application Support/Halen/<plugin-id>/`).
+- The notch surface (`NotchPanelManager`) — one plugin at a time.
+- The plugin list UI (`HalenCenterView`), the permissions screen, plugin
+  lifecycle, and the external plugin host.
 
-A **plugin** is anything conforming to `HalenPlugin`:
+A **plugin** is anything conforming to `HalenPlugin`
+(`Sources/HalenPluginAPI/HalenPlugin.swift`):
 
 ```swift
 @MainActor
-protocol HalenPlugin: AnyObject {
-    var id: String { get }               // "com.halen.typo-fixer"
-    var name: String { get }
-    var summary: String { get }
-    var icon: String { get }             // SF Symbol
-    var category: PluginCategory { get }
+public protocol HalenPlugin: AnyObject {
+    var manifest: PluginManifest { get }   // identity, events, capabilities
 
     func start()
     func stop()
@@ -91,223 +109,222 @@ protocol HalenPlugin: AnyObject {
 }
 ```
 
-Categories: `writing`, `voice`, `scheduling`, `focus`, `productivity`.
+Identity, display metadata, observed event topics, and requested
+capabilities all live in the manifest — one declaration, shown verbatim in
+the permissions screen. Categories: `writing`, `voice`, `scheduling`,
+`focus`, `productivity`, `agents`.
 
-In-process plugins ship as Swift classes wired into
-`AppCoordinator.startObservers()`: `AskHalen`, `TypoFixer`,
-`SentimentGuard`, `SnippetExpander`, `ClarityChecker`, `VoiceDictation`,
-`StyleGuide`, `EmailReply`, `ToneProfiles`. The
-`PluginRegistry` (`@Observable`) persists each plugin's enabled state in
-`UserDefaults` under the key `plugin.<id>.enabled` and calls `start()` /
-`stop()` on toggle. Default-off plugins (Voice, EmailReply, ToneProfiles) opt in via onboarding.
+The `PluginRegistry` (`@Observable`) persists each plugin's enabled state in
+`UserDefaults` under `plugin.<id>.enabled` and calls `start()` / `stop()` on
+toggle. First-party plugins are registered in
+`AppCoordinator.startObservers()` from a manifest + factory pair; external
+plugins are discovered on disk and registered through
+`ExternalPluginAdapter`, so both kinds appear in the same list with the same
+toggle, capabilities, and status.
 
-These classes back the entries you see in the marketplace —
-the v0.3 merges fold `TypoFixer` + `StyleGuide` into Word Replacements,
-`SentimentGuard` + `ClarityChecker` into Writing Coach, and `EmailReply`
-into Snippet Expander; `ToneProfiles` moved out of the marketplace into the
-Writing Assistant's Tone tab. The Writing Assistant consolidation then folds
-Word Replacements and Writing Coach into a single Writing Assistant plugin.
-The class names (and the on-disk plugin ids) keep their
-pre-merge form so existing user data carries over without migration.
+## The capability grant model
 
-Out-of-process plugins — `Reasoning Compactor`, `Mother`, and `Desktop Buddy`
-ship in this repo under `plugins/`; users can also drop their own into
-`~/Library/Application Support/Halen/Plugins/` — are registered alongside
-the in-process set via `ExternalPluginAdapter`. They speak the same
-`HalenPlugin` event surface over NDJSON-on-stdio.
+The trust model in one sentence: a plugin declares up front everything it
+observes and does, the host enforces the declaration, and the user can
+revoke any single capability afterwards.
 
-## The DI container: `HalenServices`
+- **Declaration.** `PluginManifest.capabilities` lists `Capability` raw
+  values (`observe-text`, `insert-text`, `hotkeys`, `notch-overlay`,
+  `process-observation`, …). Undeclared = unavailable; there is no runtime
+  "ask for more".
+- **Grant state.** `PermissionBroker` stores per-plugin, per-capability
+  booleans in UserDefaults (`capability.<pluginId>.<capability>`). Declared
+  and never touched means consented at enable time; the permissions screen
+  can flip any grant off individually. The broker's
+  `effectiveCapabilities(for:)` is declared ∩ not-revoked.
+- **Construction-time gating.** `HostServices.makeContext(for:)` is the one
+  place the gating rule lives: it builds a `PluginContext` whose services
+  are nil for anything outside the effective set. A revoked capability is a
+  nil service, not a runtime check the plugin could forget. Event topics are
+  gated the same way — without `observe-text`, `text.pause` and
+  `caret.moved` are silently removed from the plugin's subscription.
+- **Restart on grant change.** When the user toggles a grant, the
+  permissions screen calls `AppCoordinator.reloadPlugin(id:)`, which
+  unregisters the plugin and rebuilds it from its factory with a freshly
+  minted context — so a service reference never goes stale mid-flight.
+- **External plugins** get the same enforcement at the RPC boundary:
+  `HostBridge.dispatch` checks the caller's effective capability set on
+  every gated method and returns JSON-RPC error `-32001` on a miss.
+  `inference/complete` is deliberately ungated — shared access to the local
+  model is the platform's baseline, and a prompt can't touch anything the
+  other capabilities guard.
 
-Everything a plugin needs from the host arrives through a single struct:
-
-```swift
-@MainActor
-struct HalenServices {
-    let eventBus: EventBus
-    let inference: InferenceClient
-    let caretObserver: CaretObserver
-    let appSupportDir: URL
-
-    func storageDirectory(for pluginId: String) -> URL
-}
-```
-
-This is deliberately narrow. When `HalenServices` becomes a JSON-RPC client
-in M4, every surface here has a clean mapping (`eventBus.subscribe()` →
-`subscribe` method; `inference.complete(...)` → `inference.complete`
-method; `caretObserver.replaceRange(...)` → `caret.replace` method).
+The broker also owns every macOS TCC prompt (Accessibility, mic, speech,
+calendar, notifications, Input Monitoring, Screen Recording) so plugins
+never call TCC APIs directly and one screen can show the unified status.
 
 ## The event bus
 
-`EventBus` is a tiny pub/sub on top of `AsyncStream<Event>`:
-
-```swift
-final class EventBus: @unchecked Sendable {
-    func subscribe() -> AsyncStream<Event>
-    func publish(_ event: Event)
-}
-```
-
-Multiple subscribers each receive every published event. Termination of a
-stream auto-unsubscribes. Each `Event` case is named to be a future JSON-RPC
-method name and each payload is `Codable`:
+`EventBus` (`Sources/HalenKit/Events/EventBus.swift`) is a tiny pub/sub on
+`AsyncStream<Event>`. Multiple subscribers each receive every event;
+terminating a stream unsubscribes; slow consumers drop oldest rather than
+backpressuring the host. Event cases are named as wire method names and
+every payload is `Codable`:
 
 | Case | Method | Payload |
 |---|---|---|
-| `textPaused`        | `text.pause`        | `appBundleId`, `appName`, `text`, `caretOffset`, `timestamp` |
-| `caretMoved`        | `caret.moved`       | `appBundleId`, `rect (x,y,w,h)`, `timestamp` |
-| `appFocused`        | `app.focused`       | `appBundleId`, `appName`, `timestamp` |
-| `inferenceActivity` | `inference.activity`| `phase (started/finished)`, `source`, `anchor?`, `timestamp` |
+| `textPaused`             | `text.pause`         | `appBundleId`, `appName`, `text`, `caretOffset`, `timestamp` |
+| `caretMoved`             | `caret.moved`        | `appBundleId`, `rect (x,y,w,h)`, `timestamp` |
+| `appFocused`             | `app.focused`        | `appBundleId`, `appName`, `timestamp` |
+| `inferenceActivity`      | `inference.activity` | `phase`, `source`, `timestamp` |
+| `findingDetected`        | `finding.detected`   | a plugin flagged a paragraph |
+| `findingsCleared`        | `findings.cleared`   | flag cleared |
+| `findingActionRequested` | `finding.action`     | user action on a finding |
 
-The `text.pause` event is the workhorse — every writing plugin keys off it.
+Plugins can publish the plugin-sourced topics (`inference.activity`,
+`finding.*`); host-sourced topics are dropped if a plugin tries to publish
+them — only the host observes the system.
 
 ## AX pipeline (`CaretObserver`)
 
-Defined in `Sources/Halen/Accessibility/CaretObserver.swift`. Responsibilities:
+`Sources/HalenKit/Accessibility/CaretObserver.swift`. On each app switch it
+re-targets an `AXObserver` at the new frontmost pid, tracks the focused
+element, and turns selection/value notifications into debounced
+`text.pause` snapshots (windowed to ±4 000 chars around the caret so
+terminal scrollback can't flood the inference layer) plus `caret.moved`
+rects. Secure text fields (password inputs) are skipped entirely at the
+subscription layer.
 
-1. **App switching.** Subscribes to `NSWorkspace.didActivateApplicationNotification`.
-   On each switch it tears down the previous `AXObserver` and creates a new
-   one for the new pid (skips itself: bundle id `com.dadiani.halen`).
-2. **Focused element tracking.** Registers
-   `kAXFocusedUIElementChangedNotification` on the app element. When the
-   focused element changes, it unregisters
-   `kAXSelectedTextChangedNotification` + `kAXValueChangedNotification` on
-   the old element and registers them on the new one.
-3. **Debounced text snapshots.** Selection / value changes schedule a 400 ms
-   debounce. When it fires, the observer reads `kAXValueAttribute` (the full
-   text) and `kAXSelectedTextRangeAttribute` (caret offset), then publishes
-   `text.pause`. Payloads are capped at **8 000 chars windowed around the
-   caret** (`windowAroundCaret(text:offset:radius:)`) so terminal scrollback
-   never DDoSes the inference layer.
-4. **Caret rect emission.** On selection change, it calls
-   `kAXBoundsForRangeParameterizedAttribute` for a zero-length range at the
-   caret to get the screen rect. Converted from AX (top-left) to Cocoa
-   (bottom-left) coordinates with `axRectToCocoa`.
+Write-back goes the other way: `TextService.replaceRange(_:with:describedAs:)`
+sets the AX selected range then writes the replacement, with a
+clipboard-paste fallback for AX-hostile apps. The `describedAs` string is
+announced to VoiceOver.
 
-Bridging the C callback to Swift's actor world uses
-`MainActor.assumeIsolated`:
+## Inference: the priority queue
 
-```swift
-private let axCallback: AXObserverCallback = { _, element, notification, refcon in
-    guard let refcon else { return }
-    let observer = Unmanaged<CaretObserver>.fromOpaque(refcon).takeUnretainedValue()
-    let name = notification as String
-    MainActor.assumeIsolated {
-        observer.handleNotification(element: element, name: name)
-    }
-}
-```
+Plugins ask for a `ModelTier` (`classifier` / `small` / `medium` / `large`)
+and a `taskKind`, never a concrete model, and attach an `InferencePriority`:
+`.userInitiated` for a result someone is watching for, `.background` for
+speculative work.
 
-### AX write-back
+`RouterInferenceClient` (an actor) does the routing:
 
-The single public mutation API:
+1. Filters backends to those whose capability covers the request tier.
+2. Sorts lexicographically: user preference order
+   (`InferenceSettings.preferenceOrder`, persisted), then task affinity,
+   then the backend's base priority.
+3. Walks the chain, skipping backends whose cached availability probe says
+   unavailable, falling through to the next on failure. (Streaming requests
+   fall through only *before* the first snapshot; a mid-stream failure
+   propagates rather than rewinding the consumer's view.)
+4. Serializes per **backend instance** with an `AsyncSemaphore(1)`. Gates
+   are keyed by instance, not backend kind, because two bundled-llama
+   backends (the Qwen classifier and Gemma) hold independent model contexts
+   and must not serialize against each other. Different backends run in
+   parallel.
 
-```swift
-@discardableResult
-func replaceRange(_ range: NSRange, with replacement: String) -> Bool
-```
-
-Sets `kAXSelectedTextRangeAttribute` to the target range, then writes
-`kAXSelectedTextAttribute` with the replacement. Returns `false` for
-elements that don't honour AX writes — most Electron / web text fields and
-terminals. Used by `TypoFixer`, `SnippetExpander`, `VoiceDictation`, and
-`AskHalen` (which falls back to a clipboard + ⌘V paste when the AX write
-fails).
-
-## Inference layer
-
-`InferenceClient` is a one-method protocol:
-
-```swift
-protocol InferenceClient: Sendable {
-    func complete(_ request: InferenceRequest) async throws -> InferenceResponse
-}
-
-struct InferenceRequest: Sendable {
-    let prompt: String
-    let tier: ModelTier
-    let maxTokens: Int        // default 256
-    let temperature: Double   // default 0.2
-    let stop: [String]
-    let taskKind: InferenceTaskKind   // .classification | .generation, default .generation
-}
-```
-
-Plugins ask for a `ModelTier` (`small` / `medium` / `large`) and a
-`taskKind`, never a concrete model. The concrete `InferenceClient` is
-`RouterInferenceClient`, which holds a set of `InferenceBackend`s and, for
-each request:
-
-1. Filters to backends whose `capability.servesTiers` covers the request tier.
-2. Sorts by a lexicographic key — user preference order first
-   (`InferenceSettings.preferenceOrder`, persisted), then task-affinity
-   (`capability.strongAt`), then the backend's `basePriority`.
-3. Walks the resulting chain, skipping any backend whose cached availability
-   probe says unavailable, and falls through to the next on failure.
-4. Serializes same-backend requests with a per-backend `AsyncSemaphore(1)`;
-   different backends still run in parallel.
+`AsyncSemaphore` is where the priorities bite: waiters are ordered
+`.userInitiated` before `.background`, FIFO within a band, so a queued
+background classification never runs ahead of a rewrite the user is waiting
+on. There is deliberately no preemption of an in-flight generation — a
+foreground request waits at most one background generation. `wait()` is
+cancellation-aware, so a cancelled plugin request never leaks a permit.
 
 Three backends ship (`InferenceBackends.makeAll()`):
 
-| Backend (`BackendKind`)  | Serves tiers      | Notes |
-|--------------------------|-------------------|-------|
-| `appleFoundationModels`  | small, medium     | Apple's on-device system model via the Foundation Models framework, macOS 26+. Zero install; prewarmed at launch. |
-| `bundledLlama`           | small, medium     | Gemma 4 E4B (`IQ4_XS` GGUF) on a bundled llama.cpp runtime. Model fetched on first use by `ModelDownloader`, or baked into the `.app` with `BUNDLE_MODEL=1`. |
-| `ollama`                 | small, medium, large | Local Ollama daemon (`OllamaBackend` → `OllamaInferenceClient`). The only backend serving `.large`. Endpoint configurable via `OllamaSettings`. |
+| Backend | Serves tiers | Notes |
+|---|---|---|
+| `appleFoundationModels` | small, medium | Apple's on-device system model (macOS 26+). Zero install; prewarmed at launch. |
+| `bundledLlama` | small, medium (+ classifier via the dedicated Qwen instance) | Gemma 4 E4B and Qwen 2.5 0.5B GGUFs on a bundled llama.cpp runtime, fetched by `ModelDownloader` or baked in with `BUNDLE_MODEL=1`. |
+| `ollama` | small, medium, large | Local Ollama daemon over `http://localhost:11434` (endpoint user-configurable). The only backend serving `.large`. |
 
-The default preference order is Apple FM → bundled llama.cpp → Ollama; the
-user can reorder it in Settings → Inference.
+Plugin code only ever sees `InferenceClient`, so adding or reordering
+backends is a host-only change.
 
-The Ollama client POSTs to `http://localhost:11434/api/chat` (or the
-configured endpoint) with `stream: false`; tier maps to `gemma4:e2b` /
-`gemma4:e4b` / `gemma4:26b`. Plugin code only ever sees `InferenceClient`, so
-adding or reordering backends is a host-only change.
+## The external plugin runtime
+
+`Sources/HalenKit/PluginHosting/External/`. Any executable speaking
+newline-delimited JSON-RPC 2.0 over stdio is a plugin — the wire protocol is
+unchanged from the pre-pivot bridge, and it's documented for third parties
+in [PLUGINS.md](../../PLUGINS.md).
+
+- **Discovery.** `PluginManifest.discoverAll` scans
+  `~/Library/Application Support/Halen/Plugins/<plugin-id>/halen-plugin.json`.
+  Manifests are validated before spawn: recognised `halenApiVersion`, safe
+  id (no separators, no `..`), and a relative `executable` must resolve
+  inside the plugin directory (path traversal is rejected).
+- **Framing.** NDJSON, not LSP Content-Length headers: one JSON message per
+  line. stdout is the RPC channel; stderr is the plugin's free-form log,
+  forwarded to Halen's log.
+- **Lifecycle.** `initialize` request → `notifications/initialized` →
+  events as notifications → on disable/quit the polite ladder: `shutdown`
+  request, `exit` notification, brief wait, SIGTERM, SIGKILL.
+- **Capabilities, enforced.** Every plugin→host call goes through the single
+  `HostBridge.dispatch` (plus a `hotkey/*` intercept in `PluginHost` that
+  needs plugin identity to route `hotkey.fired` back). Gated methods check
+  the caller's effective capability set and fail with `-32001` when the
+  capability is undeclared or revoked. Event topics are filtered to the
+  manifest's `events` list before they reach the plugin's stdin.
+- **Crash isolation.** One subprocess per plugin; a segfaulting plugin
+  takes nothing else down. There is no automatic restart yet — a crashed
+  plugin stays dead until next launch.
+
+There is deliberately **no OS sandbox** around external plugins: an external
+plugin is a process running as you, and the manifest is enforced at the RPC
+boundary. Install plugins you've read.
 
 ## Storage
 
-Each plugin gets a directory under
-`~/Library/Application Support/Halen/<pluginId>/` via
-`HalenServices.storageDirectory(for:)`. Concrete examples:
+Each plugin gets a private directory at
+`~/Library/Application Support/Halen/<plugin-id>/` via
+`PluginContext.storage` (`readJSON`/`writeJSON`, atomic, pretty-printed,
+sorted keys — hand-editable). Concrete layout:
 
-| File | Owner | Contents |
+| Path (under `~/Library/Application Support/Halen/`) | Owner | Contents |
 |---|---|---|
-| `Halen/typos.json`                                 | TypoStore (top-level)    | `{ version, entries: { typo → { correction, observations, firstSeen, lastSeen } } }` |
-| `Halen/com.halen.sentiment-guard/rules.json`       | SentimentRulesStore      | Built-in + custom tone rules |
-| `Halen/com.halen.sentiment-guard/approved.json`    | SentimentGuard           | SHA-256 hashes of texts the user marked "Looks fine" |
-| `Halen/com.halen.snippet-expander/snippets.json`   | SnippetStore             | Built-in + custom snippets |
-| `Halen/com.halen.tone-profiles/profiles.json`      | AppToneProfileStore      | Per-app target tone (Tone tab) |
+| `typos.json` | Writing Assistant (TypoStore) | Learned + seeded typo corrections. Top-level path kept for pre-pivot compatibility. |
+| `com.halen.writing-assistant/style-rules.json` | Writing Assistant (preferred terms) | Literal / regex / prohibition rules. |
+| `com.halen.writing-assistant/sentiment-rules.json` | Writing Assistant (tone) | Built-in + custom tone rules. |
+| `com.halen.writing-assistant/clarity-rules.json` | Writing Assistant (clarity) | Clarity rules. |
+| `com.halen.writing-assistant/approved.json` | Writing Assistant (tone) | SHA-256 fingerprints of drafts marked "Looks fine". |
+| `com.halen.snippet-expander/snippets.json` | Snippet library | Built-in + custom snippets (path unchanged). |
+| `com.halen.tone-profiles/profiles.json` | AppToneProfileStore (host) | Per-app target tone, shared via the `tone-profiles` capability. |
+| `com.halen.mother/config.json`, `state.json` | Mother | Rulebook and ledger — schemas unchanged from the Python-era plugin. |
+| `Plugins/<plugin-id>/` | external plugins | Self-contained install dirs: manifest + executable + local data. |
 
-All files are pretty-printed JSON with sorted keys. They are hand-editable;
-the host re-merges built-ins on every launch so newly-shipped seed entries
-appear without overwriting user customisations.
+The Writing Assistant engines share the plugin's single storage directory
+with one file per engine (the per-engine *directories* of the old
+one-plugin-per-engine era are gone; `typos.json` and `snippets.json` keep
+their original paths so user data carries over without migration). Built-in
+seed entries (typos, snippets, rules) are re-merged on every launch so new
+seeds ship without overwriting user customisations.
+
+Notch Boss additionally keeps its NotchBar-inherited state under
+`~/.notchbar/` (hook script, approval socket, coordination state) — see
+[its plugin doc](plugins/notch-boss.md).
 
 ## App entry & lifecycle
 
-`Sources/Halen/App/HalenApp.swift` is the SwiftUI `@main`. It hosts an
-`NSApplicationDelegateAdaptor` (`AppDelegate`) that owns one
-`AppCoordinator`. The coordinator:
+`Sources/Halen/App/HalenApp.swift` is the SwiftUI `@main`; `AppDelegate`
+owns one `AppCoordinator`, which:
 
-1. Polls `AXIsProcessTrusted()` every second until the user grants
-   Accessibility.
-2. Once granted, starts `CaretObserver`, the overlay window, and the plugin
-   registry.
-3. Registers all ten in-process first-party plugins with their stored enabled
-   state (or their default-on/off if never set), discovers any out-of-process
-   plugins, and starts the WebSocket bridge if it's enabled in Settings.
-4. On quit, runs the async shutdown ladder for out-of-process plugins, then
-   calls `plugin.stop()` for everything so hotkeys, AX observers, and
-   floating panels unwind cleanly.
+1. Starts both model downloads/prewarms in the background and polls
+   `AXIsProcessTrusted()` until Accessibility is granted.
+2. Starts `CaretObserver`, the overlay, and builds `HostServices` (the
+   context factory) around the broker, router, and shared stores.
+3. Registers the six first-party plugins (manifest + factory each),
+   discovers external plugins, and starts the event dispatcher. If a
+   NotchBar install is detected (`~/.notchbar` exists) and the Notch Boss
+   toggle was never touched, Notch Boss defaults to on.
+4. Presents onboarding on first run.
+5. On quit, runs the async shutdown ladder for external plugin processes,
+   then `stop()`s every plugin so hotkeys, AX observers, and panels unwind
+   cleanly.
 
-The menubar UI itself is `HalenCenterView`, a `MenuBarExtra` popover with
-category sections, per-plugin toggles, a footer with Accessibility shortcut
-and Quit, and a slide-in detail view per plugin.
+## What's deliberately not here
 
-## What's deliberately not here yet
-
-- **No telemetry.** No analytics, no remote logging, no automatic crash
-  reporter. Logs go to stderr and the unified system log only.
-- **No cloud fallback.** Every prompt is served on-device. If no backend is
-  available, plugins that need inference surface an actionable error and log
-  a warning — the router never reaches out to a remote model.
-- **No background daemon.** The app is a regular `NSApplication`; quitting
-  the menubar quits everything.
+- **No telemetry.** No analytics, no remote logging, no crash uploads. Logs
+  go to stderr and the unified system log; user text in logs is redacted to
+  an unforgeable fingerprint (`Log.redact`).
+- **No cloud fallback.** Every prompt is served on-device; the router never
+  reaches out to a remote model.
+- **No plugin store, no plugin signing, no update channel for plugins.**
+  The plugin directory is a folder.
+- **No streaming over the external RPC** (`inference/complete` blocks;
+  first-party plugins get streaming through the Swift API).
+- **No background daemon.** Quitting the menubar quits everything.

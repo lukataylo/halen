@@ -218,7 +218,6 @@ footer.foot .links a:hover { color: var(--accent); }
     <li><strong>Approved-draft fingerprints</strong>: <code>approved.json</code>. <strong>SHA-256 hex digests</strong> of windowed drafts the user marked &ldquo;Looks fine&rdquo;. The plaintext is <em>not</em> persisted; only the hash.</li>
     <li><strong>Snippets</strong>: <code>com.halen.snippet-expander/snippets.json</code>. Local file.</li>
     <li><strong>Briefed-event ids</strong>: <code>com.halen.meeting-prep/processed.json</code>. Contains only EventKit event identifiers, not titles or contents.</li>
-    <li><strong>Bridge pairing token</strong>: <code>~/Library/Application Support/Halen/bridge-token</code>, 0600 permissions. Used by the optional browser extension to authenticate to the local WebSocket on <code>127.0.0.1:50765</code>.</li>
   </ul>
 
   <h2>Network traffic</h2>
@@ -229,7 +228,7 @@ footer.foot .links a:hover { color: var(--accent); }
     <li><strong>Ollama (optional)</strong>: HTTP POST to <code>http://localhost:11434/api/chat</code>. The base URL is set in code; there is no setting that would let a process change it to a remote host. Ollama itself binds to <code>127.0.0.1</code> by default.</li>
   </ul>
   <p>That traffic does not leave the loopback interface unless you have separately configured Ollama to bind to a non-localhost address.</p>
-  <p>Aside from the software-update check described next, there is <strong>no other outbound network code</strong> in the project. No analytics SDK, no remote logging endpoint, no crash reporter. The optional WebSocket bridge on <code>127.0.0.1:50765</code> only <em>accepts</em> inbound connections from the local browser extension; it never dials out.</p>
+  <p>Aside from the software-update check described next, there is <strong>no other outbound network code</strong> in the project. No analytics SDK, no remote logging endpoint, no crash reporter. Halen listens on no network port at all; the Notch Boss plugin's agent-hook socket is a local Unix socket (<code>~/.notchbar/notchbar.sock</code>), protected by filesystem permissions and unreachable from the network.</p>
 
   <h2>Software updates</h2>
   <p>Halen keeps itself up to date with <a class="inline" href="https://sparkle-project.org" rel="noopener" target="_blank">Sparkle</a>, the standard open-source updater for Mac apps. This is the <strong>one connection that does leave your Mac</strong>, and it carries none of your content:</p>
@@ -264,11 +263,11 @@ footer.foot .links a:hover { color: var(--accent); }
     </thead>
     <tbody>
       <tr><td>Accessibility</td><td>host (CaretObserver)</td><td>Read focused text, write back corrections / dictation / snippets</td></tr>
-      <tr><td>Input Monitoring</td><td>Ask Halen (⌃H)</td><td>Observe the ⌃H hotkey globally; nothing else is recorded</td></tr>
+      <tr><td>Input Monitoring</td><td>Plugin hotkeys, Snippet Expander</td><td>Match registered hotkeys globally; Snippet Expander reconstructs ;triggers in fields accessibility can't read</td></tr>
       <tr><td>Microphone</td><td>Voice Dictation</td><td>Capture audio for SFSpeechRecognizer</td></tr>
       <tr><td>Speech Recognition</td><td>Voice Dictation</td><td>Convert audio to text <strong>on-device</strong></td></tr>
       <tr><td>Calendars (full access)</td><td>Burnout Copilot, Meeting Prep</td><td>Read events; Burnout writes the &ldquo;🌿 Halen break&rdquo; event</td></tr>
-      <tr><td>Notifications</td><td>Meeting Prep, Ask Halen</td><td>Briefing &amp; clipboard-fallback alerts</td></tr>
+      <tr><td>Notifications</td><td>Plugins with the notifications capability</td><td>Clipboard-fallback and reminder alerts</td></tr>
     </tbody>
   </table>
   <p>You can deny any of these and Halen continues to run. The dependent plugins surface their own &ldquo;permission required&rdquo; detail-view state with a one-click jump to System Settings.</p>

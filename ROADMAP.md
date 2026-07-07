@@ -8,92 +8,41 @@ Versions are best-effort targets — Halen is alpha, things slide. Items
 inside a version are roughly ordered by what we'd do first.
 
 If you want to take a swing at any of these, **open an issue first**
-so we can coordinate. Several items are claimed and in-flight.
+so we can coordinate.
 
 ---
 
-## v0.3.0 — *"Plugin cutover"*  (target: mid-2026)
+## Shipped: v0.4.0 — *"The platform pivot"*
 
-Finish the out-of-process plugin migration started in v0.2.0. After
-this release, the five default-off plugins live exclusively under
-`plugins/`, and the host shrinks accordingly.
+Halen became a plugin platform: HalenPluginAPI, capability enforcement,
+one permissions screen, the priority inference queue, Mother first-party,
+and Notch Boss (the absorbed NotchBar app). See the
+[changelog](CHANGELOG.md) for the full list.
 
-- **Auto-install bundled external plugins on first launch.** Today the
-  `plugins/` directory ships in the repo but isn't copied into
-  `~/Library/Application Support/Halen/Plugins/` automatically.
-  Onboarding picks them up after the user opts in.
-- **Remove in-process Style Guide, Email Reply, Autocomplete, Tone
-  Profiles.** Once the external versions reach UX parity (tracked in
-  [`docs/PLUGIN_EXTRACTION.md`](docs/PLUGIN_EXTRACTION.md)), the
-  Swift sources move out of `Sources/Halen/Features/`.
-- **`ui/ghostText` host RPC.** Unblocks Autocomplete extraction —
-  external plugins can't currently draw inline suggestions.
-- **`clipboard/set` + richer `ax/readSelection`.** Unblocks Email
-  Reply extraction.
-- **Plugin Store: install a third-party plugin from a URL.** Manifest
-  validation, signature check, sandboxed test run, install into
-  `~/Library/Application Support/Halen/Plugins/`.
+## Next — *"Stabilize API 0.1"*
 
-## v0.4.0 — *"Selection-first"*  (target: late 2026)
+Boring on purpose. The plugin API proves itself by not changing.
 
-The current trigger model — *act on the paragraph around the
-caret* — works for writing flow but loses to a selection-first model
-for revision passes. v0.4.0 unifies them.
+- **Fix what the pivot shook loose.** A restructure this size will have
+  rough edges; issues labelled `pivot` get priority.
+- **Exercise the example plugin path end to end** on a clean machine and
+  fold what's learned back into PLUGINS.md.
+- **Selection-first actions.** Hold ⌃ over a selection to fan out
+  applicable plugin actions in one popover — the one pre-pivot feature
+  idea that survives on its merits.
 
-- **Select → action palette.** Hold ⌃ over a selection to fan out
-  all applicable plugin actions (rephrase, simplify, translate,
-  expand, …) in one popover, ranked by what the user used last.
-- **Per-app default action.** Same shortcut, different default per
-  app — `⌃⌥R` in Mail.app rewrites for tone; in Xcode it shortens to
-  a docstring.
-- **Undo affordance for inline edits.** A pill on the caret-following
-  overlay surfaces "↶ Undo Halen edit" for 4 s after any in-place
-  rewrite. Backspace already works; this makes it discoverable.
+## Only if someone else writes a plugin
 
-## v0.5.0 — *"Knowledge"*  (target: 2027)
+These get built the day a stranger ships a plugin that needs them, and
+not before:
 
-Halen has personal memory today only through your typo dictionary and
-style rules. v0.5.0 turns *anything you've written* into context the
-plugins can use, **without uploading any of it**.
-
-- **Local vector index over your own writing.** A folder of opt-in
-  sources — `~/Documents/Notes`, an Obsidian vault, exported email —
-  embedded locally with a sentence-transformer model and stored in a
-  SQLite-vss DB inside `~/Library/Application Support/Halen/`.
-- **`memory/search` host RPC.** Plugins query the index by similarity
-  and get back snippets + source paths. Ask Halen and Email Reply use
-  it first.
-- **"Cite from your notes" Email Reply mode.** When you draft a reply,
-  Halen offers paragraphs from your own past writing that match the
-  topic. You pick what to paste in; nothing is auto-inserted.
-- **Forget button.** A clearly labeled "Clear all indexed text"
-  switch in Settings → Privacy. No soft delete, no analytics on which
-  sources were used.
-
-## Backlog — *not yet scoped*
-
-Things on the radar without a version yet. Order is not priority.
-
-- **Windows / Linux ports.** Tracking macOS-first until v1.0 because
-  the AX surface differs enough that splitting attention would slow
-  every release. Likely a separate repo when it happens.
-- **Browser extension parity.** The loopback WebSocket bridge exists;
-  the extension surface is still 2 of the 10 plugins. Bringing
-  Sentiment Guard and Style Guide into the browser is the next chunk.
-- **iCloud-synced settings.** Opt-in mirror of plugin toggles, style
-  rules, typo seeds, snippets. The blocker is conflict resolution on
-  the typo dictionary, which mutates on every accepted edit.
-- **Pluggable embedding models.** Let users swap the sentence-
-  transformer used by the knowledge index. Will need a `model/embed`
-  router tier.
-- **Apple Intelligence "Writing Tools" handoff.** Detect when macOS
-  is about to invoke Writing Tools and offer Halen as the route
-  instead, so the user's chosen tone profile stays in effect.
-- **Per-plugin telemetry — but only on-device.** Counters visible in
-  Settings ("Typo Fixer caught 142 typos this week") with zero
-  network exit. Useful for tuning; never leaves the Mac.
-
----
+- **Plugin sandboxing.** sandbox-exec profiles derived from the manifest's
+  capability list, so an external plugin is *mechanically* limited to what
+  it declared instead of RPC-gated.
+- **Streaming inference over the external RPC** (first-party plugins
+  already stream through the Swift API).
+- **Install-from-URL with signature verification** — the seed of a store,
+  which is exactly why it waits for demand.
 
 ## Not on the roadmap, and probably never
 

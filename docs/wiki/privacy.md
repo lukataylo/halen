@@ -49,7 +49,7 @@ daemon) — never off-device. Plugins that downstream the text further:
 - **Snippet Expander (AI snippets)** sends the 500 chars *immediately
   preceding* the trigger as prior context; the ⌃⌥R rephrase hotkey sends only
   the currently selected text.
-- **Ask Halen** sends your typed question plus the context you can see in the
+- **Plugins that ask the model** send your request plus the context shown in the
   palette — the focused app name, the current selection, and the most recent
   clipboard entry.
 - **Writing Assistant (corrections engine)** auto-typo path does string diffs locally; it never
@@ -115,8 +115,10 @@ or calendar data:**
   build), `ModelDownloader` fetches a single GGUF file from Hugging Face
   (`huggingface.co/unsloth/gemma-4-E4B-it-GGUF`). A one-time file transfer, not
   telemetry.
-- **Browser extension bridge.** If you enable the WebSocket bridge for the
-  optional browser extension, Halen listens on `127.0.0.1:50765` (loopback only)
+- **Removed in 0.4.0: the browser-extension WebSocket bridge.** Halen no
+  longer listens on any port. (Notch Boss serves a Unix socket at
+  `~/.notchbar/notchbar.sock` for local agent hooks — filesystem-permission
+  protected, loopback-free, nothing network)
   so the extension can forward typing events from browser text fields. It only
   *accepts* inbound connections; it never dials out.
 
@@ -148,7 +150,7 @@ installed, recognition runs entirely on the Neural Engine.
 ## EventKit
 
 No built-in feature uses the calendar. A plugin that declares the `calendar`
-permission (e.g. Desktop Buddy's pre-meeting nudges) triggers **full Calendars
+permission triggers **full Calendars
 access** via `EKEventStore.requestFullAccessToEvents()` when it starts. Such a
 plugin can:
 
@@ -175,9 +177,9 @@ Nothing is uploaded.
 | Accessibility           | host (CaretObserver) | Read focused text, write back corrections / dictation / snippets |
 | Microphone              | Voice Dictation      | Capture audio for SFSpeechRecognizer |
 | Speech Recognition      | Voice Dictation      | Convert audio to text **on-device** |
-| Calendars (full access) | Optional plugins (e.g. Desktop Buddy) | Read/write events via the host's `calendar/*` methods — no built-in needs it |
-| Notifications           | Ask Halen, Snippet Expander, plugins | Clipboard-fallback notices when a result can't be inserted at the caret |
-| Input Monitoring        | Ask Halen, Snippet Expander | Match the ⌃H and ⌃⌥R hotkeys system-wide — only those hotkeys, no other keystrokes |
+| Calendars (full access) | Plugins with the `calendar` capability | Read/write events via the host's `calendar/*` methods — no built-in needs it |
+| Notifications           | Plugins with the `notifications` capability | Clipboard-fallback notices when a result can't be inserted at the caret |
+| Input Monitoring        | Plugin hotkeys, Snippet Expander | Match registered hotkeys system-wide; Snippet Expander reconstructs triggers in AX-opaque fields |
 
 You can deny any of these and the host continues to run. The dependent
 plugins surface their own "permission required" detail-view state with a

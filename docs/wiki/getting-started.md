@@ -138,7 +138,7 @@ and dictation logs `Speech recogniser is unavailable (no on-device model?)`.
 ### 4. Calendar (optional, plugin-driven)
 
 Only requested by a plugin that declares the `calendar` permission and reads
-your schedule (e.g. **Desktop Buddy**'s pre-meeting nudges). No built-in
+your schedule. No built-in
 feature needs it, so a default install never asks. When a plugin does,
 `EKEventStore.requestFullAccessToEvents()` runs on macOS 14+.
 
@@ -153,20 +153,20 @@ events via the host's `calendar/upcomingEvents` JSON-RPC method.
 ### 5. Notifications (clipboard fallbacks + plugins)
 
 `UNUserNotificationCenter.requestAuthorization(options: [.alert, .sound])`.
-Ask Halen, the `;reply` email drafter, and the Snippet Expander rewrites post
+The `;reply` email drafter and the Snippet Expander rewrites post
 one notification when a result falls back to the clipboard because the caret
 target couldn't be written; installed plugins may post their own. If you deny,
 the clipboard copy still happens silently.
 
-### 6. Input Monitoring (Ask Halen + Snippet Expander rephrase)
+### 6. Input Monitoring (plugin hotkeys + Snippet Expander)
 
-Ask Halen's ⌃H palette and Snippet Expander's ⌃⌥R rephrase-selection hotkey
+Plugin hotkeys (like Snippet Expander's ⌃⌥R rephrase-selection)
 use `NSEvent` global monitors, which need Input Monitoring to fire while
 another app is frontmost. Halen calls `IOHIDRequestAccess` on launch.
 
 Usage string (`NSInputMonitoringUsageDescription`):
 
-> Halen listens for the ⌃H hotkey so the Ask Halen palette can open in any
+> Halen listens for plugin hotkeys so they can fire in any
 > app. Only the hotkey is matched; no other keystrokes are recorded.
 
 If you deny it, the hotkeys still fire while Halen itself is frontmost. Grant

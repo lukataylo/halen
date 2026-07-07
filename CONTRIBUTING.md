@@ -80,9 +80,10 @@ A few good first issues, in rough order of accessibility:
   Same idea — common misspellings everyone makes.
 - **A plugin doc** under [`docs/wiki/plugins/`](docs/wiki/plugins/) if you
   notice something the existing docs miss.
-- **A new out-of-process plugin** under [`plugins/`](plugins/). The
-  reference plugins (`reasoning-compactor`, `mother`) are compact Python
-  bridges. Protocol docs in [`plugins/README.md`](plugins/README.md).
+- **A new external plugin** in your own repo. The protocol is a folder,
+  a JSON manifest, and NDJSON JSON-RPC over stdio — see
+  [`PLUGINS.md`](PLUGINS.md) and the reference example under
+  [`examples/clipboard-cleaner/`](examples/clipboard-cleaner/).
 - **Bugs and rough edges** in the open issues — see the [Halen issue list](https://github.com/lukataylo/halen/issues).
 
 For larger things, the [`ROADMAP.md`](ROADMAP.md) lists what we've explicitly
@@ -149,24 +150,27 @@ If you've co-authored with an AI assistant, add a `Co-Authored-By:` trailer.
 ## Plugin contributions
 
 External plugins live under [`plugins/`](plugins/) and load through the
-JSON-RPC host. The protocol contract is in [`plugins/README.md`](plugins/README.md);
+JSON-RPC host. The protocol contract is in [`PLUGINS.md`](PLUGINS.md);
 the host bridge in
 [`Sources/Halen/Plugins/External/HostBridge.swift`](Sources/Halen/Plugins/External/HostBridge.swift)
 is the single source of truth for what RPC methods a plugin can call.
 
-A plugin PR should include:
+A plugin lives in a folder with:
 
-- A `halen-plugin.json` manifest with the right `events` and `permissions`.
-- The implementation. Python is the path of least resistance — Halen ships
-  `python3` on the system; no extra dependencies if you stay standard-library.
-- A `README.md` in the plugin's folder. Match the shape of `reasoning-compactor/`
-  or `mother/`.
+- A `halen-plugin.json` manifest declaring its `events` and `capabilities`.
+- The implementation. Python is the path of least resistance — macOS ships
+  `python3`; no extra dependencies if you stay standard-library.
+- A `README.md`. Match the shape of `examples/clipboard-cleaner/`.
 
-The Plugin Store curates plugins through
-[`plugin-registry.json`](plugin-registry.json) at the repo root. We don't
-auto-list third-party plugins from PRs yet; for v0.2.x the path is to land
-your plugin under `plugins/` and we'll consider it for the curated catalog
-when the registry surface matures.
+There is no plugin store and no submission process — the plugin directory
+is a folder on disk. If you build something good, open an issue and show
+us; first-party plugin proposals are welcome but the bar is "the six
+bundled ones prove the platform," not "more is better".
+
+First-party (in-process) plugins are Swift modules under `Sources/Plugins/`
+that may depend on exactly one target: `HalenPluginAPI`. `Package.swift`
+enforces this — if your plugin needs a host change, change the API in the
+open, don't reach around it.
 
 ## Asking questions
 

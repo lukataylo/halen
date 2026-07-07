@@ -16,7 +16,7 @@ so the demo runs in **60 seconds flat** with no dead air.
 > plugin. Here's the marketplace."*
 
 - Click the **Halen icon** in the menubar.
-- Hover over each plugin card briefly: *Ask Halen, Writing Assistant,
+- Hover over each plugin card briefly: *Writing Assistant,
   Snippet Expander, Voice Dictation, Prompt Polish.*
 - *"five bundled plugins. All running locally. No cloud calls anywhere."*
 

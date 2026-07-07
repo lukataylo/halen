@@ -6,13 +6,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        Halen's surface area grows through plugins. Before you write code, a short pitch helps us
-        figure out whether it fits as built-in or external, and whether it overlaps with something
-        already on the [roadmap](https://github.com/lukataylo/halen/blob/main/ROADMAP.md).
+        Use this for "I built a plugin and want to show it", "I want to build X — does it fit?",
+        or "the plugin API is missing Y". There is no store and no submission process — external
+        plugins live in your repo; this issue is how we find out about them (and how the API
+        earns its next capability).
 
-        Reference plugins to study: [`burnout-copilot`](https://github.com/lukataylo/halen/tree/main/plugins/burnout-copilot)
-        and [`meeting-prep`](https://github.com/lukataylo/halen/tree/main/plugins/meeting-prep), both ~100 lines of Python.
-        Protocol: [`plugins/README.md`](https://github.com/lukataylo/halen/blob/main/plugins/README.md).
+        Start here: [`PLUGINS.md`](https://github.com/lukataylo/halen/blob/main/PLUGINS.md) and the
+        reference example [`examples/clipboard-cleaner/`](https://github.com/lukataylo/halen/tree/main/examples/clipboard-cleaner),
+        ~100 lines of dependency-free Python.
 
   - type: input
     id: name
