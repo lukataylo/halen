@@ -94,23 +94,31 @@ the `store-credentials` command above.
 
 What it does:
 
-1. `swift build -c release` — produces an optimized `halen` binary
-2. Detects iCloud-synced parents → stages bundle to `/tmp/halen-build/`
+1. Rebuilds the vendored llama framework from scratch from the full immutable
+   commit in
+   `Vendor/LLAMA_CPP_COMMIT` (tag `b9145` resolves to
+   `9ed6e19b9d7e14a71a19622287b2dcd495a828b8`), then verifies its source marker
+   and deterministic tree digest. Distribution builds never accept a
+   pre-existing framework plus a self-written marker.
+2. `swift build -c release` — produces an optimized `halen` binary
+3. Detects iCloud-synced parents → stages the bundle in a unique private
+   directory under `/private/tmp/`
    (iCloud's fileprovider keeps re-stamping `com.apple.FinderInfo`,
    which codesign rejects)
-3. Assembles `Halen.app` with `Contents/{MacOS,Resources,Frameworks}/`
-4. Embeds `Vendor/llama.xcframework`'s framework into `Contents/Frameworks/`
-5. Re-stamps the framework binary's `@rpath` to `@executable_path/../Frameworks`
-6. Signs the framework with Hardened Runtime + secure timestamp
-7. Signs the app with Hardened Runtime + secure timestamp +
+4. Assembles `Halen.app` with `Contents/{MacOS,Resources,Frameworks}/`
+5. Embeds `Vendor/llama.xcframework`'s framework into `Contents/Frameworks/`
+6. Re-stamps the framework binary's `@rpath` to `@executable_path/../Frameworks`
+7. Signs the framework with Hardened Runtime + secure timestamp
+8. Signs the app with Hardened Runtime + secure timestamp +
    `Resources/Halen.entitlements` (mic, calendar)
-8. `codesign --verify --strict` — must pass before proceeding
+9. Rejects development/absolute Mach-O load paths and `LC_RPATH` entries
+10. `codesign --verify --strict` — must pass before proceeding
 
 Always pass `SIGN_IDENTITY=<sha1>` on this machine — the bare cert name
 matches three certificates and codesign refuses ambiguity.
 
 Outputs:
-- `/tmp/halen-build/Halen.app` (the real bundle, on iCloud-synced machines)
+- a unique `/private/tmp/halen-build.*/Halen.app` (on iCloud-synced machines)
 - `build/Halen.app` → symlink to the staging path
 
 ### `scripts/notarize.sh`
@@ -137,13 +145,16 @@ What it does:
 
 1. Refuses to package an unstapled .app (otherwise the DMG would clear
    Gatekeeper but the app inside would still warn after install)
-2. Assembles a staging folder: `Halen.app` + `Applications` symlink
+2. Uses a unique `mktemp` staging directory outside iCloud, strips xattrs,
+   and deep/strict-verifies the staged app
 3. `hdiutil create -format UDZO` → compressed read-only DMG
 4. Signs the DMG with the same Developer ID Application cert + secure
    timestamp (Hardened Runtime doesn't apply to DMGs — they have no
    Mach-Os of their own)
 5. `xcrun notarytool submit` → wait → `stapler staple` the DMG itself
 6. Verifies: `spctl --assess --type open`, `stapler validate`
+7. Mounts the finished DMG read-only, then deep/strict-verifies the mounted
+   app, its Mach-O paths, and its stapled ticket before detaching
 
 The DMG must be notarized separately from the .app inside. Apple's
 notary ticketing the .app makes the *app* trusted on launch, but
@@ -194,7 +205,7 @@ if it persists, see the troubleshooting table below.
 | `Stapler is incapable of working with Alias files` | iCloud-staging put a symlink at `build/Halen.app` and stapler can't follow it | Already handled — both scripts now `readlink` first. If you see this, `git pull` for the symlink-follow fix |
 | `notarytool: No Keychain password item found for profile: halen-notary` | Profile never stored, or was deleted | Re-run `xcrun notarytool store-credentials "halen-notary" …` from Prerequisites §3 |
 | Notary returns `Invalid` | Almost always: missing Hardened Runtime, missing secure timestamp, or unsigned nested binary | `xcrun notarytool log <submission-id> --keychain-profile halen-notary` — Apple returns line-itemed reasons |
-| `resource fork, Finder information, or similar detritus not allowed` | iCloud re-stamped `com.apple.FinderInfo` between `xattr -cr` and `codesign` | Already handled by staging to `/tmp/halen-build/`. If it recurs, `sudo killall securityd` to unwedge codesign, then retry |
+| `resource fork, Finder information, or similar detritus not allowed` | iCloud re-stamped `com.apple.FinderInfo` between `xattr -cr` and `codesign` | Already handled by staging in a unique private directory under `/private/tmp/`. If it recurs, `sudo killall securityd` to unwedge codesign, then retry |
 | `errSecInternalComponent` from codesign | `securityd` is wedged | `sudo killall securityd` (it respawns), then retry |
 | App opens but TCC permissions don't carry over after rebuild | Bundle was signed by a different identity than last time | Don't switch identities mid-development. If you must, run `scripts/reset-permissions.sh` so TCC re-prompts cleanly |
 

@@ -19,9 +19,8 @@ struct PluginManifest: Codable, Equatable {
     /// refuses to load plugins whose `halenApiVersion` it doesn't recognise.
     let halenApiVersion: String
 
-    /// Path (absolute or relative to the manifest directory) of the
-    /// executable to launch — typically a script interpreter (`/usr/bin/python3`)
-    /// or a compiled binary. Validated to exist + be executable before spawn.
+    /// Relative path inside the manifest directory of the executable to
+    /// launch. Validated to be contained, regular, non-symlink, and executable.
     let executable: String
     let args: [String]?
     let env: [String: String]?
@@ -29,14 +28,11 @@ struct PluginManifest: Codable, Equatable {
     /// Event topics this plugin wants pushed to it. Anything not in the list
     /// is filtered before reaching the plugin's stdin — saves the plugin
     /// process the wakeups and avoids accidental data leakage.
-    let events: [String]?
+    let events: [PluginEventTopic]
 
-    /// User-visible permission declarations. Surfaced in the marketplace
-    /// "Install" sheet so the user sees what the plugin is asking for before
-    /// they enable it. **Today informational only** — the host trusts the
-    /// plugin once enabled. Real enforcement (sandbox-exec profiles, per-
-    /// permission method gating) is a follow-on.
-    let permissions: [String]?
+    /// Closed, host-enforced permission declarations. Unknown values make
+    /// manifest decoding fail rather than silently becoming a grant.
+    let permissions: [PluginPermission]
 
     /// SF Symbol the marketplace renders for the plugin row.
     let icon: String?
@@ -54,12 +50,15 @@ struct PluginManifest: Codable, Equatable {
     static func discoverAll(under root: URL) -> [(URL, PluginManifest)] {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(at: root,
-                                                       includingPropertiesForKeys: [.isDirectoryKey],
+                                                       includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
                                                        options: [.skipsHiddenFiles])
         else { return [] }
 
         var results: [(URL, PluginManifest)] = []
         for entry in entries {
+            if (try? entry.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true {
+                continue
+            }
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: entry.path, isDirectory: &isDir), isDir.boolValue else { continue }
             let manifestURL = entry.appending(path: "halen-plugin.json")
@@ -67,6 +66,10 @@ struct PluginManifest: Codable, Equatable {
             do {
                 let data = try Data(contentsOf: manifestURL)
                 let manifest = try JSONDecoder().decode(PluginManifest.self, from: data)
+                guard entry.lastPathComponent == manifest.id else {
+                    throw ManifestError.directoryNameMismatch(expected: manifest.id,
+                                                              found: entry.lastPathComponent)
+                }
                 try manifest.validate(at: entry)
                 results.append((entry, manifest))
             } catch {
@@ -108,15 +111,10 @@ struct PluginManifest: Codable, Equatable {
     /// Validate that `pluginDir.appending(path: relative).standardized` stays
     /// inside `pluginDir.standardized`. Defends against a manifest that ships
     /// `executable: "../../../usr/bin/python3"` and trusts us not to look.
-    /// Absolute paths bypass this — the user installed the plugin, so an
-    /// explicit absolute path is taken at face value (still surfaced to the
-    /// user via the install sheet's permissions list).
+    /// Validation additionally rejects absolute paths and resolves symlinks.
     static func isExecutablePathContained(_ candidate: URL, in pluginDir: URL) -> Bool {
-        // Compare standardized representations — `standardized` resolves
-        // `..` and `.` components without hitting the filesystem, so symlink
-        // shenanigans inside the plugin dir are still permitted (they're a
-        // legitimate way to point at a venv binary) but lexical escapes
-        // outside the dir are caught.
+        // Compare standardized representations first; validate(at:) then
+        // resolves the filesystem path and rejects symlinks and special files.
         let candidateStd = candidate.standardized.path
         let baseStd = pluginDir.standardized.path
         return candidateStd == baseStd || candidateStd.hasPrefix(baseStd + "/")
@@ -130,14 +128,12 @@ struct PluginManifest: Codable, Equatable {
             throw ManifestError.invalidID(id)
         }
         let exec = resolvedExecutable(in: pluginDir)
-        // Relative paths must stay within pluginDir. Absolute paths are
-        // user-trusted (the user dragged the plugin into place; surfacing
-        // an absolute path in the install sheet is the UX gate).
         let executablePath = (executable as NSString).expandingTildeInPath
-        if !executablePath.hasPrefix("/") {
-            guard Self.isExecutablePathContained(exec, in: pluginDir) else {
-                throw ManifestError.executableOutsidePluginDir(exec.path)
-            }
+        guard !executablePath.hasPrefix("/") else {
+            throw ManifestError.absoluteExecutable(executablePath)
+        }
+        guard Self.isExecutablePathContained(exec, in: pluginDir) else {
+            throw ManifestError.executableOutsidePluginDir(exec.path)
         }
         let fm = FileManager.default
         guard fm.fileExists(atPath: exec.path) else {
@@ -146,7 +142,40 @@ struct PluginManifest: Codable, Equatable {
         guard fm.isExecutableFile(atPath: exec.path) else {
             throw ManifestError.notExecutable(exec.path)
         }
+        let canonicalBase = pluginDir.resolvingSymlinksInPath().standardized.path
+        let canonicalExec = exec.resolvingSymlinksInPath().standardized.path
+        guard canonicalExec.hasPrefix(canonicalBase + "/") else {
+            throw ManifestError.executableOutsidePluginDir(canonicalExec)
+        }
+        let values = try exec.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true else {
+            throw ManifestError.specialExecutable(exec.path)
+        }
     }
+}
+
+enum PluginPermission: String, Codable, CaseIterable, Hashable, Sendable {
+    case inference
+    case axRead = "ax.read"
+    case axWrite = "ax.write"
+    case notifications
+    case uiPrompt = "ui.prompt"
+    case calendar
+    case profilesRead = "profiles.read"
+    case profilesWrite = "profiles.write"
+    case hotkeys
+}
+
+/// Closed set of host data streams a plugin may request. These subscriptions
+/// are surfaced separately from callable API permissions because they grant
+/// ongoing access to user activity and text.
+enum PluginEventTopic: String, Codable, CaseIterable, Hashable, Sendable {
+    case textPause = "text.pause"
+    case caretMoved = "caret.moved"
+    case appFocused = "app.focused"
+    case hotkeyFired = "hotkey.fired"
+    case findingDetected = "finding.detected"
+    case findingCleared = "finding.cleared"
 }
 
 enum ManifestError: Error, LocalizedError, Equatable {
@@ -155,6 +184,9 @@ enum ManifestError: Error, LocalizedError, Equatable {
     case notExecutable(String)
     case invalidID(String)
     case executableOutsidePluginDir(String)
+    case absoluteExecutable(String)
+    case specialExecutable(String)
+    case directoryNameMismatch(expected: String, found: String)
 
     var errorDescription: String? {
         switch self {
@@ -168,6 +200,12 @@ enum ManifestError: Error, LocalizedError, Equatable {
             return "Plugin id \"\(id)\" is invalid (must be non-empty, contain no path separators, no `..` segments, ≤128 chars)"
         case .executableOutsidePluginDir(let path):
             return "Plugin executable resolves outside the plugin directory: \(path)"
+        case .absoluteExecutable(let path):
+            return "Plugin executable must be relative to its plugin directory: \(path)"
+        case .specialExecutable(let path):
+            return "Plugin executable must be a regular, non-symlink file: \(path)"
+        case .directoryNameMismatch(let expected, let found):
+            return "Plugin directory must be named \"\(expected)\", not \"\(found)\""
         }
     }
 }

@@ -56,9 +56,8 @@ final class ExternalPluginAdapter: HalenPlugin {
 /// Marketplace detail view for an external plugin. Shows the manifest fields
 /// the user might want to verify before trusting the plugin — id, version,
 /// the actual executable that runs, declared permissions, where it lives on
-/// disk. Permissions are surfaced even though the host doesn't enforce them
-/// yet (informational v1), because they're the user's only signal of what
-/// surface area the plugin is asking for.
+/// disk. Permissions are surfaced because enabling is the user's approval
+/// action and the host enforces this exact closed set.
 @MainActor
 private struct ExternalPluginDetailView: View {
     let manifest: PluginManifest
@@ -147,7 +146,7 @@ private struct ExternalPluginDetailView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
                 cardLabel("Declared permissions")
-                let perms = manifest.permissions ?? []
+                let perms = manifest.permissions
                 if perms.isEmpty {
                     Text("This plugin declared no permissions.")
                         .font(.system(size: 11))
@@ -158,12 +157,12 @@ private struct ExternalPluginDetailView: View {
                             Image(systemName: "checkmark.shield")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
-                            Text(perm)
+                            Text(perm.rawValue)
                                 .font(.system(size: 12, design: .monospaced))
                         }
                     }
                 }
-                Text("Permission enforcement is informational in v1 — the host trusts any installed plugin. A sandboxed exec ladder is on the roadmap.")
+                Text("These permissions gate Halen's plugin API. A plugin is still local executable code and is not an OS sandbox; enable only code you trust.")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -179,6 +178,23 @@ private struct ExternalPluginDetailView: View {
                 Text(manifest.summary ?? "External plugin discovered under ~/Library/Application Support/Halen/Plugins/. Communicates with Halen over a JSON-RPC stdio protocol.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Divider().padding(.vertical, 2)
+                cardLabel("Data subscriptions")
+                if manifest.events.isEmpty {
+                    Text("This plugin receives no Halen event data.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(manifest.events.map(\.rawValue).sorted(), id: \.self) { topic in
+                        Text(topic)
+                            .font(.system(size: 12, design: .monospaced))
+                    }
+                }
+                Text("Subscriptions can include typed text, focused-app identity, caret location, or findings. Review them as data-access grants.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

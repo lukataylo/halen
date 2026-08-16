@@ -1,8 +1,6 @@
 // Quick liveness check for the Halen WebSocket bridge plus the token-pairing
 // UI. Runs every time the user clicks the toolbar action.
 
-const HALEN_HOST = "ws://127.0.0.1:50765/";
-const TIMEOUT_MS = 1500;
 const STORAGE_KEY = "halenBridgeToken";
 
 const dot = document.getElementById("dot");
@@ -20,31 +18,15 @@ function resolve(state, msg) {
   text.textContent = msg;
 }
 
-// --- liveness ping ----------------------------------------------------------
-
-let socket;
-try {
-  socket = new WebSocket(HALEN_HOST);
-} catch (e) {
+// Ask the single background connection for liveness; the popup never creates
+// a second WebSocket (and therefore never consumes an extra server slot).
+chrome.runtime.sendMessage({ type: "halen:status" }, (reply) => {
+  if (chrome.runtime.lastError || !reply) return resolve("fail", "Halen status unavailable");
+  if (reply.status === "connected") return resolve("ok", "Connected to Halen");
+  if (reply.status === "unpaired") return resolve("warn", "Pairing token required");
+  if (reply.status === "connecting") return resolve("warn", "Connecting to Halen…");
   resolve("fail", "Halen not reachable");
-}
-
-if (socket) {
-  socket.addEventListener("open", () => {
-    resolve("ok", "Connected to Halen");
-    socket.close();
-  });
-  socket.addEventListener("error", () => {
-    resolve("fail", "Halen not reachable");
-  });
-
-  setTimeout(() => {
-    if (!resolved) {
-      resolve("warn", "Halen didn't respond in time");
-      try { socket.close(); } catch (_) {}
-    }
-  }, TIMEOUT_MS);
-}
+});
 
 // --- token pairing ----------------------------------------------------------
 
@@ -61,10 +43,16 @@ chrome.storage.local.get([STORAGE_KEY], (result) => {
 
 saveButton.addEventListener("click", () => {
   const token = (tokenInput.value || "").trim();
-  chrome.storage.local.set({ [STORAGE_KEY]: token }, showSaved);
+  chrome.storage.local.set({ [STORAGE_KEY]: token }, () => {
+    chrome.runtime.sendMessage({ type: "halen:reconnect" });
+    showSaved();
+  });
 });
 
 clearButton.addEventListener("click", () => {
   tokenInput.value = "";
-  chrome.storage.local.remove([STORAGE_KEY], showSaved);
+  chrome.storage.local.remove([STORAGE_KEY], () => {
+    chrome.runtime.sendMessage({ type: "halen:reconnect" });
+    showSaved();
+  });
 });

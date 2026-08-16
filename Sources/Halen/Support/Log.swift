@@ -1,5 +1,6 @@
 import Foundation
 import OSLog
+import Darwin
 
 enum Log {
     static let logger = Logger(subsystem: "com.dadiani.halen", category: "halen")
@@ -12,40 +13,76 @@ enum Log {
     ///
     /// Path: `~/Library/Application Support/Halen/halen-trace.log` —
     /// per-user, persists across reboots, no permission collision on
-    /// multi-user Macs. Falls back to `/tmp/halen-trace.log` only if
-    /// Application Support is somehow unreachable.
+    /// multi-user Macs. If Application Support cannot be secured, file
+    /// mirroring is disabled; sensitive logs must never fall back to /tmp.
     ///
     /// Path resolution is inlined here (not via `HalenSupportDirectory`)
     /// to avoid a static-init cycle: `HalenSupportDirectory.root` calls
     /// `Log.error` on failure, and that would re-enter this initializer
     /// on first failed access.
+    private static let maxTraceBytes: off_t = 4 * 1024 * 1024
+
     private static let traceHandle: FileHandle? = {
         let fm = FileManager.default
-        let dir: URL
-        if let support = fm.urls(for: .applicationSupportDirectory,
-                                 in: .userDomainMask).first {
-            dir = support.appending(path: "Halen")
-            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        } else {
-            dir = URL(fileURLWithPath: "/tmp", isDirectory: true)
-        }
-        let path = dir.appending(path: "halen-trace.log").path
-        // Soft-rotate: if the existing file is over 4 MB, roll it.
-        if let attrs = try? fm.attributesOfItem(atPath: path),
-           let size = attrs[.size] as? Int64, size > 4 * 1024 * 1024 {
-            try? fm.moveItem(atPath: path, toPath: path + ".old")
-        }
-        if !fm.fileExists(atPath: path) {
-            fm.createFile(atPath: path, contents: nil)
-        }
-        let handle = try? FileHandle(forWritingTo: URL(fileURLWithPath: path))
-        // `seekToEnd()` is marked `@discardableResult` upstream but the
-        // strict toolchain on CI flagged the `try?` swallow as "result of
-        // 'try?' is unused" (warnings-as-errors). Bind to `_` to silence it;
-        // we genuinely don't care about the returned offset.
-        _ = try? handle?.seekToEnd()
-        return handle
+        guard let support = fm.urls(for: .applicationSupportDirectory,
+                                    in: .userDomainMask).first else { return nil }
+        return openSecureTraceFile(in: support.appending(path: "Halen"))
     }()
+
+    /// Creates/opens the trace file without following a final-component
+    /// symlink. Internal for focused filesystem security tests.
+    static func openSecureTraceFile(in directory: URL) -> FileHandle? {
+        let fm = FileManager.default
+        do {
+            try fm.createDirectory(at: directory,
+                                   withIntermediateDirectories: true,
+                                   attributes: [.posixPermissions: 0o700])
+        } catch { return nil }
+
+        let directoryFD = open(directory.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        guard directoryFD >= 0 else { return nil }
+        defer { close(directoryFD) }
+        var directoryStat = stat()
+        guard fstat(directoryFD, &directoryStat) == 0,
+              (directoryStat.st_mode & S_IFMT) == S_IFDIR,
+              directoryStat.st_uid == geteuid() else { return nil }
+        guard fchmod(directoryFD, 0o700) == 0 else { return nil }
+
+        let fd = openat(directoryFD, "halen-trace.log",
+                        O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC | O_NOFOLLOW,
+                        0o600)
+        guard fd >= 0 else { return nil }
+
+        var fileStat = stat()
+        guard fstat(fd, &fileStat) == 0,
+              (fileStat.st_mode & S_IFMT) == S_IFREG,
+              fileStat.st_uid == geteuid(),
+              fchmod(fd, 0o600) == 0 else {
+            close(fd)
+            return nil
+        }
+        return FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+    }
+
+    /// Keep one bounded file rather than racing a predictable `.old` path.
+    /// All production calls run on traceQueue; internal for focused tests.
+    static func writeBounded(_ data: Data, to handle: FileHandle,
+                             maxBytes: off_t = maxTraceBytes) throws {
+        guard maxBytes > 0 else { return }
+        let fd = handle.fileDescriptor
+        var fileStat = stat()
+        guard fstat(fd, &fileStat) == 0,
+              (fileStat.st_mode & S_IFMT) == S_IFREG,
+              fileStat.st_uid == geteuid() else { return }
+        if fileStat.st_size > maxBytes || off_t(data.count) > maxBytes - fileStat.st_size {
+            guard ftruncate(fd, 0) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+        }
+        // A single oversized record cannot be allowed to defeat the bound.
+        let bounded = data.count > Int(maxBytes) ? data.suffix(Int(maxBytes)) : data[...]
+        try handle.write(contentsOf: Data(bounded))
+    }
 
     private static let traceFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -59,10 +96,12 @@ enum Log {
 
     private static func appendTrace(_ level: String, _ message: String) {
         guard let handle = traceHandle else { return }
-        let ts = traceFormatter.string(from: Date())
-        let line = "\(ts) [\(level)] \(message)\n"
-        guard let data = line.data(using: .utf8) else { return }
-        traceQueue.async { try? handle.write(contentsOf: data) }
+        traceQueue.async {
+            let ts = traceFormatter.string(from: Date())
+            let line = "\(ts) [\(level)] \(message)\n"
+            guard let data = line.data(using: .utf8) else { return }
+            try? writeBounded(data, to: handle)
+        }
     }
 
     static func info(_ message: String) {
@@ -97,5 +136,13 @@ enum Log {
     static func redact(_ text: String) -> String {
         let hash = sha256Hex(text).prefix(8)
         return "<len=\(text.count) #\(hash)>"
+    }
+
+    static func redactedToastDescription(title: String, body: String) -> String {
+        "toast: title=\(redact(title)) body=\(redact(body))"
+    }
+
+    static func redactedPluginStderrDescription(pluginID: String, line: String) -> String {
+        "plugin[\(pluginID)] stderr=\(redact(line))"
     }
 }

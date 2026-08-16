@@ -3,7 +3,7 @@
   "name": "Halen for Web",
   "version": "0.1.0",
   "description": "Lets Halen see typing in browser text fields so its plugins (snippets, typo-fixer, sentiment-guard) work on Slack, Discord, Gmail, Docs and everywhere else macOS Accessibility can't reach.",
-  "minimum_chrome_version": "109",
+  "minimum_chrome_version": "116",
 
   "permissions": ["storage"],
   "host_permissions": ["<all_urls>"],
@@ -13,6 +13,10 @@
     "32":  "icons/icon32.png",
     "48":  "icons/icon48.png",
     "128": "icons/icon128.png"
+  },
+
+  "background": {
+    "service_worker": "background.js"
   },
 
   "content_scripts": [

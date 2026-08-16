@@ -117,7 +117,9 @@ or calendar data:**
   telemetry.
 - **Browser extension bridge.** If you enable the WebSocket bridge for the
   optional browser extension, Halen listens on `127.0.0.1:50765` (loopback only)
-  so the extension can forward typing events from browser text fields. It only
+  so the extension can forward typing events from browser text fields. Upgrade
+  requests require both a browser-extension origin and the pairing-token
+  subprotocol, and the transport exposes events only—no host RPC methods. It only
   *accepts* inbound connections; it never dials out.
 
 Apart from the update check above, there is **no other outbound network code**
@@ -163,8 +165,12 @@ never persisted outside macOS's own EventKit store.
 ## Telemetry
 
 **There is none.** No analytics, no usage metrics, no error reporting,
-no remote feature flags. Logging goes to stderr and the unified system
-log via the small `Log` helper in
+no remote feature flags. Diagnostics go to the unified system log and a
+bounded private trace file under Halen's per-user Application Support
+directory (`0700` directory, `0600` file). Unsafe symlinks and non-regular
+files are rejected, with no shared `/tmp` fallback. User-supplied toast text
+and plugin stderr are stored only as length-plus-hash fingerprints via the
+small `Log` helper in
 [`Sources/Halen/Support/Log.swift`](../../Sources/Halen/Support/Log.swift).
 Nothing is uploaded.
 

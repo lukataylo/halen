@@ -39,7 +39,7 @@ struct SettingsView: View {
     @AppStorage(OverlayController.dotStyleKey) private var overlayDotStyle: String = "solid"
     /// Two-way binding to the WS bridge's enabled preference. Toggling
     /// here also calls into the bridge to actually start/stop it live.
-    @AppStorage(WebSocketBridge.enabledKey) private var webSocketEnabled: Bool = true
+    @AppStorage(WebSocketBridge.enabledKey) private var webSocketEnabled: Bool = false
     /// Persisted Ollama endpoint. The TextField edits `ollamaURLDraft` and
     /// only writes through to this key on commit — typing "http://localh"
     /// mid-edit shouldn't put a half-URL into UserDefaults.

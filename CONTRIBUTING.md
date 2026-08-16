@@ -103,7 +103,8 @@ turned on, organised by feature folder. A few specifics:
 - **No force-unwraps in production paths.** Guard, return, log. The
   `HalenSupportDirectory.root` resolver exists specifically because every
   `.first!` we used to have was a crash waiting on someone's edge case.
-- **`Log` for diagnostics, not `print`.** Lines under `/tmp/halen-trace.log`
+- **`Log` for diagnostics, not `print`.** Lines under
+  `~/Library/Application Support/Halen/halen-trace.log`
   are how we debug; `print` is invisible in a release build.
 - **Tests for non-trivial logic.** If you fix a bug, a regression test is
   the price of admission. If you add a feature with branches, cover the

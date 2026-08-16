@@ -290,6 +290,16 @@ private struct InstalledPluginRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let external = plugin as? ExternalPluginAdapter {
+                        Text("Permissions: \(external.manifest.permissions.map(\.rawValue).joined(separator: ", "))")
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("Receives: \(external.manifest.events.map(\.rawValue).joined(separator: ", "))")
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 Spacer(minLength: 4)
@@ -360,6 +370,14 @@ private struct AvailablePluginRow: View {
                         Text("by \(entry.author) · v\(entry.version)")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
+                        Text("Permissions: \(entry.permissions.map(\.rawValue).joined(separator: ", "))")
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("Receives: \(entry.events.map(\.rawValue).joined(separator: ", "))")
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer(minLength: 4)
@@ -380,6 +398,11 @@ private struct AvailablePluginRow: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("Install failed: \(message)")
                 }
+
+                Text("Installed plugins start disabled. Enabling is your approval; Halen gates its plugin API to the permissions shown above.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if let source = URL(string: entry.sourceURL) {
                     Button {

@@ -3,17 +3,9 @@ import AppKit
 import ApplicationServices
 import UserNotifications
 
-/// Single source of truth for every plugin/extension → host JSON-RPC method
-/// the host exposes. Both transports (stdio via `PluginHost` and WebSocket
-/// via `WebSocketBridge`) delegate every incoming request to
-/// `HostBridge.dispatch(...)` so the API surface is identical regardless of
-/// how a client arrived.
-///
-/// This used to live duplicated in `PluginHost.handleIncoming` and
-/// `WebSocketBridge.dispatch`, and the two had already drifted: the WS path
-/// hardcoded `temperature: 0.4`, didn't accept `stop`/`taskKind`/`maxTokens`,
-/// and was missing `ax/replaceRange` + `ui/toast` entirely. Consolidating
-/// closes that class of bug.
+/// Single source of truth for every external stdio plugin → host JSON-RPC
+/// method. The browser WebSocket is deliberately notification-only and never
+/// reaches this dispatcher.
 @MainActor
 final class HostBridge {
     private let services: HalenServices
@@ -28,15 +20,14 @@ final class HostBridge {
     /// The one dispatch site. Returns the `result` payload or throws an
     /// `RPCErrorObject` the transport then encodes back to the caller.
     ///
-    /// `grantedPermissions` is the calling client's permission set — for a
-    /// stdio plugin, its manifest's `permissions`; for the WebSocket bridge,
-    /// empty (the browser extension has no privileged grants). Sensitive
-    /// methods (currently `calendar/*`) are gated on it. The text/AX/inference
-    /// methods stay ungated for now — tightening those is a separate security
-    /// pass that would need every existing plugin to declare permissions.
+    /// `grantedPermissions` is the stdio plugin manifest's permission set.
+    /// Every exposed capability is mapped to one closed permission here.
     func dispatch(method: String,
                   params: RPCValue?,
                   grantedPermissions: Set<String>) async throws -> RPCValue {
+        if let permission = Self.requiredPermission(for: method) {
+            try require(permission, in: grantedPermissions, for: method)
+        }
         switch method {
         case "inference/complete":
             return try await inferenceComplete(params: params)
@@ -49,10 +40,8 @@ final class HostBridge {
         case "ui/prompt":
             return await uiPrompt(params: params)
         case "calendar/upcomingEvents":
-            try require("calendar", in: grantedPermissions, for: method)
             return try await calendarUpcomingEvents(params: params)
         case "calendar/createEvent":
-            try require("calendar", in: grantedPermissions, for: method)
             return try await calendarCreateEvent(params: params)
         case "profile/getToneProfile":
             return profileGet(params: params)
@@ -66,16 +55,35 @@ final class HostBridge {
         }
     }
 
+    nonisolated static func requiredPermission(for method: String) -> PluginPermission? {
+        switch method {
+        case "inference/complete": return .inference
+        case "ax/readSelection": return .axRead
+        case "ax/replaceRange": return .axWrite
+        case "ui/toast": return .notifications
+        case "ui/prompt": return .uiPrompt
+        case "calendar/upcomingEvents", "calendar/createEvent": return .calendar
+        case "profile/getToneProfile", "profile/listToneProfiles": return .profilesRead
+        case "profile/setToneProfile": return .profilesWrite
+        default: return nil
+        }
+    }
+
+    nonisolated static func isAuthorized(method: String, grantedPermissions: Set<String>) -> Bool {
+        guard let required = requiredPermission(for: method) else { return true }
+        return grantedPermissions.contains(required.rawValue)
+    }
+
     /// Throw `permissionDenied` unless `permission` is in the caller's grant
     /// set. The plugin declared (or didn't) the permission in its manifest;
     /// the marketplace install sheet is where the user actually consents.
-    private func require(_ permission: String,
+    private func require(_ permission: PluginPermission,
                          in granted: Set<String>,
                          for method: String) throws {
-        guard granted.contains(permission) else {
+        guard granted.contains(permission.rawValue) else {
             throw RPCErrorObject(
                 code: PluginRPC.ErrorCode.permissionDenied.rawValue,
-                message: "\(method) requires the `\(permission)` permission — declare it in halen-plugin.json",
+                message: "\(method) requires the `\(permission.rawValue)` permission — declare it in halen-plugin.json",
                 data: nil)
         }
     }
@@ -164,10 +172,9 @@ final class HostBridge {
         let title = params?.objectValue?["title"]?.stringValue ?? "Halen"
         let body = params?.objectValue?["body"]?.stringValue ?? ""
         // `ui/toast` posts a real system notification (it used to only log).
-        // No permission gate: a notification is low-risk and the user can
-        // silence Halen's notifications in System Settings. Authorisation is
-        // requested lazily — the first toast triggers the one-time prompt.
-        Log.info("toast: \(title): \(body)")
+        // The dispatch table gates this on `notifications`. System
+        // authorisation is requested lazily on first use.
+        Log.info(Log.redactedToastDescription(title: title, body: body))
         Task { await Self.postNotification(title: title, body: body) }
         return .object(["ok": true] as [String: Any?])
     }
@@ -191,8 +198,7 @@ final class HostBridge {
 
     /// Interactive popup. Unlike `ui/toast` this *blocks* the plugin's RPC
     /// call until the user picks an action (or dismisses / it times out).
-    /// Ungated — like `ui/toast`, a popup is an annoyance at worst, not a
-    /// privilege; marketplace curation is the real gate on hostile plugins.
+    /// The dispatch table gates this on the separate `ui.prompt` permission.
     private func uiPrompt(params: RPCValue?) async -> RPCValue {
         let obj = params?.objectValue
         let title = obj?["title"]?.stringValue ?? "Halen"
@@ -217,10 +223,8 @@ final class HostBridge {
     // on every classification. Exposing the store over RPC lets an
     // external plugin edit the *same* data the in-process readers see.
     //
-    // Ungated for now. A future security pass might gate writes on a
-    // `profiles` permission, but for v0.2.0 the data is per-user
-    // preference (formal vs casual register, not a privacy-sensitive
-    // signal) and the marketplace is the trust boundary.
+    // Reads and writes are separately gated by `profiles.read` and
+    // `profiles.write` in the central dispatch table.
 
     private func profileGet(params: RPCValue?) -> RPCValue {
         let bundleId = params?.objectValue?["bundleId"]?.stringValue ?? ""

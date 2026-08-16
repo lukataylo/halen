@@ -12,14 +12,16 @@ final class PluginRegistry {
 
     private let defaults = UserDefaults.standard
 
-    /// Add a plugin. Honors the previously-saved enabled state (default: enabled).
-    func register(_ plugin: any HalenPlugin) {
+    /// Add a plugin. Built-ins preserve their established defaults; callers
+    /// registering external code pass `defaultEnabled: false` so install and
+    /// discovery never execute code before the user explicitly enables it.
+    func register(_ plugin: any HalenPlugin, defaultEnabled: Bool = true) {
         guard !plugins.contains(where: { $0.id == plugin.id }) else {
             Log.warn("PluginRegistry: \(plugin.id) already registered — skipping")
             return
         }
         plugins.append(plugin)
-        let enabled = readPersistedEnabled(plugin.id)
+        let enabled = readPersistedEnabled(plugin.id, fallback: defaultEnabled)
         enabledStates[plugin.id] = enabled
         if enabled {
             plugin.start()
@@ -71,7 +73,7 @@ final class PluginRegistry {
         plugins.lazy.filter { self.isEnabled($0.id) }.count
     }
 
-    private func readPersistedEnabled(_ id: String) -> Bool {
+    private func readPersistedEnabled(_ id: String, fallback: Bool = true) -> Bool {
         // Explicit user choice takes precedence over the default-off list —
         // someone who deliberately enabled VoiceDictation and quit should
         // get VoiceDictation on next launch even though it's off by default
@@ -128,7 +130,7 @@ final class PluginRegistry {
             return true
         }
 
-        return !Self.defaultDisabledPluginIds.contains(id)
+        return fallback && !Self.defaultDisabledPluginIds.contains(id)
     }
 
     /// Returns `true` if any of `anyOf` was persisted as enabled, `false`

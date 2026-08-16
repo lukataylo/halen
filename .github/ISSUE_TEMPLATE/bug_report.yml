@@ -92,9 +92,9 @@ body:
     attributes:
       label: Relevant log lines
       description: |
-        Halen writes diagnostic output to `/tmp/halen-trace.log`. The last 200 lines around the bug are usually plenty.
+        Halen writes diagnostic output to `~/Library/Application Support/Halen/halen-trace.log`. The last 200 lines around the bug are usually plenty.
         ```bash
-        tail -n 200 /tmp/halen-trace.log
+        tail -n 200 "$HOME/Library/Application Support/Halen/halen-trace.log"
         ```
         Redact anything sensitive before pasting — Halen tries to scrub PII but trust your eyes over ours.
       render: text
