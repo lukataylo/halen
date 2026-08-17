@@ -76,18 +76,34 @@ final class PluginInstance {
         Log.info("PluginInstance[\(manifest.id)]: spawned pid=\(process.processIdentifier)")
 
         // Handshake: initialize → wait for response → send initialized.
+        let granted = Set(manifest.permissions)
+        var capabilities: [String: Any?] = [:]
+        if granted.contains(.inference) {
+            capabilities["inference"] = ["streaming": false,
+                                              "tiers": ["small", "medium", "large"]] as [String: Any]
+        }
+        if granted.contains(.axRead) || granted.contains(.axWrite) {
+            capabilities["ax"] = ["read": granted.contains(.axRead),
+                                    "write": granted.contains(.axWrite)] as [String: Any]
+        }
+        if granted.contains(.notifications) || granted.contains(.uiPrompt) {
+            capabilities["ui"] = ["toast": granted.contains(.notifications),
+                                    "prompt": granted.contains(.uiPrompt)] as [String: Any]
+        }
+        if granted.contains(.calendar) { capabilities["calendar"] = true }
+        if granted.contains(.profilesRead) || granted.contains(.profilesWrite) {
+            capabilities["profiles"] = ["read": granted.contains(.profilesRead),
+                                          "write": granted.contains(.profilesWrite)] as [String: Any]
+        }
+        if granted.contains(.hotkeys) { capabilities["hotkeys"] = true }
+
         let initParams = RPCValue.object([
             "protocolVersion": manifest.halenApiVersion,
             "hostInfo": [
                 "name": "Halen",
                 "version": "0.1.0"
             ],
-            "capabilities": [
-                "inference": ["streaming": false,
-                              "tiers": ["small", "medium", "large"]],
-                "ax": ["read": true, "write": true],
-                "ui": ["toast": true]
-            ]
+            "capabilities": capabilities
         ] as [String: Any?])
         _ = try await call(method: "initialize", params: initParams)
         try send(notification: "notifications/initialized")
@@ -213,7 +229,8 @@ final class PluginInstance {
     /// Same as `send(notification:)` but for event topics. Filters by the
     /// manifest's `events` allowlist so plugins only get what they asked for.
     func deliver(event topic: String, payload: RPCValue) {
-        guard manifest.events?.contains(topic) ?? false else { return }
+        guard let eventTopic = PluginEventTopic(rawValue: topic),
+              manifest.events.contains(eventTopic) else { return }
         let params = RPCValue.object([
             "topic": .string(topic),
             "payload": payload
@@ -243,7 +260,7 @@ final class PluginInstance {
         let id = manifest.id
         stderrTask = installLineReader(on: stderrPipe.fileHandleForReading) { [weak self] line in
             guard self?.isRunning == true else { return }
-            Log.info("plugin[\(id)] \(line)")
+            Log.info(Log.redactedPluginStderrDescription(pluginID: id, line: line))
         }
     }
 

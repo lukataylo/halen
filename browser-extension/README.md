@@ -9,27 +9,23 @@ Gmail, Google Docs, Notion, ChatGPT.app's input, etc.
 ## How it works
 
 ```
-┌──────────────────┐   ws://127.0.0.1:50765    ┌─────────────────────┐
-│  Chrome / Arc /  │  event/text.pause ──────► │  Halen.app          │
-│  Edge — DOM      │                           │   WebSocketBridge   │
-│  input/textarea  │                           │     ↓               │
-│  contenteditable │                           │   EventBus          │
-└──────────────────┘                           │     ↓               │
-                                               │   SnippetExpander   │
-                                               │   TypoFixer         │
-                                               │   SentimentGuard    │
-                                               │     ↓               │
-                                               │   AX write fails    │
-                                               │     ↓               │
-                                               │   clipboard + ⌘V    │
-                                               └─────────────────────┘
-                                                        │
-                                                        ▼
-                                               (paste lands in DOM)
+┌──────────────────┐  runtime message  ┌────────────────┐
+│ Browser tabs     │ event/text.pause ►│ MV3 background │
+│ DOM edit fields  │                   │ service worker │
+└──────────────────┘                   └───────┬────────┘
+                                              │ one authenticated WebSocket
+                                              ▼
+                                    ┌─────────────────────┐
+                                    │ Halen WebSocketBridge│
+                                    │ EventBus → plugins   │
+                                    │ clipboard + ⌘V       │
+                                    └─────────────────────┘
 ```
 
-Same plugins, same protocol shape — the browser tab is just another event
-source. Write-back relies on Halen's existing clipboard-and-⌘V fallback
+All tabs send events to one MV3 background service worker, which owns the
+single authenticated WebSocket. The token is presented as a WebSocket
+subprotocol, so the connection opens only after authentication. Write-back relies on Halen's
+clipboard-and-⌘V fallback
 because synthesised ⌘V works perfectly in Chromium text fields.
 
 The bridge is authenticated: loopback binding alone isn't a trust boundary
@@ -42,7 +38,8 @@ token** before it can send or receive events.
 2. Toggle on **Developer mode** (top-right)
 3. Click **Load unpacked**
 4. Pick the `browser-extension/` directory in this repo
-5. **Pair it.** Click the extension's toolbar icon to open its popup, then
+5. In **Halen Settings → Browser bridge**, enable the bridge.
+6. **Pair it.** Click the extension's toolbar icon to open its popup, then
    paste the pairing token from **Halen Settings → Browser bridge**. Until
    the token matches, the connection opens but Halen ignores its events.
 
@@ -70,11 +67,22 @@ Google Doc. Halen's SnippetExpander fires, the AX write fails (silently),
 the clipboard fallback kicks in, ⌘V is synthesised, and your signature
 lands in the field.
 
+## Security and lifecycle
+
+- Halen accepts WebSocket upgrades only from Chrome, Firefox, or Safari
+  extension origins; ordinary web pages and origin-less clients are rejected.
+- The background worker authenticates during the WebSocket upgrade and keeps
+  the one socket alive with periodic traffic. Chrome 116+ is required for reliable MV3
+  WebSocket liveness.
+- The paired extension can publish supported events only. It receives no host
+  RPC capabilities.
+- Text is windowed around the caret to 32K UTF-16 units, and the background
+  worker refuses events over 192 KiB before retaining or sending them.
+
 ## Limitations of v0
 
-- Each browser tab opens its own WebSocket connection — Halen accepts an
-  unbounded number; if this becomes a problem we'll move to one
-  service-worker-owned connection that proxies for all tabs.
+- One service-worker-owned connection proxies events for all tabs. Halen caps
+  the bridge at 16 simultaneous clients across installed browser profiles.
 - The extension is one-way today: events go up, writes come back via the
   ⌘V clipboard fallback. Future: direct `extension/replaceSelection` RPC
   so writes preserve undo history and avoid clobbering the clipboard.

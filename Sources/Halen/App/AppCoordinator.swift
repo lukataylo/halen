@@ -248,7 +248,7 @@ final class AppCoordinator {
         pluginHost = host
         for (dir, manifest) in host.discoverManifests() {
             let adapter = ExternalPluginAdapter(manifest: manifest, pluginDir: dir, host: host)
-            registry.register(adapter)
+            registry.register(adapter, defaultEnabled: false)
         }
         host.startEventDispatcher()
 
@@ -286,7 +286,7 @@ final class AppCoordinator {
         }
         guard !registry.contains(manifest.id) else { return }
         let adapter = ExternalPluginAdapter(manifest: manifest, pluginDir: directory, host: pluginHost)
-        registry.register(adapter)
+        registry.register(adapter, defaultEnabled: false)
     }
 
     private func startEventLogger() {

@@ -34,4 +34,51 @@ final class LogRedactTests: XCTestCase {
         XCTAssertTrue(r.hasPrefix("<"))
         XCTAssertTrue(r.hasSuffix(">"))
     }
+
+    func testSecureTraceFileUsesPrivateModes() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let handle = try XCTUnwrap(Log.openSecureTraceFile(in: root))
+        defer { try? handle.close() }
+        let dirMode = try XCTUnwrap(FileManager.default.attributesOfItem(atPath: root.path)[.posixPermissions] as? NSNumber)
+        let fileMode = try XCTUnwrap(FileManager.default.attributesOfItem(atPath: root.appending(path: "halen-trace.log").path)[.posixPermissions] as? NSNumber)
+        XCTAssertEqual(dirMode.intValue & 0o777, 0o700)
+        XCTAssertEqual(fileMode.intValue & 0o777, 0o600)
+    }
+
+    func testSecureTraceFileRejectsSymlinkAndNonRegularFile() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appending(path: UUID().uuidString)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let trace = root.appending(path: "halen-trace.log")
+        try fm.createSymbolicLink(at: trace, withDestinationURL: root.appending(path: "target"))
+        XCTAssertNil(Log.openSecureTraceFile(in: root))
+        try fm.removeItem(at: trace)
+        try fm.createDirectory(at: trace, withIntermediateDirectories: false)
+        XCTAssertNil(Log.openSecureTraceFile(in: root))
+    }
+
+    func testBoundedWriteTruncatesWithoutRotation() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? fm.removeItem(at: root) }
+        let handle = try XCTUnwrap(Log.openSecureTraceFile(in: root))
+        defer { try? handle.close() }
+        try Log.writeBounded(Data(repeating: 0x41, count: 12), to: handle, maxBytes: 16)
+        try Log.writeBounded(Data(repeating: 0x42, count: 8), to: handle, maxBytes: 16)
+        let content = try Data(contentsOf: root.appending(path: "halen-trace.log"))
+        XCTAssertEqual(content, Data(repeating: 0x42, count: 8))
+        XCTAssertFalse(fm.fileExists(atPath: root.appending(path: "halen-trace.log.old").path))
+    }
+
+    func testSensitiveCallSiteDescriptionsRedactPayloads() {
+        let toast = Log.redactedToastDescription(title: "private title", body: "private body")
+        XCTAssertFalse(toast.contains("private title"))
+        XCTAssertFalse(toast.contains("private body"))
+        let stderr = Log.redactedPluginStderrDescription(pluginID: "example", line: "secret stderr")
+        XCTAssertTrue(stderr.contains("plugin[example]"))
+        XCTAssertFalse(stderr.contains("secret stderr"))
+    }
 }

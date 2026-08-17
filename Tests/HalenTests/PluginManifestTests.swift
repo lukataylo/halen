@@ -83,8 +83,8 @@ final class PluginManifestValidateTests: XCTestCase {
             version: "1.0",
             halenApiVersion: "0.1",
             executable: "../../../../bin/sh",   // path traversal
-            args: nil, env: nil, events: nil,
-            permissions: nil, icon: nil, category: nil
+            args: nil, env: nil, events: [],
+            permissions: [], icon: nil, category: nil
         )
 
         XCTAssertThrowsError(try manifest.validate(at: tmp)) { err in
@@ -106,8 +106,8 @@ final class PluginManifestValidateTests: XCTestCase {
             version: "1.0",
             halenApiVersion: "0.1",
             executable: "run.sh",
-            args: nil, env: nil, events: nil,
-            permissions: nil, icon: nil, category: nil
+            args: nil, env: nil, events: [],
+            permissions: [], icon: nil, category: nil
         )
 
         XCTAssertThrowsError(try manifest.validate(at: tmp)) { err in
@@ -127,8 +127,8 @@ final class PluginManifestValidateTests: XCTestCase {
             name: "Future", summary: nil, version: "1.0",
             halenApiVersion: "9.99",
             executable: "run.sh",
-            args: nil, env: nil, events: nil,
-            permissions: nil, icon: nil, category: nil
+            args: nil, env: nil, events: [],
+            permissions: [], icon: nil, category: nil
         )
 
         XCTAssertThrowsError(try manifest.validate(at: tmp)) { err in
@@ -158,8 +158,8 @@ final class PluginManifestValidateTests: XCTestCase {
             name: "Good", summary: nil, version: "1.0",
             halenApiVersion: "0.1",
             executable: "bin/run.sh",
-            args: nil, env: nil, events: nil,
-            permissions: nil, icon: nil, category: nil
+            args: nil, env: nil, events: [],
+            permissions: [], icon: nil, category: nil
         )
 
         XCTAssertNoThrow(try manifest.validate(at: tmp))

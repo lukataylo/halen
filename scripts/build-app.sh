@@ -21,11 +21,31 @@ if [[ "$DIST" == "1" ]]; then
     # keychain; codesign matches this as a substring. Override with
     # SIGN_IDENTITY=... if you have more than one and the match is ambiguous.
     SIGN_IDENTITY="${SIGN_IDENTITY:-Developer ID Application}"
+    # Release provenance inputs must themselves come from the checked-in
+    # release policy, not local edits or untracked marker files.
+    PROVENANCE_INPUTS=(Vendor/LLAMA_CPP_VERSION Vendor/LLAMA_CPP_COMMIT
+        scripts/fetch-assets.sh scripts/verify-llama-framework.sh)
+    if ! git diff --quiet -- "${PROVENANCE_INPUTS[@]}" \
+        || ! git diff --cached --quiet -- "${PROVENANCE_INPUTS[@]}" \
+        || ! git ls-files --error-unmatch Vendor/LLAMA_CPP_COMMIT >/dev/null 2>&1; then
+        echo "error: DIST requires clean, committed llama provenance inputs" >&2
+        exit 1
+    fi
 else
     CONFIG="${CONFIG:-debug}"
     # Stable across rebuilds so granted TCC (Accessibility, etc.) permissions
     # stick. Override with SIGN_IDENTITY=- for ad-hoc.
     SIGN_IDENTITY="${SIGN_IDENTITY:-Apple Development: luka dadiani (75R33YUT6M)}"
+fi
+
+# Distribution builds never trust a pre-existing binary or its adjacent
+# provenance marker: rebuild directly from the immutable upstream commit in
+# the clean, committed policy above. Development builds may reuse a verified
+# cache for iteration.
+if [[ "$DIST" == "1" ]]; then
+    SKIP_GGUF=1 REBUILD_LLAMA=1 "$ROOT/scripts/fetch-assets.sh"
+else
+    "$ROOT/scripts/verify-llama-framework.sh"
 fi
 
 # When the repo lives inside an iCloud-synced folder (Documents, Desktop)
@@ -34,7 +54,7 @@ fi
 # "resource fork, Finder information, or similar detritus not allowed", and
 # nothing short of staging the build outside iCloud reliably escapes the
 # race. So: detect iCloud (parent dir tagged with the fileprovider xattr)
-# and stage to /tmp/halen-build/ when present. A `build/Halen.app` symlink
+# and stage to a unique private temporary directory. A `build/Halen.app` symlink
 # at the canonical location keeps `run-dev.sh` and the user's muscle memory
 # pointing at the right place.
 #
@@ -47,7 +67,8 @@ fi
 if [[ -n "${OUT_DIR:-}" ]]; then
     APP_DIR="$OUT_DIR/Halen.app"
 elif [[ "$icloud_detected" == "1" ]]; then
-    APP_DIR="/tmp/halen-build/Halen.app"
+    BUILD_STAGE="$(mktemp -d /private/tmp/halen-build.XXXXXX)"
+    APP_DIR="$BUILD_STAGE/Halen.app"
     echo "→ iCloud-synced parent detected — staging to $APP_DIR"
 else
     APP_DIR="$ROOT/build/Halen.app"
@@ -96,6 +117,7 @@ done
 # with a dyld "Library not loaded" error.
 LLAMA_FW_SRC="$ROOT/Vendor/llama.xcframework/macos-arm64/llama.framework"
 if [[ -d "$LLAMA_FW_SRC" ]]; then
+    "$ROOT/scripts/verify-llama-framework.sh"
     echo "→ embedding llama.framework"
     mkdir -p "$FRAMEWORKS"
     ditto "$LLAMA_FW_SRC" "$FRAMEWORKS/llama.framework"
@@ -142,6 +164,7 @@ fi
 # Each codesign call is preceded by its own `xattr -cr` to defeat iCloud's
 # FinderInfo re-stamping (see the staging block at the top of this script).
 echo "→ signing with: $SIGN_IDENTITY"
+"$ROOT/scripts/verify-macho-paths.sh" "$APP_DIR"
 
 # Pre-flight: codesign prompts for keychain access on every signed binary
 # unless the signing key's partition list authorises `codesign:`. This

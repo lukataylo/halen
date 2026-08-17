@@ -66,8 +66,8 @@ final class PluginHost {
     func spawn(at dir: URL, manifest: PluginManifest) async {
         guard !instances.contains(where: { $0.manifest.id == manifest.id }) else { return }
         // The plugin's granted permission set — what it declared in its
-        // manifest. `HostBridge` gates sensitive methods (calendar/*) on it.
-        let granted = Set(manifest.permissions ?? [])
+        // manifest. `HostBridge` gates every exposed host method on it.
+        let granted = Set(manifest.permissions.map(\.rawValue))
         let pluginId = manifest.id   // captured by the per-instance handler
         // Captured separately because the conflict registry surfaces a
         // human label (manifest name), not the dotted reverse-DNS id.
@@ -76,11 +76,15 @@ final class PluginHost {
                                       handler: { [bridge, weak self] method, params in
             // Per-plugin methods (hotkey/*) need plugin identity to route
             // fired events back; intercept them here before falling
-            // through to the shared bridge. Every other RPC goes through
-            // the single `HostBridge` shared with the WebSocket transport,
-            // so the surface is identical and can't drift.
+            // through to the centralized `HostBridge`. The WebSocket bridge
+            // is notification-only and has no route to these RPC methods.
             switch method {
             case "hotkey/register", "hotkey/unregister":
+                guard granted.contains(PluginPermission.hotkeys.rawValue) else {
+                    throw RPCErrorObject(code: PluginRPC.ErrorCode.permissionDenied.rawValue,
+                                         message: "\(method) requires the `hotkeys` permission",
+                                         data: nil)
+                }
                 guard let self else {
                     throw RPCErrorObject(code: PluginRPC.ErrorCode.internalError.rawValue,
                                          message: "Plugin host shutting down", data: nil)

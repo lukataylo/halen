@@ -19,7 +19,7 @@ cd "$ROOT"
 #    flows that rely on the in-app ModelDownloader to fetch on first use).
 # ---------------------------------------------------------------------------
 GGUF_PATH="assets/Models/gemma-4-E4B-it-IQ4_XS.gguf"
-GGUF_URL="https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-IQ4_XS.gguf"
+GGUF_URL="https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/653803f092503c04a65164346f3208a36e707693/gemma-4-E4B-it-IQ4_XS.gguf"
 GGUF_SHA="eb29c8519c4c07b880fb9cae7ff13ee2e30c5f38516268920ab85c04df6d52a2"
 
 if [[ "${SKIP_GGUF:-0}" == "1" ]]; then
@@ -41,18 +41,24 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 2. llama.cpp xcframework — built from the pinned tag, macOS arm64 only
+# 2. llama.cpp xcframework — built from the immutable pinned commit
 # ---------------------------------------------------------------------------
-if [[ -d "Vendor/llama.xcframework" ]]; then
-    echo "✓ Vendor/llama.xcframework (present)"
+if [[ -d "Vendor/llama.xcframework" ]] && [[ "${REBUILD_LLAMA:-0}" != "1" ]] \
+    && ./scripts/verify-llama-framework.sh; then
+    echo "✓ Vendor/llama.xcframework (verified cache hit)"
 else
     TAG="$(cat Vendor/LLAMA_CPP_VERSION)"
-    echo "→ building Vendor/llama.xcframework from llama.cpp $TAG"
+    COMMIT="$(tr -d '[:space:]' < Vendor/LLAMA_CPP_COMMIT)"
+    echo "→ building Vendor/llama.xcframework from llama.cpp $TAG ($COMMIT)"
     WORK="$(mktemp -d)"
-    git clone --filter=blob:none https://github.com/ggml-org/llama.cpp.git "$WORK/llama.cpp"
+    trap 'rm -rf "$WORK"' EXIT
+    git init -q "$WORK/llama.cpp"
     (
         cd "$WORK/llama.cpp"
-        git checkout "$TAG"
+        git remote add origin https://github.com/ggml-org/llama.cpp.git
+        git fetch --depth 1 origin "$COMMIT"
+        git checkout -q --detach FETCH_HEAD
+        [[ "$(git rev-parse HEAD)" == "$COMMIT" ]] || { echo "error: fetched unexpected llama.cpp commit" >&2; exit 1; }
         # macOS-only (arm64) trim of the upstream multi-platform script: keep its
         # options + assembly functions (lines 1-402), append just the macOS path.
         sed -n '1,402p' build-xcframework.sh > build-macos-only.sh
@@ -86,8 +92,26 @@ INNER
         plutil -replace AvailableLibraries.0.LibraryIdentifier -string "macos-arm64" "$XCF/Info.plist"
         plutil -remove AvailableLibraries.0.SupportedArchitectures.1 "$XCF/Info.plist"
     )
+    rm -rf Vendor/llama.xcframework Vendor/llama.xcframework.provenance
     cp -R "$WORK/llama.cpp/build-apple/llama.xcframework" Vendor/llama.xcframework
+    digest="$({
+        while IFS= read -r entry; do
+            rel="${entry#Vendor/llama.xcframework/}"
+            if [[ -L "$entry" ]]; then
+                hash="$(printf '%s' "$(readlink "$entry")" | shasum -a 256 | awk '{print $1}')"
+                printf 'L %s %s\n' "$hash" "$rel"
+            else
+                hash="$(shasum -a 256 "$entry" | awk '{print $1}')"
+                printf 'F %s %s\n' "$hash" "$rel"
+            fi
+        done < <(find Vendor/llama.xcframework \( -type f -o -type l \) -print | LC_ALL=C sort)
+    } | shasum -a 256 | awk '{print $1}')"
+    printf 'source=%s\ncommit=%s\ntree_sha256=%s\n' \
+        'https://github.com/ggml-org/llama.cpp.git' "$COMMIT" "$digest" \
+        > Vendor/llama.xcframework.provenance
+    ./scripts/verify-llama-framework.sh
     rm -rf "$WORK"
+    trap - EXIT
     echo "✓ Vendor/llama.xcframework (arm64)"
 fi
 

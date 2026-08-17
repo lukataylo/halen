@@ -69,3 +69,40 @@ final class ContentRangeParserTests: XCTestCase {
         XCTAssertEqual(parsed?.total, 1)
     }
 }
+
+final class ModelSpecIntegrityTests: XCTestCase {
+    func testDownloadURLsUseImmutableRevisions() {
+        let specs = [ModelSpec.gemma4E4B_IQ4_XS, ModelSpec.qwen25_05B_Q4_K_M]
+
+        for spec in specs {
+            XCTAssertNotNil(spec.sourceURL.path.range(
+                of: #"/resolve/[0-9a-f]{40}/"#,
+                options: .regularExpression
+            ), "\(spec.displayName) must download from an immutable commit")
+            XCTAssertNotNil(spec.expectedSHA256)
+            XCTAssertTrue(spec.expectedSize > 0)
+        }
+    }
+
+    func testGemmaPinMatchesKnownArtifact() {
+        let spec = ModelSpec.gemma4E4B_IQ4_XS
+
+        XCTAssertTrue(spec.sourceURL.path.contains(
+            "/resolve/653803f092503c04a65164346f3208a36e707693/"
+        ))
+        XCTAssertEqual(spec.expectedSize, 4_715_414_688)
+        XCTAssertEqual(spec.expectedSHA256,
+                       "eb29c8519c4c07b880fb9cae7ff13ee2e30c5f38516268920ab85c04df6d52a2")
+    }
+
+    func testQwenPinMatchesKnownArtifact() {
+        let spec = ModelSpec.qwen25_05B_Q4_K_M
+
+        XCTAssertTrue(spec.sourceURL.path.contains(
+            "/resolve/9217f5db79a29953eb74d5343926648285ec7e67/"
+        ))
+        XCTAssertEqual(spec.expectedSize, 491_400_032)
+        XCTAssertEqual(spec.expectedSHA256,
+                       "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db")
+    }
+}

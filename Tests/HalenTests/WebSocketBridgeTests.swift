@@ -55,3 +55,90 @@ final class TruncateUTF16Tests: XCTestCase {
         XCTAssertEqual(WebSocketBridge.truncateUTF16(composed, maxUnits: 2), composed)
     }
 }
+
+final class WebSocketBridgePolicyTests: XCTestCase {
+    func testBridgeDefaultsOffWithoutPersistedChoice() {
+        let previous = UserDefaults.standard.object(forKey: WebSocketBridge.enabledKey)
+        defer {
+            if let previous {
+                UserDefaults.standard.set(previous, forKey: WebSocketBridge.enabledKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: WebSocketBridge.enabledKey)
+            }
+        }
+        UserDefaults.standard.removeObject(forKey: WebSocketBridge.enabledKey)
+        XCTAssertFalse(WebSocketBridge.isEnabledInDefaults)
+    }
+
+    func testUnauthenticatedRequestCannotDispatch() {
+        XCTAssertEqual(WebSocketBridgePolicy.disposition(
+            isAuthenticated: false, isRequest: true, method: "inference/complete"),
+            .rejectRequest)
+    }
+
+    func testNoApplicationMessageIsAllowedBeforeHandshakeAuthentication() {
+        XCTAssertEqual(WebSocketBridgePolicy.disposition(
+            isAuthenticated: false, isRequest: false, method: "subscribe"), .reject)
+        XCTAssertEqual(WebSocketBridgePolicy.disposition(
+            isAuthenticated: false, isRequest: false, method: "event/text.pause"), .reject)
+    }
+
+    func testAuthenticatedNotificationsAndSubscriptionAllowedButRequestsRemainDenied() {
+        XCTAssertEqual(WebSocketBridgePolicy.disposition(
+            isAuthenticated: true, isRequest: false, method: "event/text.pause"), .notification)
+        XCTAssertEqual(WebSocketBridgePolicy.disposition(
+            isAuthenticated: true, isRequest: false, method: "subscribe"), .subscribe)
+        XCTAssertEqual(WebSocketBridgePolicy.disposition(
+            isAuthenticated: true, isRequest: true, method: "ui/toast"), .rejectRequest)
+    }
+
+    func testBrowserExtensionOriginsAllowed() {
+        XCTAssertTrue(WebSocketBridgePolicy.isAllowedBrowserOrigin("chrome-extension://abcdefghijklmnop"))
+        XCTAssertTrue(WebSocketBridgePolicy.isAllowedBrowserOrigin("moz-extension://addon-id"))
+        XCTAssertTrue(WebSocketBridgePolicy.isAllowedBrowserOrigin("safari-web-extension://com.example.halen"))
+    }
+
+    func testMissingNullAndWebOriginsRejected() {
+        XCTAssertFalse(WebSocketBridgePolicy.isAllowedBrowserOrigin(nil))
+        XCTAssertFalse(WebSocketBridgePolicy.isAllowedBrowserOrigin("null"))
+        XCTAssertFalse(WebSocketBridgePolicy.isAllowedBrowserOrigin("http://localhost"))
+        XCTAssertFalse(WebSocketBridgePolicy.isAllowedBrowserOrigin("https://example.com"))
+        XCTAssertFalse(WebSocketBridgePolicy.isAllowedBrowserOrigin("chrome-extension://"))
+    }
+
+    func testUpgradeRequiresExactlyOneAllowedOrigin() {
+        XCTAssertTrue(WebSocketBridgePolicy.isAllowedBrowserOrigins([
+            "chrome-extension://abcdefghijklmnop"
+        ]))
+        XCTAssertFalse(WebSocketBridgePolicy.isAllowedBrowserOrigins([]))
+        XCTAssertFalse(WebSocketBridgePolicy.isAllowedBrowserOrigins([
+            "chrome-extension://abcdefghijklmnop",
+            "https://example.com"
+        ]))
+    }
+
+    func testUpgradeRequiresExactPairingSubprotocol() {
+        let expected = WebSocketBridgePolicy.pairingSubprotocol(token: "abc123")
+        let origin = ["chrome-extension://abcdefghijklmnop"]
+        XCTAssertTrue(WebSocketBridgePolicy.isAllowedHandshake(
+            origins: origin, offeredSubprotocols: [expected], expectedSubprotocol: expected))
+        XCTAssertFalse(WebSocketBridgePolicy.isAllowedHandshake(
+            origins: origin, offeredSubprotocols: [], expectedSubprotocol: expected))
+        XCTAssertFalse(WebSocketBridgePolicy.isAllowedHandshake(
+            origins: origin, offeredSubprotocols: ["halen.wrong"], expectedSubprotocol: expected))
+        XCTAssertFalse(WebSocketBridgePolicy.isAllowedHandshake(
+            origins: origin, offeredSubprotocols: [expected, "extra"], expectedSubprotocol: expected))
+    }
+
+    func testClientCeilingDecision() {
+        XCTAssertTrue(WebSocketBridgePolicy.canAcceptClient(currentCount: 15))
+        XCTAssertFalse(WebSocketBridgePolicy.canAcceptClient(currentCount: 16))
+    }
+
+    func testPendingHandshakesCannotPermanentlyOccupySlots() {
+        XCTAssertEqual(WebSocketBridgePolicy.admission(currentCount: 3, pendingCount: 3), .accept)
+        XCTAssertEqual(WebSocketBridgePolicy.admission(currentCount: 4, pendingCount: 4), .evictPending)
+        XCTAssertEqual(WebSocketBridgePolicy.admission(currentCount: 16, pendingCount: 1), .evictPending)
+        XCTAssertEqual(WebSocketBridgePolicy.admission(currentCount: 16, pendingCount: 0), .reject)
+    }
+}

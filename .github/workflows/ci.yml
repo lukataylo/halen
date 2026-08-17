@@ -36,6 +36,9 @@ jobs:
           swift --version
           xcodebuild -version
 
+      - name: Test release verifiers
+        run: ./scripts/test-release-verifiers.sh
+
       - name: Cache llama.xcframework
         # Keyed on the pinned llama.cpp tag — bumping Vendor/LLAMA_CPP_VERSION
         # invalidates the cache and forces a rebuild. Build is ~10 min cold,
@@ -43,8 +46,10 @@ jobs:
         id: cache-llama
         uses: actions/cache@v4
         with:
-          path: Vendor/llama.xcframework
-          key: llama-xcframework-${{ runner.os }}-${{ hashFiles('Vendor/LLAMA_CPP_VERSION') }}
+          path: |
+            Vendor/llama.xcframework
+            Vendor/llama.xcframework.provenance
+          key: llama-xcframework-${{ runner.os }}-${{ hashFiles('Vendor/LLAMA_CPP_VERSION', 'Vendor/LLAMA_CPP_COMMIT', 'scripts/verify-llama-framework.sh') }}
 
       - name: Cache SwiftPM build
         uses: actions/cache@v4
@@ -66,6 +71,9 @@ jobs:
       - name: Build (debug)
         run: swift build -c debug
 
+      - name: Verify vendored provenance
+        run: ./scripts/verify-llama-framework.sh
+
       - name: Test
         run: swift test -c debug --enable-code-coverage
 
@@ -73,3 +81,6 @@ jobs:
         # Release config catches a different class of warning/error than debug.
         # Skip running tests at -O so CI stays under 15 min on the macos-14 runner.
         run: swift build -c release
+
+      - name: Verify release Mach-O paths
+        run: ./scripts/verify-macho-paths.sh "$(swift build -c release --show-bin-path)/halen"

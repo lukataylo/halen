@@ -13,7 +13,8 @@ cd "$ROOT"
 
 APP_DIR="$ROOT/build/Halen.app"
 # When the build was staged outside the iCloud-synced tree, `build/Halen.app`
-# is a symlink to /tmp/halen-build/Halen.app. `xcrun stapler` refuses to
+# may be a symlink to a unique `/private/tmp/halen-build.*/Halen.app`.
+# `xcrun stapler` refuses to
 # work through alias files ("Stapler is incapable of working with Alias
 # files"), and `ditto` archives the symlink itself, not the bundle. Resolve
 # to the real path up front so every step below operates on the bundle.

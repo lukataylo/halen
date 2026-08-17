@@ -4,10 +4,10 @@
   "summary": "Shrinks verbose LLM chain-of-thought on-device — ⌃⌥K to compact a selection.",
   "version": "1.0.0",
   "halenApiVersion": "0.1",
-  "executable": "/usr/bin/python3",
-  "args": ["plugin.py"],
+  "executable": "plugin.py",
+  "args": [],
   "events": ["text.pause", "hotkey.fired"],
-  "permissions": ["inference", "ax.read", "notifications"],
+  "permissions": ["inference", "ax.read", "notifications", "hotkeys"],
   "icon": "rectangle.compress.vertical",
   "category": "productivity"
 }

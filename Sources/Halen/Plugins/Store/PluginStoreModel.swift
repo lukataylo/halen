@@ -69,22 +69,13 @@ final class PluginStoreModel {
             return
         }
         do {
-            var request = URLRequest(url: url)
-            request.timeoutInterval = 20
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            let (data, response) = try await URLSession.shared.data(for: request)
-            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-                fetchState = .failed("Registry server returned HTTP \(http.statusCode).")
-                return
-            }
-            let index = try JSONDecoder().decode(PluginRegistryIndex.self, from: data)
-            guard index.schemaVersion == PluginRegistryIndex.supportedSchemaVersion else {
-                fetchState = .failed("Registry schema v\(index.schemaVersion) isn't supported by this build of Halen.")
-                return
-            }
+            let index = try await PluginRegistryIndex.fetchAuthenticated(from: url)
             available = index.plugins
             fetchState = .loaded
             Log.info("PluginStore: registry loaded — \(index.plugins.count) entr\(index.plugins.count == 1 ? "y" : "ies")")
+        } catch let error as RegistryError {
+            Log.warn("PluginStore: registry rejected — \(error.localizedDescription)")
+            fetchState = .failed(error.localizedDescription)
         } catch let error as DecodingError {
             Log.warn("PluginStore: registry decode failed — \(error)")
             fetchState = .failed("The plugin registry is malformed and couldn't be read.")

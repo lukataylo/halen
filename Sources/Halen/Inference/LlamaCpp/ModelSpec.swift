@@ -70,7 +70,7 @@ extension ModelSpec {
         bundleResourceName: "gemma-4-E4B-it-IQ4_XS",
         displayName: "Gemma 4 E4B (IQ4_XS)",
         sourceURL: URL(string:
-            "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-IQ4_XS.gguf"
+            "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/653803f092503c04a65164346f3208a36e707693/gemma-4-E4B-it-IQ4_XS.gguf"
         )!,
         expectedSize: 4_715_414_688,   // ~4.72 GB
         expectedSHA256: "eb29c8519c4c07b880fb9cae7ff13ee2e30c5f38516268920ab85c04df6d52a2",
@@ -97,7 +97,7 @@ extension ModelSpec {
         bundleResourceName: "qwen2.5-0.5b-instruct-q4_k_m",
         displayName: "Qwen 2.5 0.5B (Q4_K_M)",
         sourceURL: URL(string:
-            "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+            "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/9217f5db79a29953eb74d5343926648285ec7e67/qwen2.5-0.5b-instruct-q4_k_m.gguf"
         )!,
         expectedSize: 491_400_032,     // ~491 MB
         expectedSHA256: "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",

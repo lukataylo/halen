@@ -8,10 +8,8 @@ import Observation
 /// today, eventually VS Code / Slack extension / iOS companion — speak the
 /// same event-and-RPC protocol as out-of-process plugins.
 ///
-/// Bound to `127.0.0.1` only: no external interfaces, no auth needed in v0
-/// because the loopback constraint plus single-user macOS is the trust
-/// boundary. (A future iteration adds a handshake token written to disk and
-/// passed by the client on connect.)
+/// Bound to `127.0.0.1`, origin checked during the HTTP upgrade, and paired
+/// with a per-install token before any application message is accepted.
 ///
 /// Wire format: NDJSON-shaped JSON-RPC 2.0 messages — same `RPCMessage` and
 /// `RPCValue` types the stdio plugin host uses, just delivered as WebSocket
@@ -25,13 +23,12 @@ final class WebSocketBridge {
     nonisolated static let defaultPort: UInt16 = 50765
 
     /// UserDefaults key controlling whether the bridge is started at launch.
-    /// Default ON — installed clients (browser extension, future companions)
-    /// can't function without it, and binding to loopback-only keeps the
-    /// trust boundary tight.
+    /// Default OFF: the browser extension is optional, so new installs should
+    /// not expose a listener until the user explicitly enables the bridge.
     nonisolated static let enabledKey = "halen.websocketBridge.enabled"
 
     nonisolated static var isEnabledInDefaults: Bool {
-        UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
+        UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? false
     }
 
     /// Maximum bytes accepted per incoming WebSocket frame. JSON-RPC requests
@@ -41,6 +38,9 @@ final class WebSocketBridge {
     /// can't OOM us by streaming a multi-GB frame. Clients exceeding this
     /// are disconnected.
     nonisolated static let maxIncomingFrameBytes = 256 * 1024
+    nonisolated static let maxClients = 16
+    nonisolated static let maxPendingHandshakes = 4
+    nonisolated static let handshakeTimeout: Duration = .seconds(5)
 
     /// Cap on the number of topics a single client can subscribe to. Loose
     /// enough to never restrict a legitimate client (there are 3 valid
@@ -55,7 +55,6 @@ final class WebSocketBridge {
     nonisolated static let maxInjectedTextLength = 32 * 1024
 
     private let services: HalenServices
-    private let bridge: HostBridge
     private let port: UInt16
 
     private var listener: NWListener?
@@ -73,16 +72,18 @@ final class WebSocketBridge {
     private final class Client: Identifiable {
         let id = UUID()
         let connection: NWConnection
-        /// `nil` until the client has sent a valid `subscribe` notification.
-        /// Unauthenticated clients can connect (so the popup's ping-and-close
-        /// liveness check works) but get no events and can't inject any.
-        var subscribedTopics: Set<String>?
+        // Authentication happens during the HTTP upgrade. A Client exists
+        // only for a socket whose extension origin and pairing subprotocol
+        // were accepted by Network.framework.
+        let isAuthenticated = true
+        var isReady = false
+        var subscribedTopics: Set<String> = []
+        var handshakeDeadline: Task<Void, Never>?
         init(_ connection: NWConnection) { self.connection = connection }
     }
 
     init(services: HalenServices, port: UInt16 = WebSocketBridge.defaultPort) {
         self.services = services
-        self.bridge = HostBridge(services: services)
         self.port = port
     }
 
@@ -117,7 +118,10 @@ final class WebSocketBridge {
     func stop() {
         subscriptionTask?.cancel()
         subscriptionTask = nil
-        for client in clients { client.connection.cancel() }
+        for client in clients {
+            client.handshakeDeadline?.cancel()
+            client.connection.cancel()
+        }
         clients.removeAll()
         clientCount = 0
         listener?.cancel()
@@ -126,8 +130,27 @@ final class WebSocketBridge {
     }
 
     private func makeListener() throws -> NWListener {
+        guard let pairingToken = BridgeTokenStore.tokenOrCreate() else {
+            throw WebSocketBridgeError.authenticationUnavailable
+        }
+        let expectedSubprotocol = WebSocketBridgePolicy.pairingSubprotocol(token: pairingToken)
         let wsOptions = NWProtocolWebSocket.Options()
         wsOptions.autoReplyPing = true
+        wsOptions.maximumMessageSize = Self.maxIncomingFrameBytes
+        wsOptions.setClientRequestHandler(.main) { subprotocols, headers in
+            let origins = headers
+                .filter { $0.name.caseInsensitiveCompare("Origin") == .orderedSame }
+                .map(\.value)
+            let accepted = WebSocketBridgePolicy.isAllowedHandshake(
+                origins: origins,
+                offeredSubprotocols: subprotocols,
+                expectedSubprotocol: expectedSubprotocol
+            )
+            return NWProtocolWebSocket.Response(
+                status: accepted ? .accept : .reject,
+                subprotocol: accepted ? expectedSubprotocol : nil
+            )
+        }
         let params = NWParameters.tcp
         params.allowLocalEndpointReuse = true
         // Filters incoming connections to loopback interfaces. The underlying
@@ -144,6 +167,21 @@ final class WebSocketBridge {
     // MARK: - Per-client
 
     private func accept(_ connection: NWConnection) {
+        let pendingCount = clients.lazy.filter { !$0.isReady }.count
+        switch WebSocketBridgePolicy.admission(currentCount: clients.count,
+                                                pendingCount: pendingCount) {
+        case .accept:
+            break
+        case .evictPending:
+            if let oldestPending = clients.first(where: { !$0.isReady }) {
+                Log.warn("WebSocketBridge: evicting incomplete handshake for newer client")
+                removeClient(oldestPending)
+            }
+        case .reject:
+            Log.warn("WebSocketBridge: rejected client — ceiling of \(Self.maxClients) reached")
+            connection.cancel()
+            return
+        }
         let client = Client(connection)
         clients.append(client)
         clientCount = clients.count
@@ -157,6 +195,12 @@ final class WebSocketBridge {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 switch state {
+                case .ready:
+                    if let c = self.clients.first(where: { $0.id == clientID }) {
+                        c.isReady = true
+                        c.handshakeDeadline?.cancel()
+                        c.handshakeDeadline = nil
+                    }
                 case .failed, .cancelled:
                     if let c = self.clients.first(where: { $0.id == clientID }) {
                         self.removeClient(c)
@@ -165,6 +209,14 @@ final class WebSocketBridge {
                     break
                 }
             }
+        }
+        client.handshakeDeadline = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.handshakeTimeout)
+            guard !Task.isCancelled, let self,
+                  let pending = self.clients.first(where: { $0.id == clientID }),
+                  !pending.isReady else { return }
+            Log.warn("WebSocketBridge: incomplete handshake timed out")
+            self.removeClient(pending)
         }
         connection.start(queue: .main)
         receive(on: client)
@@ -192,6 +244,7 @@ final class WebSocketBridge {
                     }
                     self.handleIncoming(data: data, from: resolved)
                 }
+                guard self.clients.contains(where: { $0.id == clientID }) else { return }
                 if error != nil {
                     self.removeClient(resolved)
                 } else {
@@ -202,6 +255,8 @@ final class WebSocketBridge {
     }
 
     private func removeClient(_ client: Client) {
+        client.handshakeDeadline?.cancel()
+        client.handshakeDeadline = nil
         client.connection.cancel()
         clients.removeAll { $0.id == client.id }
         clientCount = clients.count
@@ -225,7 +280,7 @@ final class WebSocketBridge {
         // Filter to clients that authenticated AND subscribed to this topic.
         // Unauthenticated or wrong-topic clients receive nothing — that's the
         // whole point of the subscribe-with-token handshake.
-        let targets = clients.filter { $0.subscribedTopics?.contains(topic) == true }
+        let targets = clients.filter { $0.isReady && $0.isAuthenticated && $0.subscribedTopics.contains(topic) }
         guard !targets.isEmpty else { return }
         let msg = RPCMessage(method: "event/\(topic)",
                              params: .object(["topic": .string(topic), "payload": payload]))
@@ -259,33 +314,26 @@ final class WebSocketBridge {
             Log.warn("WebSocketBridge: dropped malformed message from \(client.id.uuidString.prefix(8))")
             return
         }
-        if msg.isRequest {
-            Task { @MainActor in await self.handleRequest(msg, from: client) }
-        } else if msg.isNotification {
+        switch WebSocketBridgePolicy.disposition(
+            isAuthenticated: client.isAuthenticated,
+            isRequest: msg.isRequest,
+            method: msg.method
+        ) {
+        case .subscribe:
+            handleSubscribe(msg, from: client)
+        case .notification:
             handleNotification(msg, from: client)
+        case .rejectRequest:
+            rejectRequest(msg, from: client)
+        case .reject:
+            Log.debug("WebSocketBridge: rejected \(msg.method ?? "message") from client \(client.id.uuidString.prefix(8))")
         }
-        // Responses to our outbound requests would land here — we don't
-        // currently make any, but the dispatcher is ready when we do.
+        // Responses are ignored: this notification-only transport never
+        // issues outbound requests.
     }
 
     private func handleNotification(_ msg: RPCMessage, from client: Client) {
         guard let method = msg.method else { return }
-
-        // Subscription handshake: client posts `{token, topics: [...]}`.
-        // Without it, the client is connected but ignored for everything
-        // below — the auth gate that loopback-only binding doesn't give us.
-        if method == "subscribe" {
-            handleSubscribe(msg, from: client)
-            return
-        }
-
-        // Every method below requires an authenticated subscription. Unauth'd
-        // clients can liveness-ping (popup) but can neither receive events
-        // nor inject them into the EventBus.
-        guard client.subscribedTopics != nil else {
-            Log.debug("WebSocketBridge: ignored \(method) from unauthenticated client \(client.id.uuidString.prefix(8))")
-            return
-        }
 
         // Clients can inject events (the browser extension's main use case).
         // Publishing onto the EventBus means every in-process plugin reacts
@@ -341,23 +389,17 @@ final class WebSocketBridge {
         return out
     }
 
-    /// Validate the client's `subscribe` notification against the persisted
-    /// token; on success, record the requested topics so `broadcast(...)`
-    /// fan-out can filter on them.
+    /// Validate the authenticated client's `subscribe` notification and record
+    /// the requested topics so `broadcast(...)` fan-out can filter on them.
     ///
-    /// Shape: `subscribe { token: "...", topics: ["text.pause", "app.focused"] }`.
+    /// Shape: `subscribe { topics: ["text.pause", "app.focused"] }`.
     /// Topics not in the bridge's set of emitted topics are dropped silently.
     private func handleSubscribe(_ msg: RPCMessage, from client: Client) {
         guard let params = msg.params?.objectValue,
-              let providedToken = params["token"]?.stringValue,
               let topicsAny = params["topics"]?.arrayValue
         else {
-            Log.warn("WebSocketBridge: bad subscribe payload from \(client.id.uuidString.prefix(8))")
-            return
-        }
-        guard let expected = BridgeTokenStore.tokenOrCreate(),
-              providedToken == expected else {
-            Log.warn("WebSocketBridge: rejected subscribe from \(client.id.uuidString.prefix(8)) — token mismatch")
+            Log.warn("WebSocketBridge: bad subscribe payload from \(client.id.uuidString.prefix(8)) — disconnecting")
+            removeClient(client)
             return
         }
         // Cap the input list before the Set/intersection pass — a malicious
@@ -365,6 +407,7 @@ final class WebSocketBridge {
         // the main actor for no useful purpose.
         if topicsAny.count > Self.maxSubscribeTopics {
             Log.warn("WebSocketBridge: rejected subscribe from \(client.id.uuidString.prefix(8)) — \(topicsAny.count) topics (cap \(Self.maxSubscribeTopics))")
+            removeClient(client)
             return
         }
         let valid: Set<String> = ["text.pause", "caret.moved", "app.focused"]
@@ -374,35 +417,91 @@ final class WebSocketBridge {
         Log.info("WebSocketBridge: \(client.id.uuidString.prefix(8)) subscribed to [\(topicList)]")
     }
 
-    private func handleRequest(_ msg: RPCMessage, from client: Client) async {
-        guard let id = msg.id, let method = msg.method else { return }
-        do {
-            // Single source of truth for every host method, shared with
-            // PluginHost. The WS transport now gets the full surface for
-            // free (ax/replaceRange, ui/toast — previously missing here).
-            // No granted permissions — the browser extension has no
-            // privileged grants, so gated methods (calendar/*) are denied.
-            let result = try await bridge.dispatch(method: method, params: msg.params,
-                                                   grantedPermissions: [])
-            send(RPCMessage(id: id, result: result), to: [client])
-        } catch let error as RPCErrorObject {
-            send(RPCMessage(id: id, error: error), to: [client])
-        } catch {
-            send(RPCMessage(id: id, error: RPCErrorObject(
-                code: PluginRPC.ErrorCode.internalError.rawValue,
-                message: error.localizedDescription, data: nil
-            )), to: [client])
+    private func rejectRequest(_ msg: RPCMessage, from client: Client) {
+        guard let id = msg.id else { return }
+        // Browser clients deliberately have an empty RPC capability set. The
+        // extension is an event source, not a path to AX/inference/UI APIs.
+        send(RPCMessage(id: id, error: RPCErrorObject(
+            code: PluginRPC.ErrorCode.permissionDenied.rawValue,
+            message: "WebSocket clients have no RPC capabilities", data: nil
+        )), to: [client])
+    }
+}
+
+/// Pure admission/message policy kept outside Network.framework so the
+/// security boundary can be pinned by fast unit tests.
+enum WebSocketBridgePolicy {
+    enum Admission: Equatable {
+        case accept
+        case evictPending
+        case reject
+    }
+
+    enum Disposition: Equatable {
+        case subscribe
+        case notification
+        case rejectRequest
+        case reject
+    }
+
+    static func isAllowedBrowserOrigin(_ origin: String?) -> Bool {
+        guard let origin, origin != "null",
+              let components = URLComponents(string: origin),
+              let scheme = components.scheme?.lowercased(),
+              let host = components.host, !host.isEmpty else { return false }
+        return ["chrome-extension", "moz-extension", "safari-web-extension"].contains(scheme)
+    }
+
+    /// HTTP permits repeated headers in general, but a WebSocket upgrade has
+    /// exactly one security origin. Reject duplicates instead of trusting the
+    /// first value and leaving interpretation differences between layers.
+    static func isAllowedBrowserOrigins(_ origins: [String]) -> Bool {
+        origins.count == 1 && isAllowedBrowserOrigin(origins[0])
+    }
+
+    static func pairingSubprotocol(token: String) -> String {
+        "halen.\(token)"
+    }
+
+    static func isAllowedHandshake(origins: [String],
+                                   offeredSubprotocols: [String],
+                                   expectedSubprotocol: String) -> Bool {
+        isAllowedBrowserOrigins(origins)
+            && offeredSubprotocols == [expectedSubprotocol]
+    }
+
+    static func canAcceptClient(currentCount: Int) -> Bool {
+        currentCount < WebSocketBridge.maxClients
+    }
+
+    static func admission(currentCount: Int, pendingCount: Int) -> Admission {
+        if pendingCount >= WebSocketBridge.maxPendingHandshakes { return .evictPending }
+        if currentCount >= WebSocketBridge.maxClients {
+            return pendingCount > 0 ? .evictPending : .reject
         }
+        return .accept
+    }
+
+    static func disposition(isAuthenticated: Bool,
+                            isRequest: Bool,
+                            method: String?) -> Disposition {
+        if isRequest { return .rejectRequest }
+        guard let method else { return .reject }
+        if !isAuthenticated { return .reject }
+        return method == "subscribe" ? .subscribe : .notification
     }
 }
 
 enum WebSocketBridgeError: Error, LocalizedError {
     case invalidPort(UInt16)
+    case authenticationUnavailable
 
     var errorDescription: String? {
         switch self {
         case .invalidPort(let port):
             return "Halen WebSocket bridge: invalid port \(port)"
+        case .authenticationUnavailable:
+            return "Halen WebSocket bridge: pairing token unavailable"
         }
     }
 }

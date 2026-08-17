@@ -65,20 +65,31 @@ fi
 
 VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$INFO_PLIST")"
 DMG_PATH="$ROOT/build/Halen-$VERSION.dmg"
-STAGING="$ROOT/build/dmg-staging"
+STAGING="$(mktemp -d /private/tmp/halen-dmg.XXXXXX)"
+MOUNT_POINT=""
+cleanup() {
+    if [[ -n "$MOUNT_POINT" ]] && mount | grep -Fq "on $MOUNT_POINT "; then
+        hdiutil detach "$MOUNT_POINT" >/dev/null || true
+    fi
+    rm -rf "$STAGING"
+}
+trap cleanup EXIT
 VOLNAME="Halen $VERSION"
 
 # --- assemble layout -------------------------------------------------------
 
 echo "→ assembling DMG staging at $STAGING"
-rm -rf "$STAGING" "$DMG_PATH"
-mkdir -p "$STAGING"
+rm -f "$DMG_PATH"
 
 # Copy the .app — `ditto` preserves the code signature and any extended
 # attributes (including the stapled notarization ticket). `cp -R` would
 # work for the bits but ditto is the path Apple recommends for signed
 # bundles.
 ditto "$APP_DIR" "$STAGING/Halen.app"
+xattr -cr "$STAGING/Halen.app"
+codesign --verify --deep --strict --verbose=2 "$STAGING/Halen.app"
+xcrun stapler validate "$STAGING/Halen.app"
+"$ROOT/scripts/verify-macho-paths.sh" "$STAGING/Halen.app"
 
 # Drag-target: a symlink to /Applications next to Halen.app turns the DMG
 # into a one-gesture install — the user drags Halen onto Applications and
@@ -122,9 +133,20 @@ echo "→ verifying"
 spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG_PATH"
 xcrun stapler validate "$DMG_PATH"
 
+echo "→ mounting read-only and verifying packaged app"
+MOUNT_POINT="$(mktemp -d /private/tmp/halen-dmg-mount.XXXXXX)"
+hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT_POINT" "$DMG_PATH" >/dev/null
+codesign --verify --deep --strict --verbose=2 "$MOUNT_POINT/Halen.app"
+"$ROOT/scripts/verify-macho-paths.sh" "$MOUNT_POINT/Halen.app"
+xcrun stapler validate "$MOUNT_POINT/Halen.app"
+hdiutil detach "$MOUNT_POINT" >/dev/null
+rmdir "$MOUNT_POINT"
+MOUNT_POINT=""
+
 # --- cleanup ---------------------------------------------------------------
 
 rm -rf "$STAGING"
+trap - EXIT
 
 echo
 echo "✓ packaged $DMG_PATH"
