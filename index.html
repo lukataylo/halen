@@ -1597,10 +1597,10 @@ img { display: block; max-width: 100%; }
         <span class="cc-title">Voice check</span>
       </div>
       <div class="cc-body">
-        <div class="cc-greet">Tuned to your voice.</div>
+        <div class="cc-greet">Only your voice.</div>
         <ul class="cc-list">
-          <li><span class="ic">◉</span>Your voice, learned in 30 s</li>
-          <li><span class="ic">⌀</span>Other voices dropped</li>
+          <li><span class="ic">◉</span>30 s setup</li>
+          <li><span class="ic">⌀</span>Others ignored</li>
           <li><span class="ic">∅</span>Nothing uploaded</li>
         </ul>
       </div>
@@ -1623,13 +1623,13 @@ img { display: block; max-width: 100%; }
     <div class="cta-card c-tone">
       <div class="cc-titlebar">
         <span class="cc-dots"><span></span><span></span><span></span></span>
-        <span class="cc-title">When Zoom uses the mic</span>
+        <span class="cc-title">Zoom</span>
       </div>
       <div class="cc-body" id="ctaToneBody">
-        <div class="cc-opt" data-tone="0"><span class="dot"></span>Listen automatically</div>
+        <div class="cc-opt" data-tone="0"><span class="dot"></span>Listen</div>
         <div class="cc-opt active" data-tone="1"><span class="dot"></span>Ask first</div>
         <div class="cc-opt" data-tone="2"><span class="dot"></span>Never</div>
-        <div class="cc-foot"><span>Per app, your call</span><span>≡</span></div>
+        <div class="cc-foot"><span>Per app</span><span>≡</span></div>
       </div>
     </div>
 
@@ -1639,12 +1639,10 @@ img { display: block; max-width: 100%; }
         <span class="cc-title">This week</span>
       </div>
       <div class="cc-body" id="ctaImproveBody">
-        <div class="cc-item active"><span class="ic">◎</span>Focus: long monologues</div>
+        <div class="cc-item active"><span class="ic">◎</span>Fewer monologues</div>
         <div class="cc-item"><span class="ic">↑</span>Presence up 8</div>
-        <div class="cc-item"><span class="ic">≈</span>Clarity steady</div>
-        <div class="cc-item"><span class="ic">✓</span>6 calls rated</div>
-        <div class="cc-item"><span class="ic">☺</span>Mostly warm</div>
-      </div>
+                <div class="cc-item"><span class="ic">✓</span>6 calls rated</div>
+              </div>
     </div>
 
     <div class="cta-card c-snippets">
@@ -1663,15 +1661,15 @@ img { display: block; max-width: 100%; }
           <div style="flex:1">
             <div class="cc-snip">
               <div class="t">15:30 · Zoom</div>
-              <div class="p">Room to talk. Keep pausing.</div>
+              <div class="p">Room to talk.</div>
             </div>
             <div class="cc-snip">
               <div class="t">11:00 · Teams</div>
-              <div class="p">Fast pace, 190 wpm.</div>
+              <div class="p">A bit fast.</div>
             </div>
             <div class="cc-snip">
               <div class="t">09:15 · FaceTime</div>
-              <div class="p">Warm, laughed twice.</div>
+              <div class="p">Warm.</div>
             </div>
           </div>
         </div>
@@ -1682,8 +1680,8 @@ img { display: block; max-width: 100%; }
   </div>
 
   <div class="cta-content">
-    <span class="cta-eyebrow"><span class="dot"></span>v1.0 · ready to install</span>
-    <h2>Try it on<br/><span class="quiet">your next call.</span></h2>
+    <span class="cta-eyebrow"><span class="dot"></span>v1.0</span>
+    <h2>Free.<br/><span class="quiet">On your Mac.</span></h2>
     <div class="download-stack">
       <a class="dl" href="https://github.com/lukataylo/halen/releases/download/eq-v1.0.0/HalenEQ-1.0.0.dmg" data-dmg>
         <span class="ic">
@@ -1694,9 +1692,7 @@ img { display: block; max-width: 100%; }
       <span class="dl-specs">
         <span class="chip">macOS 26+</span>
         <span class="chip">Apple silicon</span>
-        <span class="chip">Free · MIT</span>
-        <span class="chip">Auto-updates</span>
-        <span class="chip">Zoom · Teams · Meet · more</span>
+        <span class="chip">Open source</span>
       </span>
     </div>
   </div>
@@ -1991,9 +1987,9 @@ document.querySelectorAll('.st, .st-brand').forEach(el => io.observe(el));
   const wcEl = document.getElementById('ctaWordCount');
   if (typeEl) {
     const phrases = [
-      'You gave people room to talk. Next time: keep pausing before you answer.',
-      'You talked fast, about 190 words a minute. Next time: one breath before each answer.',
-      'Steady all the way through, and you laughed three times.'
+      'Room to talk. Keep pausing.',
+      'A bit fast. Breathe first.',
+      'Steady, and you laughed.'
     ];
     let pi = 0;
     async function tloop() {
