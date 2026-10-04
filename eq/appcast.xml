@@ -4,12 +4,12 @@
         <title>Halen EQ</title>
         <item>
             <title>1.0.0</title>
-            <pubDate>Sun, 04 Oct 2026 15:21:28 +0000</pubDate>
+            <pubDate>Sun, 04 Oct 2026 15:28:41 +0000</pubDate>
             <sparkle:version>1</sparkle:version>
             <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/lukataylo/halen/releases/download/eq-v1.0.0/HalenEQ-1.0.0.dmg" type="application/octet-stream" sparkle:edSignature="jgDfvgjHcG3WHTg3ohsHeCWLnOyIaoEZ91eQBEKZBVSRrYGtisgsYXBBouRper0u566Yn2tAcB+yJezYrYhJBQ==" length="13615438"/>
+            <enclosure url="https://github.com/lukataylo/halen/releases/download/eq-v1.0.0/HalenEQ-1.0.0.dmg" type="application/octet-stream" sparkle:edSignature="4RJ8EJj8p5IsJmS43amUqf+oVPtCA1W+UCPeNWtEkAcO+5koziwSsOhRVQKh4IG5jERrdcGXfzMeeJTTQbYKCQ==" length="13612906"/>
         </item>
     </channel>
 </rss>
