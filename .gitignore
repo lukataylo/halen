@@ -24,3 +24,7 @@ Vendor/llama.xcframework/
 * [0-9].sh
 __pycache__/
 *.pyc
+
+# Halen EQ build output
+eq/.build/
+eq/dist/
