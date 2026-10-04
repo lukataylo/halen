@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key><string>dev.halen.eq</string>
+    <key>CFBundleName</key><string>Halen EQ</string>
+    <key>CFBundleDisplayName</key><string>Halen EQ</string>
+    <key>CFBundleExecutable</key><string>HalenEQ</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>1.0.0</string>
+    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>LSMinimumSystemVersion</key><string>26.0</string>
+    <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+    <key>LSUIElement</key><true/>
+    <key>NSHumanReadableCopyright</key><string>© 2026 Halen Labs. MIT licence.</string>
+
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Halen EQ listens to your side of conversations to coach your delivery. Audio never leaves your Mac and is discarded as soon as it's analysed.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Halen EQ measures only how loud the other side of your call is, to know when they're talking. It never records or transcribes them.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Your speech is transcribed on-device to count pace and fillers. Nothing is sent anywhere.</string>
+
+    <!-- Sparkle: its own feed, so the archived writing-assistant Halen's users are never moved onto this app. -->
+    <key>SUFeedURL</key><string>https://halen.dev/eq/appcast.xml</string>
+    <key>SUPublicEDKey</key><string>fs4hoKqujBp62pEGUz12LK0oMr1Z+NG53nuZRuE0hWU=</string>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUScheduledCheckInterval</key><integer>86400</integer>
+    <key>SUEnableInstallerLauncherService</key><false/>
+</dict>
+</plist>
