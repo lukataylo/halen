@@ -80,7 +80,7 @@ struct Overview: View {
                     ContentUnavailableView {
                         Label("No conversations yet", systemImage: "waveform")
                     } description: {
-                        Text("Join a call — Halen EQ starts on its own, hears only you, and forgets the audio.")
+                        Text("Join a call — Halen starts on its own, hears only you, and forgets the audio.")
                     }
                     .padding(.top, 60)
                 } else {
@@ -124,7 +124,7 @@ struct Overview: View {
                 Text("\(rated) of 6 rated").font(.title3.weight(.semibold)).monospacedDigit()
                 DotBars(values: (0 ..< 6).map { $0 < rated ? 100 : nil }, color: .primary, rows: 1, dot: 7)
                     .frame(width: 120)
-                Text("Rate a few calls and Halen EQ learns what *your* good calls have in common.")
+                Text("Rate a few calls and Halen learns what *your* good calls have in common.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }

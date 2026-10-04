@@ -24,6 +24,13 @@ final class AppModel: ObservableObject {
     /// Live levels live in their own object so 10 Hz updates only redraw
     /// the waveform, not every window observing the model.
     let live = LiveMeter()
+    /// Paused by the user ("for an hour" / "until tomorrow"): calls are ignored.
+    @Published private(set) var pausedUntil: Date?
+    /// The voice check threw away most of the last call: probably a new mic.
+    @Published var voiceMismatch = false
+    /// A call the user stopped or discarded by hand: leave it alone until it ends.
+    private var ignoredCall: String?
+    private var enrollFinishRequested = false
     @Published var lastError: String?
 
     @AppStorage("autoStart") var autoStart = true
@@ -94,7 +101,18 @@ final class AppModel: ObservableObject {
             Demo.seed(store)
             sessions = store?.all() ?? []
             ratingPanel.model = self
-            if let first = sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.ratingPanel.present(first.id) } }
+            if ProcessInfo.processInfo.environment["EQ_DEMO_LISTEN"] == "1" {
+                // Fake a live call for screenshots of the listening state.
+                state = .listening(source: "us.zoom.xos", since: .now.addingTimeInterval(-252))
+                var t = 0
+                meterTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        t += 1
+                        let mine = t % 40 < 22
+                        self?.live.push(you: mine ? Float.random(in: -40 ... -18) : -60, them: mine ? -70 : Float.random(in: -42 ... -20))
+                    }
+                }
+            } else if let first = sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.ratingPanel.present(first.id) } }
             return
         }
         #endif
@@ -121,7 +139,9 @@ final class AppModel: ObservableObject {
 
     private func callChanged(_ call: CallDetector.Call?) {
         detectedCall = call
-        guard autoStart, !Self.needsOnboarding else { return }
+        if call == nil { ignoredCall = nil }
+        if let until = pausedUntil, until <= .now { pausedUntil = nil }
+        guard autoStart, !Self.needsOnboarding, pausedUntil == nil, call?.bundleID != ignoredCall || call == nil else { return }
         switch (call, state) {
         case (let c?, .idle):
             switch mode(for: c.bundleID) {
@@ -197,7 +217,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func stop() async {
+    /// `discard`: end now and keep nothing from this call. Either way, a call
+    /// that's still going won't restart listening until it ends.
+    func stop(discard: Bool = false) async {
         if case .starting = state { state = .idle; return }   // start() sees this and bails
         guard case .listening(let source, let since) = state, let pipeline else { return }
         meterTimer?.invalidate(); meterTimer = nil
@@ -208,13 +230,15 @@ final class AppModel: ObservableObject {
         let other = origin == nil ? nil : spans
         tap = nil
         live.reset()
+        ignoredCall = detectedCall?.bundleID
         state = .analysing
         await feeder?.value   // drain every captured chunk before finishing
         feeder = nil
         var saved: SessionRecord?
         do {
             let (metrics, words) = try await pipeline.finish(other: other)
-            if metrics.speakingSeconds >= 20 {   // otherwise a mic blip, not a conversation
+            voiceMismatch = metrics.voiceChecked && metrics.ignoredSeconds > 60 && metrics.ignoredSeconds > 3 * metrics.speakingSeconds
+            if !discard, metrics.speakingSeconds >= 20 {   // otherwise a mic blip, not a conversation
             let keepWords = saveTranscripts && metrics.voiceChecked && !words.isEmpty
             let record = SessionRecord(startedAt: since, source: source, metrics: metrics,
                                        scores: ScoreCard(metrics: metrics, baseline: baseline),
@@ -276,8 +300,12 @@ final class AppModel: ObservableObject {
             collector = Task { var all: [Float] = []; for await c in chunks { all += c }; return all }
         } catch { enrollment = .failed(error.localizedDescription); return }
 
-        let ticks = 120   // 30 s at 4 Hz
-        for i in 0 ... ticks {
+        // Stop as soon as there's enough of you: ~15 s of speech, then a pause
+        // (or "Done"). Hard limit 45 s.
+        enrollFinishRequested = false
+        let enoughTicks = 60, maxTicks = 180   // 4 Hz
+        var speechTicks = 0, quietRun = 0
+        for _ in 0 ..< maxTicks {
             // A call started (or a session began) mid-setup: abandon rather
             // than learn someone else's voice.
             if state != .idle || detectedCall.map({ !$0.isBrowser }) == true {
@@ -285,8 +313,12 @@ final class AppModel: ObservableObject {
                 enrollment = .failed("A call started — try again when you're off the call.")
                 return
             }
-            enrollment = .recording(progress: Double(i) / Double(ticks))
-            live.push(you: mic.currentLevel, them: nil)
+            let level = mic.currentLevel
+            if level > -42 { speechTicks += 1; quietRun = 0 } else { quietRun += 1 }
+            enrollment = .recording(progress: min(1, Double(speechTicks) / Double(enoughTicks)))
+            live.push(you: level, them: nil)
+            if speechTicks >= enoughTicks && quietRun >= 6 { break }          // finished the passage
+            if enrollFinishRequested && speechTicks >= enoughTicks * 2 / 3 { break }
             try? await Task.sleep(for: .milliseconds(250))
         }
         mic.stop()
@@ -306,6 +338,7 @@ final class AppModel: ObservableObject {
             baseline.calmPitchSt = RunningStat()
             for w in m.windows where w.speaking > 0.5 { if let p = w.pitchSt { baseline.calmPitchSt.add(Double(p)) } }
             Self.saveBaseline(baseline)
+            voiceMismatch = false
             enrollment = .done
         } catch {
             enrollment = .failed(error.localizedDescription)
@@ -320,6 +353,10 @@ final class AppModel: ObservableObject {
         _ = await MicCapture.requestPermission()
         objectWillChange.send()
     }
+
+    func finishEnrollmentEarly() { enrollFinishRequested = true }
+
+    func pause(until date: Date?) { pausedUntil = date }
 
     func resetEnrollmentState() { if enrollment != .processing { enrollment = .idle } }
 

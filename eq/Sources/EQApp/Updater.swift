@@ -5,7 +5,7 @@ import Sparkle
 
 /// Sparkle 2 auto-updates. Feed and public key live in Info.plist
 /// (SUFeedURL / SUPublicEDKey); every update is EdDSA-verified before it
-/// replaces the app. This is one of only two network requests Halen EQ makes
+/// replaces the app. This is one of only two network requests Halen makes
 /// (the other is the one-time voice model download).
 #if APPSTORE
 /// The App Store build updates through the App Store; nothing to show.

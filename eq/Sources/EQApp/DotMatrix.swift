@@ -289,3 +289,35 @@ struct DotBars: View {
         .frame(height: CGFloat(rows) * dot * 1.55)
     }
 }
+
+/// Listening waveform, minimal: one hair-thin row of dots for you above a
+/// hairline, one for them (level only) below. Loudness shows as dot size
+/// and ink, not height, so it stays two rows tall.
+struct HairlineWave: View {
+    var you: [Float]
+    var them: [Float]?
+    var cols = 44
+
+    var body: some View {
+        Canvas { ctx, size in
+            let pitch = size.width / CGFloat(cols)
+            let mid = size.height / 2
+            func level(_ db: Float) -> CGFloat { CGFloat(max(0, min(1, (db + 55) / 40))) }
+            func row(_ values: [Float], y: CGFloat, color: Color) {
+                for c in 0 ..< cols {
+                    let i = values.count - cols + c
+                    let v = i >= 0 ? level(values[i]) : 0
+                    let d = 1.6 + v * 1.8
+                    ctx.fill(Path(ellipseIn: CGRect(x: CGFloat(c) * pitch + (pitch - d) / 2, y: y - d / 2, width: d, height: d)),
+                             with: .color(color.opacity(0.15 + 0.85 * v)))
+                }
+            }
+            row(you, y: mid - 4.5, color: .primary)
+            ctx.fill(Path(CGRect(x: 0, y: mid - 0.25, width: size.width, height: 0.5)), with: .color(.primary.opacity(0.12)))
+            if let them { row(them, y: mid + 4.5, color: .secondary) }
+        }
+        .frame(height: 14)
+        .accessibilityElement()
+        .accessibilityLabel(them == nil ? "Your voice level" : "Your voice level above the line, the other side below")
+    }
+}

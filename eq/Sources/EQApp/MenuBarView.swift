@@ -10,6 +10,7 @@ struct MenuBarView: View {
     @Environment(\.openSettings) private var openSettings
     @State private var rating = 0.5
     @State private var touched = false
+    @StateObject private var permissions = Permissions()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -21,6 +22,12 @@ struct MenuBarView: View {
             }
             .frame(maxWidth: .infinity)
 
+            if permissions.microphone == .denied {
+                banner("Microphone access is off", detail: "Halen can't hear you.", action: "Open Settings") { Permissions.open("Privacy_Microphone") }
+            }
+            if model.voiceMismatch, model.state == .idle {
+                banner("Halen ignored most of that call", detail: "New mic or headphones? Record your voice again.", action: "Record") { openWindow(id: "voice"); NSApp.activate() }
+            }
             if model.voicePrint == nil, model.state == .idle { setupCard }
             if let r = model.lastUnrated, model.state == .idle { rateCard(r) }
 
@@ -46,17 +53,32 @@ struct MenuBarView: View {
                 Spacer()
                 switch model.state {
                 case .idle:
-                    Button("Listen Now") { Task { await model.start(source: nil) } }
-                        .controlSize(.small)
-                        .help("Listen to an in-person conversation or a call Halen EQ didn't spot")
-                case .listening:
-                    Button("Stop") { Task { await model.stop() } }.controlSize(.small)
+                    if model.pausedUntil != nil {
+                        Button("Resume") { model.pause(until: nil) }.controlSize(.small)
+                    } else {
+                        Menu("Listen Now") {
+                            Button("Pause for 1 Hour") { model.pause(until: .now.addingTimeInterval(3600)) }
+                            Button("Pause Until Tomorrow") { model.pause(until: Calendar.current.startOfDay(for: .now.addingTimeInterval(86_400))) }
+                        } primaryAction: { Task { await model.start(source: nil) } }
+                        .controlSize(.small).fixedSize()
+                        .help("Listen now, or hold the arrow to pause Halen for private calls")
+                    }
+                case .listening(_, let since):
+                    Text(since, style: .timer).font(Dot.font(13)).monospacedDigit().foregroundStyle(.secondary)
                 case .starting, .analysing:
                     ProgressView().controlSize(.small)
                 }
             }
             if model.isListening {
-                LiveWave(live: model.live)
+                VStack(spacing: 8) {
+                    LiveWave(live: model.live)
+                    HStack(spacing: 8) {
+                        Button("Discard", systemImage: "trash") { Task { await model.stop(discard: true) } }
+                            .labelStyle(.iconOnly).controlSize(.small)
+                            .help("Stop and keep nothing from this call")
+                        Button("Stop") { Task { await model.stop() } }.controlSize(.small)
+                    }
+                }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -68,21 +90,38 @@ struct MenuBarView: View {
         case .idle:
             if let c = model.detectedCall, c.isBrowser {
                 Label("Browser is using the mic", systemImage: "globe").font(.callout)
+            } else if let until = model.pausedUntil {
+                Label("Paused until \(until.formatted(date: .omitted, time: .shortened))", systemImage: "pause.circle").font(.callout)
             } else {
                 Label("Waiting for a call", systemImage: "moon.zzz").font(.callout).foregroundStyle(.secondary)
             }
         case .starting:
             Label("Getting ready…", systemImage: "hourglass").font(.callout)
-        case .listening(let src, let since):
+        case .listening(let src, _):
             HStack(spacing: 6) {
-                SourceIcon(bundleID: src, size: 16)
-                Text("Hearing only you").font(.callout)
-                Text(since, style: .timer).font(Dot.font(14)).monospacedDigit()
+                Circle().fill(Palette.clarity).frame(width: 7, height: 7)
+                    .phaseAnimator([1.0, 0.35]) { $0.opacity($1) } animation: { _ in .easeInOut(duration: 0.9) }
+                Text(model.voicePrint == nil ? "Listening" : "Hearing only you").font(.callout)
+                SourceIcon(bundleID: src, size: 14)
             }
             .help(model.voicePrint == nil ? "Voice check is off — other voices near your mic may be included." : "Voice check is on.")
         case .analysing:
             Label("Analysing · audio discarded", systemImage: "sparkles").font(.callout)
         }
+    }
+
+    private func banner(_ title: String, detail: String, action: String, _ run: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title).font(.callout.weight(.medium))
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button(action, action: run).controlSize(.small)
+        }
+        .padding(8)
+        .dotCard()
     }
 
     private var setupCard: some View {
@@ -119,13 +158,13 @@ struct MenuBarView: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 2) {
-            MenuRow("Open Halen EQ", shortcut: "O") { openWindow(id: "main"); NSApp.activate() }
+            MenuRow("Open Halen", shortcut: "O") { openWindow(id: "main"); NSApp.activate() }
             MenuRow("Settings…", shortcut: ",") { openSettings(); NSApp.activate() }
             if updater.isAvailable {
                 MenuRow("Check for Updates…", shortcut: "U") { updater.checkForUpdates(); NSApp.activate() }
                     .disabled(!updater.canCheck)
             }
-            MenuRow("Quit Halen EQ", shortcut: "Q") { NSApp.terminate(nil) }
+            MenuRow("Quit Halen", shortcut: "Q") { NSApp.terminate(nil) }
         }
     }
 }
@@ -159,13 +198,14 @@ struct MenuRow: View {
 private struct LiveWave: View {
     @ObservedObject var live: LiveMeter
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            DotWaveform(you: live.you, them: live.them)
+        VStack(spacing: 3) {
+            HairlineWave(you: live.you, them: live.them)
             HStack {
-                DotLabel("You", size: 9)
+                Text("you")
                 Spacer()
-                if live.them != nil { DotLabel("Them · level only", size: 9) }
+                if live.them != nil { Text("them") }
             }
+            .font(.system(size: 9, weight: .medium)).foregroundStyle(.tertiary)
         }
     }
 }

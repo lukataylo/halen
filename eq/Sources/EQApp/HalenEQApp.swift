@@ -16,7 +16,7 @@ struct HalenEQApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("Halen EQ", id: "main") {
+        Window("Halen", id: "main") {
             MainWindow().environmentObject(model)
         }
         .defaultSize(width: 900, height: 640)

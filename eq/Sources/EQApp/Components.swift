@@ -29,7 +29,7 @@ enum MenubarIcon {
             return true
         }
         img.isTemplate = true
-        img.accessibilityDescription = listening ? "Halen EQ — listening" : "Halen EQ"
+        img.accessibilityDescription = listening ? "Halen — listening" : "Halen"
         return img
     }
 }

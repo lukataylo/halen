@@ -9,6 +9,7 @@ struct WelcomeView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var mode: AppModel.AppMode = .ask
+    @State private var openAtLogin = true
 
     var body: some View {
         VStack(spacing: 20) {
@@ -38,8 +39,10 @@ struct WelcomeView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                Text("You can change this per app in Settings. Halen shows a dot in the menu bar whenever it's listening.")
+                Text("You can change this per app in Settings. While Halen listens you'll see a dot by its icon, and macOS's orange microphone dot. That's expected.")
                     .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Toggle("Open Halen at login", isOn: $openAtLogin).padding(.top, 4)
             }
 
             HStack {
@@ -58,6 +61,7 @@ struct WelcomeView: View {
     private func finish(thenVoice: Bool) {
         Task {
             await model.finishOnboarding(mode: mode)
+            if openAtLogin != model.launchAtLogin { model.launchAtLogin = openAtLogin }
             dismissWindow(id: "welcome")
             if thenVoice { openWindow(id: "voice"); NSApp.activate() }
         }

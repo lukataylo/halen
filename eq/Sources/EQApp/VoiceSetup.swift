@@ -8,44 +8,37 @@ struct VoiceSetupView: View {
     @Environment(\.dismissWindow) private var dismissWindow
 
     static let passage = """
-    When the sunlight strikes raindrops in the air, they act as a prism and form a rainbow. \
-    The rainbow is a division of white light into many beautiful colours. These take the shape \
-    of a long round arch, with its path high above, and its two ends apparently beyond the horizon. \
-    There is, according to legend, a boiling pot of gold at one end. People look, but no one ever finds it. \
-    When a man looks for something beyond his reach, his friends say he is looking for the pot of gold \
-    at the end of the rainbow.
+    When sunlight hits raindrops in the air, they act like a prism and make a rainbow. \
+    People say there's a pot of gold at one end. Many look for it, but nobody has found it yet.
     """
 
     var body: some View {
-        VStack(spacing: 18) {
-            Image(systemName: "person.wave.2.fill")
-                .font(.system(size: 34))
+        VStack(spacing: 16) {
             VStack(spacing: 6) {
-                Text("Teach Halen EQ your voice").font(.title2.bold())
-                Text("Read the passage below at your normal pace for 30 seconds. Halen EQ learns what you sound like, so it ignores everyone else — and what calm sounds like for you.")
+                Text("Teach Halen your voice").font(.title2.bold())
+                Text("Read this aloud at your normal pace. Halen stops on its own when it has enough, about 15 seconds.")
                     .multilineTextAlignment(.center).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             Text(Self.passage)
                 .font(.title3)
-                .lineSpacing(4)
+                .lineSpacing(5)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
                 .dotCard()
-                .opacity(isRecording ? 1 : 0.85)
 
             controls
-                .frame(height: 64)
+                .frame(minHeight: 56)
 
             Label("Your voice print stays on this Mac, encrypted. Delete it any time in Settings.", systemImage: "lock.fill")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(28)
-        .frame(width: 520)
+        .frame(width: 480)
         .onDisappear { model.resetEnrollmentState() }
     }
-
-    private var isRecording: Bool { if case .recording = model.enrollment { true } else { false } }
 
     @ViewBuilder private var controls: some View {
         switch model.enrollment {
@@ -66,9 +59,15 @@ struct VoiceSetupView: View {
             }
         case .recording(let p):
             VStack(spacing: 10) {
-                EnrollWave(live: model.live).frame(width: 300)
-                Text("\(Int(((1 - p) * 30).rounded(.up)))").font(Dot.font(26)).monospacedDigit()
-                    .contentTransition(.numericText(countsDown: true)).animation(.snappy, value: Int((1 - p) * 30))
+                EnrollWave(live: model.live).frame(width: 220)
+                HStack(spacing: 12) {
+                    ProgressView(value: p).frame(width: 140)
+                    Text(p < 1 ? "Keep reading…" : "Got it, pause when you're done").font(.callout).foregroundStyle(.secondary)
+                    Button("Done") { model.finishEnrollmentEarly() }
+                        .controlSize(.small)
+                        .disabled(p < 0.66)
+                        .keyboardShortcut(.defaultAction)
+                }
             }
         case .processing:
             ProgressView("Learning your voice… (first time downloads a small model)").controlSize(.small)
@@ -84,5 +83,5 @@ struct VoiceSetupView: View {
 
 private struct EnrollWave: View {
     @ObservedObject var live: LiveMeter
-    var body: some View { DotWaveform(you: live.you, them: nil, rows: 5) }
+    var body: some View { HairlineWave(you: live.you, them: nil, cols: 36) }
 }

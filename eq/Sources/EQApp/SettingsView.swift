@@ -7,6 +7,7 @@ struct SettingsView: View {
         TabView {
             Tab("General", systemImage: "gearshape") { GeneralSettings() }
             Tab("Voice", systemImage: "person.wave.2") { VoiceSettings() }
+            Tab("Permissions", systemImage: "lock.shield") { PermissionSettings() }
             Tab("Privacy", systemImage: "hand.raised") { PrivacySettings() }
         }
         .frame(width: 460)
@@ -134,4 +135,27 @@ private struct AppModeRow: View {
     }
 
     private var name: String { appDisplayName(bundleID, fallback: bundleID) }
+}
+
+private struct PermissionSettings: View {
+    @EnvironmentObject var model: AppModel
+    @StateObject private var permissions = Permissions()
+
+    var body: some View {
+        Form {
+            Section {
+                PermissionRow(title: "Microphone", why: "Your side of the call. Required.",
+                              status: permissions.microphone) { Task { await permissions.requestMicrophone() } }
+                PermissionRow(title: "Speech Recognition", why: "On-device, for pace and ums. Without it Halen still measures your voice.",
+                              status: permissions.speech) { Task { await permissions.requestSpeech() } }
+                PermissionRow(title: "System Audio Recording", why: "Only how loud the other side is, for talk share. Asked at your first call.",
+                              status: .unknown) { permissions.openSystemAudio() }
+            } footer: {
+                Text("If you said Don't Allow, macOS won't ask again. Turn it back on in System Settings, then come back here.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear { permissions.refresh() }
+    }
 }
