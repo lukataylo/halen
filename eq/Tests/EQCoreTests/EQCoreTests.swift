@@ -14,6 +14,17 @@ func sine(_ hz: Double, seconds: Double, amp: Float = 0.3, glideTo: Double? = ni
     }
 }
 
+/// 1024 samples of two summed sines — split out so slower CI compilers
+/// don't time out type-checking one long closure.
+func twoTone(_ f1: Double, _ f2: Double, _ a2: Float) -> [Float] {
+    (0 ..< 1_024).map { (i: Int) -> Float in
+        let t = Double(i) / 16_000
+        let a = Float(sin(2 * Double.pi * f1 * t))
+        let b = Float(sin(2 * Double.pi * f2 * t))
+        return a + a2 * b
+    }
+}
+
 func silence(_ seconds: Double) -> [Float] { [Float](repeating: 0, count: Int(seconds * 16_000)) }
 
 @Suite struct ProsodyTests {
@@ -30,10 +41,10 @@ func silence(_ seconds: Double) -> [Float] { [Float](repeating: 0, count: Int(se
         for _ in 0 ..< 3_000 {
             let f1 = Double.random(in: 40 ... 900, using: &rng), f2 = Double.random(in: 40 ... 4_000, using: &rng)
             let a2 = Float.random(in: 0 ... 1, using: &rng)
-            let x = (0 ..< 1_024).map { i in Float(sin(2 * .pi * f1 * Double(i) / 16_000)) + a2 * Float(sin(2 * .pi * f2 * Double(i) / 16_000)) }
+            let x = twoTone(f1, f2, a2)
             if let f0 = ProsodyExtractor.yin(x) { #expect(f0.isFinite && f0 >= 57 && f0 <= 525) }
         }
-        let bad = (0 ..< 1_024).map { i in Float(sin(2 * .pi * 521 * Double(i) / 16_000)) + 0.2 * Float(sin(2 * .pi * 2_724 * Double(i) / 16_000)) }
+        let bad = twoTone(521, 2_724, 0.2)
         if let f0 = ProsodyExtractor.yin(bad) { #expect(f0 > 0) }
     }
 
