@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Halen | Hear how you come across on calls</title>
+<title>Halen | Is it you who talks too much?</title>
 <meta name="description" content="A tiny Mac app that listens to your side of your calls and tells you how you came across. Runs entirely on your Mac and forgets the audio." />
 <meta name="keywords" content="speech coach, communication coach, meeting feedback, public speaking, emotional intelligence, on-device AI, private, macOS, Zoom, Teams" />
 <meta name="author" content="Halen Labs" />
@@ -13,7 +13,7 @@
 <!-- Open Graph / Facebook / LinkedIn -->
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Halen" />
-<meta property="og:title" content="Halen | Hear how you come across on calls" />
+<meta property="og:title" content="Halen | Is it you who talks too much?" />
 <meta property="og:description" content="A tiny Mac app that listens to your side of your calls and tells you how you came across. Runs entirely on your Mac and forgets the audio." />
 <meta property="og:url" content="https://halen.dev/" />
 <meta property="og:image" content="https://halen.dev/assets/eq/post-call.png" />
@@ -24,7 +24,7 @@
 
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Halen | Hear how you come across on calls" />
+<meta name="twitter:title" content="Halen | Is it you who talks too much?" />
 <meta name="twitter:description" content="A tiny Mac app that listens to your side of your calls and tells you how you came across. Runs entirely on your Mac and forgets the audio." />
 <meta name="twitter:image" content="https://halen.dev/assets/eq/post-call.png" />
 <meta name="twitter:image:alt" content="Halen: hear how you come across on calls." />
@@ -61,7 +61,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Doto:wght@700;900&display=swap" rel="stylesheet" />
 <style>
 :root {
   --bg: #ffffff;
@@ -1404,6 +1404,80 @@ img { display: block; max-width: 100%; }
 .eq-word { font-family: var(--mono); font-size: 11px; font-weight: 600; min-width: 38px; text-align: right; }
 @media (max-width: 760px) { .popover { right: 10px; } .eq-card { width: 230px; } .win { width: 92%; } .menubar .mb-l span { display: none; } }
 .hero-sub { max-width: none; margin: -30px auto 0; text-align: center; font-size: clamp(19px, 2vw, 24px); font-weight: 600; letter-spacing: -0.01em; line-height: 1.35; color: #3a3a3c; opacity: 0; animation: rise 0.9s var(--ease) 1.4s forwards; }
+
+/* ---------- download section: wider space + cards that look like Halen ---------- */
+.cta { padding: 210px 28px 190px; }
+.cta-card { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif; color: #1d1d1f; padding: 13px 14px; border-radius: 16px; }
+.cta-card.c-typing    { width: 250px; top: 5%;  left: 1.5%; }
+.cta-card.c-assistant { width: 236px; top: 46%; left: 2%; }
+.cta-card.c-model     { width: 232px; bottom: 5%; left: 4%; top: auto; }
+.cta-card.c-tone      { width: 236px; top: 6%;  right: 1.5%; left: auto; }
+.cta-card.c-improve   { width: 240px; top: 44%; right: 2%; }
+.cta-card.c-snippets  { width: 236px; bottom: 5%; right: 4%; }
+.hx-lbl { font-family: Doto, ui-monospace, monospace; font-weight: 900; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: rgba(0,0,0,.55); }
+.hx-head, .hx-row { display: flex; align-items: center; gap: 7px; font-size: 12.5px; }
+.hx-head img { width: 15px; height: 15px; }
+.hx-head span { color: #8e8e93; }
+.hx-x { margin-left: auto; font-style: normal; color: #aeaeb2; font-size: 15px; }
+.hx-rings { display: flex; justify-content: space-between; gap: 6px; margin: 10px 4px 8px; }
+.hx-rings.big { margin: 10px 0 2px; }
+.hx-ring { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.hx-ring svg { width: 40px; height: 40px; }
+.hx-rings.big .hx-ring svg { width: 52px; height: 52px; }
+.hx-ring text { font-family: Doto, ui-monospace, monospace; font-weight: 900; font-size: 15px; fill: #1d1d1f; }
+.hx-ring em { font-style: normal; font-family: Doto, ui-monospace, monospace; font-weight: 700; font-size: 8.5px; letter-spacing: .12em; text-transform: uppercase; color: rgba(0,0,0,.5); }
+.hx-tip { font-size: 12px; line-height: 1.45; min-height: 52px; color: #1d1d1f; }
+.hx-tip .cc-caret { display: inline-block; width: 1.5px; height: 13px; background: #1d1d1f; vertical-align: -2px; margin-left: 1px; animation: ctaCaret 1s steps(2,start) infinite; }
+.hx-rate { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.hx-rate .hx-lbl { font-size: 8.5px; white-space: nowrap; }
+.hx-slider { flex: 1; display: flex; justify-content: space-between; align-items: center; }
+.hx-slider i { width: 4px; height: 4px; border-radius: 50%; background: rgba(0,0,0,.12); }
+.hx-slider i.on { background: #1d1d1f; }
+.hx-slider i.thumb { transform: scale(1.8); }
+.hx-live { width: 7px; height: 7px; border-radius: 50%; background: #22CC78; box-shadow: 0 0 0 3px rgba(34,204,120,.18); animation: hxPulse 1.6s ease-in-out infinite; }
+@keyframes hxPulse { 50% { opacity: .35; } }
+.hx-timer { margin-left: auto; font-family: Doto, ui-monospace, monospace; font-weight: 900; font-size: 13px; color: #8e8e93; }
+.hx-wave { margin: 12px 0 4px; }
+.hx-w { display: flex; justify-content: space-between; height: 6px; align-items: center; }
+.hx-w i { width: 3.4px; height: 3.4px; border-radius: 50%; background: #1d1d1f; opacity: .15; transition: opacity .12s, transform .12s; }
+.hx-w.them i { background: #8e8e93; }
+.hx-line { height: .5px; background: rgba(0,0,0,.12); margin: 3px 0; }
+.hx-ends { display: flex; justify-content: space-between; font-size: 9px; color: #aeaeb2; font-weight: 500; }
+.hx-app { font-size: 15px; color: #2D8CFF; line-height: 1; }
+.hx-seg { display: flex; margin: 10px 0 6px; padding: 2px; border-radius: 8px; background: rgba(0,0,0,.06); }
+.hx-seg .cc-opt { flex: 1; text-align: center; font-size: 11.5px; padding: 5px 0; border-radius: 6px; color: #3a3a3c; transition: background .3s, box-shadow .3s; }
+.hx-seg .cc-opt.active { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.15); font-weight: 600; }
+.hx-note { font-size: 10.5px; color: #8e8e93; }
+.hx-week { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.hx-week .cc-item { display: grid; grid-template-columns: 8px 74px 1fr; align-items: center; gap: 7px; font-size: 11.5px; border-radius: 6px; padding: 2px 4px; transition: background .3s; }
+.hx-week .cc-item.active { background: rgba(0,0,0,.04); }
+.hx-week .cc-item > i { width: 7px; height: 7px; border-radius: 50%; }
+.hx-week .cc-item b { font-weight: 600; }
+.hx-bars { display: flex; justify-content: space-between; align-items: flex-end; height: 22px; }
+.hx-bars span { display: flex; flex-direction: column-reverse; gap: 1.5px; }
+.hx-bars span i { width: 3.4px; height: 3.4px; border-radius: 50%; background: rgba(0,0,0,.1); }
+.hx-list { margin-top: 6px; }
+.hx-call { display: grid; grid-template-columns: 18px 1fr auto 10px; align-items: center; gap: 8px; padding: 6px 2px; border-top: 1px solid rgba(0,0,0,.05); }
+.hx-call:first-child { border-top: 0; }
+.hx-call b { display: block; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.hx-call small { font-size: 10.5px; color: #8e8e93; }
+.hx-sd { display: flex; gap: 3px; }
+.hx-sd i { width: 5px; height: 5px; border-radius: 50%; background: rgba(0,0,0,.12); }
+.hx-unrated { width: 7px; height: 7px; border-radius: 50%; border: 1px solid #8e8e93; }
+.cta .cta-card, .cta .cta-card * { text-align: left; }
+.cta .cta-card .hx-lbl { color: rgba(0,0,0,.55); }
+.cta .cta-card.c-model .hx-lbl, .cta .cta-card.c-snippets .hx-lbl, .cta .cta-card.c-improve .hx-lbl { margin-bottom: 2px; }
+.cta .cta-card.c-model .hx-ring, .cta .cta-card.c-typing .hx-ring { align-items: center; }
+.cta .cta-card .hx-ring em { text-align: center; }
+.cta .cta-card.c-tone .hx-seg .cc-opt { color: #3a3a3c; padding: 5px 2px; white-space: nowrap; font-size: 11px; text-align: center; display: block; border: 0; margin: 0; }
+.cta .cta-card.c-tone .hx-seg .cc-opt.active { color: #1d1d1f; background: #fff; }
+.cta .cta-card.c-tone .hx-seg .cc-opt .dot, .cta .cta-card.c-tone .hx-seg .cc-opt::before { display: none; }
+.cta .cta-card.c-improve .hx-week .cc-item { display: grid; grid-template-columns: 8px 70px 1fr; color: #1d1d1f; padding: 3px 4px; margin: 0; border: 0; }
+.cta .cta-card.c-improve .hx-week .cc-item.active { background: rgba(0,0,0,.05); color: #1d1d1f; }
+.cta .cta-card.c-improve .hx-bars { width: 100%; }
+.cta .cta-card.c-snippets .hx-call b { text-align: left; }
+.cta .cta-card.c-typing .hx-tip { text-align: left; }
+@media (max-width: 1180px) { .cta-card.c-assistant, .cta-card.c-improve { display: none; } }
 </style>
 </head>
 <body>
@@ -1427,15 +1501,15 @@ img { display: block; max-width: 100%; }
   <span class="brandmark" aria-hidden="true">
     <img src="assets/halen-icon.svg" alt="" />
   </span>
-  <h1 aria-label="Hear how you come across on calls.">
-    <span class="w w1">Hear</span>
-    <span class="w w2">how</span>
-    <span class="w w3">you</span>
-    <span class="w w4">come</span>
-    <span class="w w5">across</span>
-    <span class="grp"><span class="w w6">on</span> <span class="w w7 ac">calls</span><span class="dot"></span></span>
+  <h1 aria-label="Is it you who talks too much?">
+    <span class="w w1">Is</span>
+    <span class="w w2">it</span>
+    <span class="w w3 ac">you</span>
+    <span class="w w4">who</span>
+    <span class="w w5">talks</span>
+    <span class="grp"><span class="w w6">too</span> <span class="w w7">much?</span></span>
   </h1>
-  <p class="hero-sub">One tip after every call. Free, private, on your Mac.</p>
+  <p class="hero-sub">Halen hears your side of every call and tells you, kindly.<br/>Free, private, on your Mac.</p>
 </div>
 
 <!-- ============ MANIFESTO ============ -->
@@ -1576,104 +1650,50 @@ img { display: block; max-width: 100%; }
        off); content is illustrative not real UI. -->
   <div class="cta-cards" aria-hidden="true">
 
+    <!-- Mini versions of real Halen UI. Decorative only. -->
     <div class="cta-card c-typing">
-      <div class="cc-titlebar">
-        <span class="cc-dots"><span></span><span></span><span></span></span>
-        <span class="cc-title">After the call</span>
-        <span class="cc-end"><span></span><span></span><span></span></span>
-      </div>
-      <div class="cc-body">
-        <div class="cc-text"><span id="ctaTypeText"></span><span class="cc-caret"></span></div>
-        <div class="cc-foot">
-          <span id="ctaWordCount">0 words</span>
-          <span>Audio discarded</span>
-        </div>
-      </div>
+      <div class="hx-head"><img src="assets/halen-icon.svg" alt="" /><b>Zoom</b><span>32 min</span><i class="hx-x">&times;</i></div>
+      <div class="hx-rings"><span data-ring="84" data-c="#3D7BFF"></span><span data-ring="70" data-c="#22CC78"></span><span data-ring="91" data-c="#FFB021"></span></div>
+      <div class="hx-tip"><span id="ctaTypeText"></span><span class="cc-caret"></span><span id="ctaWordCount" hidden></span></div>
+      <div class="hx-rate"><span class="hx-lbl">How did it go?</span><span class="hx-slider" data-slider="0.7"></span></div>
     </div>
 
     <div class="cta-card c-assistant">
-      <div class="cc-titlebar">
-        <span class="cc-dots"><span></span><span></span><span></span></span>
-        <span class="cc-title">Voice check</span>
-      </div>
-      <div class="cc-body">
-        <div class="cc-greet">Only your voice.</div>
-        <ul class="cc-list">
-          <li><span class="ic">◉</span>30 s setup</li>
-          <li><span class="ic">⌀</span>Others ignored</li>
-          <li><span class="ic">∅</span>Nothing uploaded</li>
-        </ul>
-      </div>
+      <div class="hx-row"><i class="hx-live"></i><b>Hearing only you</b><span class="hx-timer">04:12</span></div>
+      <div class="hx-wave"><div class="hx-w you" data-wave="you"></div><div class="hx-line"></div><div class="hx-w them" data-wave="them"></div></div>
+      <div class="hx-ends"><span>you</span><span>them</span></div>
     </div>
 
     <div class="cta-card c-model">
-      <div class="cc-titlebar">
-        <span class="cc-dots"><span></span><span></span><span></span></span>
-        <span class="cc-title">Today</span>
-      </div>
-      <div class="cc-body">
-        <div class="cc-radio">
-          <div class="active"><span class="dot"></span>Presence · 82</div>
-          <div><span class="dot"></span>Clarity · 76</div>
-          <div><span class="dot"></span>Composure · 91</div>
-        </div>
-      </div>
+      <div class="hx-lbl">Today</div>
+      <div class="hx-rings big"><span data-ring="82" data-c="#3D7BFF" data-l="Presence"></span><span data-ring="76" data-c="#22CC78" data-l="Clarity"></span><span data-ring="91" data-c="#FFB021" data-l="Composure"></span></div>
     </div>
 
     <div class="cta-card c-tone">
-      <div class="cc-titlebar">
-        <span class="cc-dots"><span></span><span></span><span></span></span>
-        <span class="cc-title">Zoom</span>
+      <div class="hx-row"><span class="hx-app">&#9679;</span><b>Zoom</b></div>
+      <div class="hx-seg" id="ctaToneBody">
+        <div class="cc-opt" data-tone="0">Listen</div>
+        <div class="cc-opt active" data-tone="1">Ask first</div>
+        <div class="cc-opt" data-tone="2">Never</div>
       </div>
-      <div class="cc-body" id="ctaToneBody">
-        <div class="cc-opt" data-tone="0"><span class="dot"></span>Listen</div>
-        <div class="cc-opt active" data-tone="1"><span class="dot"></span>Ask first</div>
-        <div class="cc-opt" data-tone="2"><span class="dot"></span>Never</div>
-        <div class="cc-foot"><span>Per app</span><span>≡</span></div>
-      </div>
+      <div class="hx-note">When this app uses the mic</div>
     </div>
 
     <div class="cta-card c-improve">
-      <div class="cc-titlebar">
-        <span class="cc-dots"><span></span><span></span><span></span></span>
-        <span class="cc-title">This week</span>
+      <div class="hx-lbl">Last 7 days</div>
+      <div class="hx-week" id="ctaImproveBody">
+        <div class="cc-item active"><i style="background:#3D7BFF"></i><b>Presence</b><span class="hx-bars" data-bars="62,70,58,74,80,77,86" data-c="#3D7BFF"></span></div>
+        <div class="cc-item"><i style="background:#22CC78"></i><b>Clarity</b><span class="hx-bars" data-bars="80,78,84,82,88,86,90" data-c="#22CC78"></span></div>
+        <div class="cc-item"><i style="background:#FFB021"></i><b>Composure</b><span class="hx-bars" data-bars="70,64,82,76,72,85,91" data-c="#FFB021"></span></div>
       </div>
-      <div class="cc-body" id="ctaImproveBody">
-        <div class="cc-item active"><span class="ic">◎</span>Fewer monologues</div>
-        <div class="cc-item"><span class="ic">↑</span>Presence up 8</div>
-                <div class="cc-item"><span class="ic">✓</span>6 calls rated</div>
-              </div>
     </div>
 
     <div class="cta-card c-snippets">
-      <div class="cc-titlebar">
-        <span class="cc-dots"><span></span><span></span><span></span></span>
-        <span class="cc-title">Calls</span>
-        <span class="cc-end"><span></span><span></span><span></span></span>
-      </div>
-      <div class="cc-body">
-        <div class="cc-side">
-          <div class="cc-icons">
-            <span class="ic">▣</span>
-            <span class="ic">⌖</span>
-            <span class="ic">◷</span>
-          </div>
-          <div style="flex:1">
-            <div class="cc-snip">
-              <div class="t">15:30 · Zoom</div>
-              <div class="p">Room to talk.</div>
-            </div>
-            <div class="cc-snip">
-              <div class="t">11:00 · Teams</div>
-              <div class="p">A bit fast.</div>
-            </div>
-            <div class="cc-snip">
-              <div class="t">09:15 · FaceTime</div>
-              <div class="p">Warm.</div>
-            </div>
-          </div>
-        </div>
-        <div class="cc-foot"><span>3 calls today</span><span>All local ✓</span></div>
+      <div class="hx-lbl">Today</div>
+      <div class="hx-list">
+        <div class="hx-call"><span class="hx-app" style="color:#2D8CFF">&#9679;</span><div><b>15:30</b><small>Zoom &middot; 32 min</small></div><span class="hx-sd"><i style="background:#3D7BFF"></i><i style="background:#22CC78"></i><i style="background:#FFB021"></i></span><span class="hx-unrated"></span></div>
+        <div class="hx-call"><span class="hx-app" style="color:#6264A7">&#9679;</span><div><b>11:00</b><small>Teams &middot; 48 min</small></div><span class="hx-sd"><i style="background:#3D7BFF"></i><i></i><i style="background:#FFB021"></i></span></div>
+        <div class="hx-call"><span class="hx-app" style="color:#30C85E">&#9679;</span><div><b>09:15</b><small>FaceTime &middot; 19 min</small></div><span class="hx-sd"><i style="background:#3D7BFF"></i><i style="background:#22CC78"></i><i style="background:#FFB021"></i></span></div>
       </div>
     </div>
 
@@ -1681,7 +1701,7 @@ img { display: block; max-width: 100%; }
 
   <div class="cta-content">
     <span class="cta-eyebrow"><span class="dot"></span>v1.0.1</span>
-    <h2>Free.<br/><span class="quiet">On your Mac.</span></h2>
+    <h2>Talk less.<br/><span class="quiet">Say more.</span></h2>
     <div class="download-stack">
       <a class="dl" href="https://github.com/lukataylo/halen/releases/download/eq-v1.0.1/HalenEQ-1.0.1.dmg" data-dmg>
         <span class="ic">
@@ -1973,6 +1993,48 @@ document.querySelectorAll('.st, .st-brand').forEach(el => io.observe(el));
     });
   }, { threshold: 0.25 });
   io.observe(cta);
+})();
+
+// ---------- CTA cards: render Halen-style dots ----------
+(function () {
+  document.querySelectorAll('.cta-card [data-ring]').forEach(el => {
+    const v = +el.dataset.ring, n = 24, lit = Math.round(v / 100 * n);
+    let d = '';
+    for (let i = 0; i < n; i++) {
+      const a = i / n * 2 * Math.PI - Math.PI / 2;
+      d += `<circle cx="${30 + 25 * Math.cos(a)}" cy="${30 + 25 * Math.sin(a)}" r="2.5" fill="${i < lit ? el.dataset.c : 'rgba(0,0,0,.12)'}"/>`;
+    }
+    el.className = 'hx-ring';
+    el.innerHTML = `<svg viewBox="0 0 60 60">${d}<text x="30" y="35" text-anchor="middle">${v}</text></svg>` + (el.dataset.l ? `<em>${el.dataset.l}</em>` : '');
+  });
+  document.querySelectorAll('.cta-card [data-slider]').forEach(el => {
+    const lit = Math.round(+el.dataset.slider * 18);
+    el.innerHTML = Array.from({ length: 19 }, (_, i) => `<i class="${i < lit ? 'on' : i === lit ? 'on thumb' : ''}"></i>`).join('');
+  });
+  document.querySelectorAll('.cta-card [data-bars]').forEach(el => {
+    el.innerHTML = el.dataset.bars.split(',').map((v, j, all) => {
+      const lit = Math.max(1, Math.round((v - 40) / 60 * 5));
+      return '<span>' + Array.from({ length: 5 }, (_, r) => `<i style="${r < lit ? 'background:' + el.dataset.c + (j < all.length - 1 ? ';opacity:.75' : '') : ''}"></i>`).join('') + '</span>';
+    }).join('');
+  });
+  const you = document.querySelector('.cta-card [data-wave="you"]'), them = document.querySelector('.cta-card [data-wave="them"]');
+  if (you && them) {
+    const N = 30;
+    you.innerHTML = them.innerHTML = '<i></i>'.repeat(N);
+    const yi = you.children, ti = them.children;
+    let t = 0;
+    setInterval(() => {
+      t = (t + 1) % 40;
+      const mine = t < 22;
+      for (let i = 0; i < N - 1; i++) {
+        yi[i].style.opacity = yi[i + 1].style.opacity; yi[i].style.transform = yi[i + 1].style.transform;
+        ti[i].style.opacity = ti[i + 1].style.opacity; ti[i].style.transform = ti[i + 1].style.transform;
+      }
+      const vy = mine ? 0.35 + Math.random() * 0.65 : 0.12, vt = mine ? 0.12 : 0.35 + Math.random() * 0.65;
+      yi[N - 1].style.opacity = vy; yi[N - 1].style.transform = `scale(${0.8 + vy * 0.7})`;
+      ti[N - 1].style.opacity = vt; ti[N - 1].style.transform = `scale(${0.8 + vt * 0.7})`;
+    }, 110);
+  }
 })();
 
 // ---------- CTA floating-card animations ----------
