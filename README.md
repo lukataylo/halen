@@ -8,7 +8,7 @@
   <strong>Hear how you come across on calls.</strong><br>
   A tiny Mac app that listens to your side of the conversation and tells you how it went.<br>
   Everything runs on your Mac. Audio is never saved.<br><br>
-  <a href="https://github.com/lukataylo/halen/releases/download/eq-v1.0.0/HalenEQ-1.0.0.dmg"><b>Download for Mac</b></a> · <a href="https://halen.dev">halen.dev</a> · <a href="https://halen.dev/privacy.html">Privacy</a>
+  <a href="https://github.com/lukataylo/halen/releases/download/eq-v1.0.1/HalenEQ-1.0.1.dmg"><b>Download for Mac</b></a> · <a href="https://halen.dev">halen.dev</a> · <a href="https://halen.dev/privacy.html">Privacy</a>
 </p>
 
 ---
@@ -36,7 +36,7 @@ Then you drag one slider to say how the call felt. After a few calls it shows yo
 
 ## Install
 
-[**Download Halen**](https://github.com/lukataylo/halen/releases/download/eq-v1.0.0/HalenEQ-1.0.0.dmg). Free, MIT licensed. Needs macOS 26 or later on Apple silicon.
+[**Download Halen**](https://github.com/lukataylo/halen/releases/download/eq-v1.0.1/HalenEQ-1.0.1.dmg). Free, MIT licensed. Needs macOS 26 or later on Apple silicon.
 
 1. Open the DMG and drag **Halen** to Applications.
 2. Launch it. It lives in the menu bar.
