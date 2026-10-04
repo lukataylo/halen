@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Privacy | Halen EQ</title>
-<meta name="description" content="What Halen EQ hears, what it keeps, and the only two things that ever touch the network." />
+<title>Privacy | Halen</title>
+<meta name="description" content="What Halen hears, what it keeps, and the only two things that ever touch the network." />
 <meta name="theme-color" content="#1635D6" />
 <meta name="author" content="Halen Labs" />
 <link rel="canonical" href="https://halen.dev/privacy.html" />
@@ -173,7 +173,7 @@ footer.foot .links a:hover { color: var(--accent); }
 <body>
 
 <nav class="nav">
-  <a href="index.html" class="brand"><img src="assets/halen-icon.svg" alt="" /> Halen EQ</a>
+  <a href="index.html" class="brand"><img src="assets/halen-icon.svg" alt="" /> Halen</a>
   <div class="links">
     <a href="index.html#demo">Demo</a>
     <a href="index.html#download">Download</a>
@@ -184,19 +184,19 @@ footer.foot .links a:hover { color: var(--accent); }
 
 <main>
   <h1>Privacy</h1>
-  <p class="subtitle">What Halen EQ hears, what it keeps, and the only two things that ever touch the network.</p>
-  <p class="updated">Last updated 4 October 2026 · applies to Halen EQ 1.0</p>
+  <p class="subtitle">What Halen hears, what it keeps, and the only two things that ever touch the network.</p>
+  <p class="updated">Last updated 4 October 2026 · applies to Halen 1.0</p>
 
   <div class="callout">
-    <strong>Audio never leaves your Mac, and with the voice check on, Halen EQ only analyses you.</strong> Everything runs on-device. No account, no cloud, no analytics.
+    <strong>Audio never leaves your Mac, and with the voice check on, Halen only analyses you.</strong> Everything runs on-device. No account, no cloud, no analytics.
   </div>
 
   <h2>What it hears</h2>
   <p>Your microphone, and only while a call is on (or you press Listen Now). It never saves or transcribes the other side of the call (see below).</p>
-  <p>If you set up the voice check, every second and a half of audio is compared with your voice print. Anything that isn&rsquo;t you is wiped from memory before it&rsquo;s analysed. If a moment of audio can&rsquo;t be checked, it&rsquo;s dropped rather than kept. If the voice model itself fails to load, Halen EQ tells you, and other voices near your mic may be included in that call&rsquo;s numbers.</p>
+  <p>If you set up the voice check, every second and a half of audio is compared with your voice print. Anything that isn&rsquo;t you is wiped from memory before it&rsquo;s analysed. If a moment of audio can&rsquo;t be checked, it&rsquo;s dropped rather than kept. If the voice model itself fails to load, Halen tells you, and other voices near your mic may be included in that call&rsquo;s numbers.</p>
 
   <h2>Knowing when they&rsquo;re talking</h2>
-  <p>To measure talk share and interruptions, Halen EQ watches the call app&rsquo;s output <strong>volume</strong>: one loudness number at a time. The sound itself is thrown away instantly and never transcribed. macOS asks your permission for this; say no and Halen EQ still works, just with fewer listening stats.</p>
+  <p>To measure talk share and interruptions, Halen watches the call app&rsquo;s output <strong>volume</strong>: one loudness number at a time. The sound itself is thrown away instantly and never transcribed. macOS asks your permission for this; say no and Halen still works, just with fewer listening stats.</p>
 
   <h2>What it keeps</h2>
   <table>
@@ -214,14 +214,14 @@ footer.foot .links a:hover { color: var(--accent); }
   <h2>Network traffic</h2>
   <p>Three things, and nothing else:</p>
   <ul>
-    <li><strong>Update check.</strong> Once a day Halen EQ fetches <code>halen.dev/eq/appcast.xml</code>. Updates are signed, and verified before they install. You can turn this off in Settings.</li>
+    <li><strong>Update check.</strong> Once a day Halen fetches <code>halen.dev/eq/appcast.xml</code>. Updates are signed, and verified before they install. You can turn this off in Settings.</li>
     <li><strong>Voice model download.</strong> The first time you set up the voice check, a small speaker-recognition model (about 30&nbsp;MB) is downloaded from Hugging Face. It runs locally from then on.</li>
     <li><strong>Speech model.</strong> The first time, macOS may download Apple&rsquo;s on-device speech model for your language. That&rsquo;s Apple&rsquo;s system download; your audio isn&rsquo;t part of it.</li>
   </ul>
   <p>No analytics, no crash reports, no telemetry. The code is open, so you can check every line.</p>
 
   <h2>Coaching text</h2>
-  <p>The one-line takeaway after each call is written by Apple&rsquo;s on-device model (Apple Intelligence), from the numbers only. If Apple Intelligence isn&rsquo;t available, Halen EQ uses a simple built-in template instead. Nothing is sent to a server.</p>
+  <p>The one-line takeaway after each call is written by Apple&rsquo;s on-device model (Apple Intelligence), from the numbers only. If Apple Intelligence isn&rsquo;t available, Halen uses a simple built-in template instead. Nothing is sent to a server.</p>
 
   <h2>Permissions, summarised</h2>
   <table>
@@ -234,7 +234,7 @@ footer.foot .links a:hover { color: var(--accent); }
   </table>
 
   <h2>Recording laws</h2>
-  <p>Halen EQ is designed to analyse only your own voice and to save no audio. Laws differ by place, and this isn&rsquo;t legal advice. Speakers and shared rooms can let other voices reach your mic, so if you&rsquo;re somewhere that requires everyone&rsquo;s consent, tell people you use it.</p>
+  <p>Halen is designed to analyse only your own voice and to save no audio. Laws differ by place, and this isn&rsquo;t legal advice. Speakers and shared rooms can let other voices reach your mic, so if you&rsquo;re somewhere that requires everyone&rsquo;s consent, tell people you use it.</p>
 
   <h2>Contact</h2>
   <p>Questions? Email <a class="inline" href="#" data-contact>the maintainer</a> or open an issue at <a class="inline" href="https://github.com/lukataylo/halen" rel="noopener" target="_blank">github.com/lukataylo/halen</a>.</p>

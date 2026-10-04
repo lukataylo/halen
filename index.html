@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Halen EQ | Hear how you come across on calls</title>
+<title>Halen | Hear how you come across on calls</title>
 <meta name="description" content="A tiny Mac app that listens to your side of your calls and tells you how you came across. Runs entirely on your Mac and forgets the audio." />
 <meta name="keywords" content="speech coach, communication coach, meeting feedback, public speaking, emotional intelligence, on-device AI, private, macOS, Zoom, Teams" />
 <meta name="author" content="Halen Labs" />
@@ -12,22 +12,22 @@
 
 <!-- Open Graph / Facebook / LinkedIn -->
 <meta property="og:type" content="website" />
-<meta property="og:site_name" content="Halen EQ" />
-<meta property="og:title" content="Halen EQ | Hear how you come across on calls" />
+<meta property="og:site_name" content="Halen" />
+<meta property="og:title" content="Halen | Hear how you come across on calls" />
 <meta property="og:description" content="A tiny Mac app that listens to your side of your calls and tells you how you came across. Runs entirely on your Mac and forgets the audio." />
 <meta property="og:url" content="https://halen.dev/" />
 <meta property="og:image" content="https://halen.dev/assets/eq/post-call.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="Halen EQ: the card you see when a call ends, with three dot-ring scores and one takeaway." />
+<meta property="og:image:alt" content="Halen: the card you see when a call ends, with three dot-ring scores and one takeaway." />
 <meta property="og:locale" content="en_US" />
 
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Halen EQ | Hear how you come across on calls" />
+<meta name="twitter:title" content="Halen | Hear how you come across on calls" />
 <meta name="twitter:description" content="A tiny Mac app that listens to your side of your calls and tells you how you came across. Runs entirely on your Mac and forgets the audio." />
 <meta name="twitter:image" content="https://halen.dev/assets/eq/post-call.png" />
-<meta name="twitter:image:alt" content="Halen EQ: hear how you come across on calls." />
+<meta name="twitter:image:alt" content="Halen: hear how you come across on calls." />
 
 <link rel="icon" type="image/svg+xml" href="assets/halen-icon.svg" />
 <link rel="apple-touch-icon" href="assets/halen-icon.svg" />
@@ -39,7 +39,7 @@
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "Halen EQ",
+  "name": "Halen",
   "description": "A tiny Mac app that listens to your side of your calls and tells you how you came across. Runs entirely on your Mac and forgets the audio.",
   "applicationCategory": "ProductivityApplication",
   "operatingSystem": "macOS 14+",
@@ -1285,19 +1285,45 @@ img { display: block; max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   .swarm-stage, .pulse-stage { display: none; }
 }
-/* ---------- Halen EQ demo (dot-matrix, like the app) ---------- */
+/* ---------- Halen demo (dot-matrix, like the app) ---------- */
 .snip .key.eq-p::before, .snip .key.eq-c::before, .snip .key.eq-m::before, .snip .key.eq-t::before { content: ""; width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .snip .key.eq-p::before { background: #3D7BFF; }
 .snip .key.eq-c::before { background: #22CC78; }
 .snip .key.eq-m::before { background: #FFB021; }
 .snip .key.eq-t::before { background: #111; }
-.eq-body { position: relative; min-height: 420px; padding: 28px; display: flex; flex-direction: column; justify-content: center; }
-.eq-wave { display: grid; grid-template-columns: repeat(46, 1fr); gap: 5px 0; justify-items: center; }
-.eq-wave i { width: 6px; height: 6px; border-radius: 50%; background: rgba(0,0,0,.08); transition: background .08s; }
+.eq-body { position: relative; padding: 0; }
+.call { position: relative; background: #202124; height: 460px; padding: 14px 14px 64px; transition: filter .5s; }
+.call.ended .tiles, .call.ended .controls, .call.ended .halen-pill { filter: blur(6px) brightness(.55); }
+.left-msg { position: absolute; left: 14px; right: 380px; top: 46%; text-align: center; color: #fff; font-size: 15px; opacity: 0; transition: opacity .4s; }
+.call.ended .left-msg { opacity: .85; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; height: 100%; }
+.tile { position: relative; border-radius: 12px; overflow: hidden; background: #3c4043; box-shadow: inset 0 0 0 0 transparent; transition: box-shadow .2s; }
+.tile svg { width: 100%; height: 100%; display: block; }
+.tile.talking { box-shadow: inset 0 0 0 3px #8ab4f8; }
+#tileYou.talking { box-shadow: inset 0 0 0 3px #22CC78; }
+.tile .tag { position: absolute; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #fff; background: rgba(0,0,0,.45); padding: 3px 8px; border-radius: 6px; }
+.tile .mute { width: 9px; height: 9px; border-radius: 50%; background: #ea4335; display: inline-block; box-shadow: 0 0 0 2px rgba(234,67,53,.35); }
+.tile .toast { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: #fff; color: #202124; font-size: 11.5px; padding: 4px 10px; border-radius: 999px; white-space: nowrap; opacity: 0; animation: toast 7s 1.5s infinite; }
+@keyframes toast { 0%, 55% { opacity: 0; } 60%, 90% { opacity: 1; } 100% { opacity: 0; } }
+.tile .mouth { transform-origin: 100px 81px; }
+.tile.talking .mouth { animation: talk .22s infinite alternate; }
+@keyframes talk { from { transform: scaleY(.35); } to { transform: scaleY(1.15); } }
+.cat { animation: cat 9s linear infinite; }
+@keyframes cat { 0% { transform: translateX(-70px); } 45%, 100% { transform: translateX(230px); } }
+.dog { transform: translateY(40px); animation: dog 8s 2s ease-in-out infinite; }
+@keyframes dog { 0%, 40% { transform: translateY(40px); } 50%, 75% { transform: translateY(0); } 85%, 100% { transform: translateY(40px); } }
+.controls { position: absolute; left: 0; right: 0; bottom: 12px; display: flex; justify-content: center; gap: 10px; }
+.controls .cb { width: 40px; height: 40px; border-radius: 50%; background: #3c4043; display: grid; place-items: center; }
+.controls .cb svg { width: 20px; height: 20px; }
+.controls .cb.end { background: #ea4335; width: 56px; border-radius: 999px; }
+.halen-pill { position: absolute; z-index: 2; bottom: 14px; left: 22px; display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.95); border-radius: 999px; padding: 6px 12px 6px 7px; box-shadow: 0 8px 24px rgba(0,0,0,.25); font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; color: #111; }
+.halen-pill img { width: 18px; height: 18px; }
+.eq-wave { display: grid; grid-template-columns: repeat(22, 5px); gap: 2px; }
+.eq-wave i { width: 4px; height: 4px; border-radius: 50%; background: rgba(0,0,0,.08); transition: background .08s; }
 .eq-wave i.on { background: #111; }
 .eq-wave i.them { background: rgba(0,0,0,.38); }
 .eq-wave-lbl { display: flex; justify-content: space-between; margin-top: 10px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-.eq-card { position: absolute; top: 22px; right: 22px; width: 330px; background: rgba(255,255,255,.96); backdrop-filter: blur(20px);
+.eq-card { position: absolute; z-index: 3; top: 22px; right: 22px; width: 330px; background: rgba(255,255,255,.96); backdrop-filter: blur(20px);
   border-radius: 18px; padding: 16px; box-shadow: 0 24px 60px -18px rgba(0,0,0,.28), 0 0 0 1px rgba(0,0,0,.05);
   opacity: 0; transform: translateY(-8px) scale(.98); transition: opacity .35s, transform .35s; pointer-events: none; }
 .eq-card.show { opacity: 1; transform: none; }
@@ -1317,15 +1343,14 @@ img { display: block; max-width: 100%; }
 .eq-dots i.on { background: #111; }
 .eq-dots i.thumb { transform: scale(1.6); }
 .eq-word { font-family: var(--mono); font-size: 12px; font-weight: 600; min-width: 44px; text-align: right; }
-@media (min-width: 761px) { .eq-body { padding-right: 380px; } }
-@media (max-width: 760px) { .eq-card { position: relative; top: auto; right: auto; width: auto; margin-top: 18px; } .eq-body { min-height: 0; } }
+@media (max-width: 760px) { .eq-card { position: relative; top: auto; right: auto; width: auto; margin: 12px; } .call { height: 340px; } }
 .hero-sub { max-width: 34ch; margin: -36px auto 0; text-align: center; font-size: 19px; line-height: 1.5; color: var(--muted); opacity: 0; animation: rise 0.9s var(--ease) 1.4s forwards; }
 </style>
 </head>
 <body>
 
 <nav class="nav" id="nav">
-  <a href="#top" class="brand"><img src="assets/halen-icon.svg" alt="" /> Halen EQ</a>
+  <a href="#top" class="brand"><img src="assets/halen-icon.svg" alt="" /> Halen</a>
   <div class="links">
     <a href="#demo">Demo</a>
     <a href="#download">Download</a>
@@ -1368,7 +1393,7 @@ img { display: block; max-width: 100%; }
 
   <p class="st">Most tools that could tell you record everyone, upload it to the <span class="kw" data-swarm="cloud">cloud</span> and charge <span class="kw" data-swarm="subs">monthly</span>.</p>
 
-  <p class="st">Halen EQ runs on <span class="kw" data-swarm="models">your Mac</span>. Do the 30-second voice check and it ignores every voice but yours. It turns the sound into a few numbers and throws the audio away.</p>
+  <p class="st">Halen runs on <span class="kw" data-swarm="models">your Mac</span>. Do the 30-second voice check and it ignores every voice but yours. It turns the sound into a few numbers and throws the audio away.</p>
 
   <p class="st">No bot in the call, no audio saved, no account.</p>
 
@@ -1415,12 +1440,62 @@ img { display: block; max-width: 100%; }
     <div class="field">
       <div class="field-top">
         <div class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
-        <span class="title" id="eqTitle">Weekly 1:1 &middot; Zoom</span>
-        <span class="right"><span class="pulse"></span> <span id="eqStatus">Halen EQ · listening</span></span>
+        <span class="title" id="eqTitle">Team sync &middot; Zoom</span>
+        <span class="right"><span class="pulse"></span> <span id="eqStatus">Halen · listening</span></span>
       </div>
       <div class="field-body eq-body">
-        <div class="eq-wave" id="eqWave" aria-hidden="true"></div>
-        <div class="eq-wave-lbl"><span>You</span><span>Them · level only</span></div>
+        <div class="call" id="eqCall">
+          <div class="halen-pill" aria-hidden="true">
+            <img src="assets/halen-icon.svg" alt="" />
+            <div class="eq-wave" id="eqWave"></div>
+            <span>hearing only you</span>
+          </div>
+          <div class="tiles">
+            <div class="tile" id="tileYou"><svg viewBox="0 0 200 140" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <rect width="200" height="140" fill="#e9e4dc"/><rect x="14" y="14" width="44" height="54" rx="3" fill="#cfe6f7"/><path d="M36 14v54M14 41h44" stroke="#fff" stroke-width="3"/>
+            <path d="M44 140 Q46 104 100 100 Q154 104 156 140Z" fill="#2f6fdb"/>
+            <rect x="92" y="86" width="16" height="18" rx="6" fill="#f1c7a5"/>
+            <ellipse cx="100" cy="64" rx="27" ry="31" fill="#f1c7a5"/>
+            <path d="M72 58 Q100 22 128 58 Q128 44 116 36 Q100 28 84 36 Q72 44 72 58Z" fill="#3b2a20"/>
+            <circle cx="90" cy="64" r="2.6" fill="#1d1d1f"/><circle cx="110" cy="64" r="2.6" fill="#1d1d1f"/>
+            <ellipse class="mouth" cx="100" cy="81" rx="6" ry="4" fill="#7a3b2e"/><path d="M70 66 Q70 30 100 30 Q130 30 130 66" fill="none" stroke="#2b2b2e" stroke-width="5"/><rect x="64" y="60" width="10" height="18" rx="4" fill="#2b2b2e"/><rect x="126" y="60" width="10" height="18" rx="4" fill="#2b2b2e"/>
+          </svg><span class="tag">You</span></div>
+            <div class="tile" id="tile1"><svg viewBox="0 0 200 140" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <rect width="200" height="140" fill="#dfe8e3"/><rect x="138" y="24" width="48" height="5" rx="2" fill="rgba(0,0,0,.12)"/><rect x="142" y="10" width="7" height="14" fill="#c9a26b"/><rect x="151" y="13" width="6" height="11" fill="#7d9bc4"/><rect x="159" y="8" width="8" height="16" fill="#d77a6a"/><circle cx="24" cy="98" r="14" fill="#5f9c6b"/><rect x="19" y="104" width="10" height="30" rx="3" fill="#b07a4f"/>
+            <path d="M44 140 Q46 104 100 100 Q154 104 156 140Z" fill="#e07a3f"/>
+            <rect x="92" y="86" width="16" height="18" rx="6" fill="#8d5a3b"/>
+            <ellipse cx="100" cy="64" rx="27" ry="31" fill="#8d5a3b"/>
+            <circle cx="100" cy="26" r="11" fill="#1d1d1f"/><path d="M71 62 Q72 30 100 30 Q128 30 129 62 Q122 44 100 42 Q78 44 71 62Z" fill="#1d1d1f"/>
+            <circle cx="90" cy="64" r="2.6" fill="#1d1d1f"/><circle cx="110" cy="64" r="2.6" fill="#1d1d1f"/>
+            <path d="M92 80 Q100 87 108 80" stroke="#7a3b2e" stroke-width="2.4" fill="none" stroke-linecap="round"/><g fill="none" stroke="#1d1d1f" stroke-width="2.4"><circle cx="89" cy="64" r="7"/><circle cx="111" cy="64" r="7"/><path d="M96 64h8"/></g>
+          </svg><g class="cat"><path d="M8 124 q6-14 22-12 q10 1 14 9 l6-6 2 9 -4 3 q-2 9 -16 9 h-20 q-8 0 -4 -12z" fill="#2a2a2c"/><path d="M38 116 l3-9 3 8z M30 113 l3-9 4 8z" fill="#2a2a2c"/><circle cx="35" cy="118" r="1.4" fill="#ffd34d"/></g><span class="tag">Priya</span></div>
+            <div class="tile" id="tile2"><svg viewBox="0 0 200 140" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <rect width="200" height="140" fill="#efe1cf"/>
+            <path d="M44 140 Q46 104 100 100 Q154 104 156 140Z" fill="#4b8b5b"/>
+            <rect x="92" y="86" width="16" height="18" rx="6" fill="#e9b48f"/>
+            <ellipse cx="100" cy="64" rx="27" ry="31" fill="#e9b48f"/>
+            <circle cx="76" cy="48" r="9" fill="#c9783a"/><circle cx="86" cy="38" r="9" fill="#c9783a"/><circle cx="100" cy="34" r="9" fill="#c9783a"/><circle cx="114" cy="38" r="9" fill="#c9783a"/><circle cx="124" cy="48" r="9" fill="#c9783a"/><circle cx="80" cy="58" r="9" fill="#c9783a"/><circle cx="120" cy="58" r="9" fill="#c9783a"/>
+            <circle cx="90" cy="64" r="2.6" fill="#1d1d1f"/><circle cx="110" cy="64" r="2.6" fill="#1d1d1f"/>
+            <ellipse class="mouth" cx="100" cy="81" rx="6" ry="4" fill="#7a3b2e"/>
+          </svg><span class="tag"><i class="mute"></i>Tom</span><span class="toast">Tom, you&rsquo;re on mute</span></div>
+            <div class="tile" id="tile3"><svg viewBox="0 0 200 140" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <rect width="200" height="140" fill="#e6e0f0"/>
+            <path d="M44 140 Q46 104 100 100 Q154 104 156 140Z" fill="#6b5bd2"/>
+            <rect x="92" y="86" width="16" height="18" rx="6" fill="#c68e6a"/>
+            <ellipse cx="100" cy="64" rx="27" ry="31" fill="#c68e6a"/>
+            <path d="M72 58 Q100 22 128 58 Q128 44 116 36 Q100 28 84 36 Q72 44 72 58Z" fill="#5a3a28"/>
+            <circle cx="90" cy="64" r="2.6" fill="#1d1d1f"/><circle cx="110" cy="64" r="2.6" fill="#1d1d1f"/>
+            <path d="M92 80 Q100 87 108 80" stroke="#7a3b2e" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+          </svg><g class="dog"><ellipse cx="160" cy="132" rx="26" ry="22" fill="#c98b4f"/><ellipse cx="140" cy="122" rx="8" ry="14" fill="#8a5a2e" transform="rotate(-18 140 122)"/><ellipse cx="180" cy="122" rx="8" ry="14" fill="#8a5a2e" transform="rotate(18 180 122)"/><circle cx="152" cy="126" r="2.6" fill="#1d1d1f"/><circle cx="168" cy="126" r="2.6" fill="#1d1d1f"/><ellipse cx="160" cy="135" rx="5" ry="3.5" fill="#1d1d1f"/><path d="M160 139 q0 8 5 8" stroke="#e46b7a" stroke-width="3" fill="none"/></g><span class="tag">Sam</span></div>
+          </div>
+          <div class="controls" aria-hidden="true">
+            <span class="cb"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0M12 17v3" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></span>
+            <span class="cb"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="12" height="10" rx="2" stroke="#fff" stroke-width="1.8" fill="none"/><path d="M15 11l5-3v8l-5-3" stroke="#fff" stroke-width="1.8" fill="none" stroke-linejoin="round"/></svg></span>
+            <span class="cb"><svg viewBox="0 0 24 24"><path d="M8 13V6a1.5 1.5 0 0 1 3 0v6m0-1V4.5a1.5 1.5 0 0 1 3 0V11m0-4a1.5 1.5 0 0 1 3 0v6c0 4-2.5 7-6 7s-5-2-6.5-4.5L3 13.5a1.5 1.5 0 0 1 2.5-1.6L8 15" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span class="cb end"><svg viewBox="0 0 24 24"><path d="M3 14c5-5 13-5 18 0l-2.5 2.5-3-1.5v-2.2a10 10 0 0 0-5 0V15l-3 1.5z" fill="#fff"/></svg></span>
+          </div>
+          <div class="left-msg">You left the call</div>
+        </div>
         <div class="eq-card" id="eqCard" aria-live="polite">
           <div class="eq-card-head"><img src="assets/halen-icon.svg" alt="" /> <b id="eqApp">Zoom</b> <span id="eqDur">32 min</span></div>
           <div class="eq-rings" id="eqRings"></div>
@@ -1553,7 +1628,7 @@ img { display: block; max-width: 100%; }
         <span class="ic">
           <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
         </span>
-        Download Halen EQ
+        Download Halen
       </a>
       <span class="dl-specs">
         <span class="chip">macOS 26+</span>
@@ -1591,7 +1666,7 @@ document.querySelectorAll('[data-contact]').forEach(el => {
     e.preventDefault();
     const u = ['luka', '.', 'taylor'].join('');
     const d = ['gmail', '.', 'com'].join('');
-    window.location.href = 'mailto:' + u + '@' + d + '?subject=' + encodeURIComponent('Halen EQ');
+    window.location.href = 'mailto:' + u + '@' + d + '?subject=' + encodeURIComponent('Halen');
   });
 });
 
@@ -1917,7 +1992,7 @@ document.querySelectorAll('.st, .st-brand').forEach(el => io.observe(el));
     markEl.style.transform = 'scale(0.5)';
     markEl.style.transition = 'opacity 0.7s var(--ease), transform 0.9s var(--spring)';
   }
-  const fullText = 'Halen EQ';
+  const fullText = 'Halen';
   const brandIO = new IntersectionObserver(es => es.forEach(e => {
     if (e.isIntersecting) {
       brandIO.disconnect();
@@ -1998,8 +2073,8 @@ navIO.observe(document.getElementById('demo'));
 // theirs mirrored below — level only), then the post-call card with dot
 // rings, one takeaway, and the "how did it go?" dot slider.
 const EQ = {
-  presence:  { app: 'Zoom',     title: 'Weekly 1:1 · Zoom',        dur: '32 min', scores: [41, 82, 77], focus: 0,
-    take: 'You talked for 72% of that 1:1, and two answers ran past 90 seconds. Next time: stop after your main point and ask what they think.', rate: 0.45 },
+  presence:  { app: 'Zoom',     title: 'Team sync · Zoom',        dur: '32 min', scores: [41, 82, 77], focus: 0,
+    take: 'You talked for 72% of that call, and two answers ran past 90 seconds. Next time: stop after your main point and ask what they think.', rate: 0.45 },
   clarity:   { app: 'Teams',    title: 'Quarterly review · Teams', dur: '48 min', scores: [74, 52, 80], focus: 1,
     take: 'You averaged 190 words a minute. Next time: take one breath before each answer.', rate: 0.6 },
   composure: { app: 'Zoom',     title: 'Budget sync · Zoom',       dur: '27 min', scores: [70, 79, 46], focus: 2,
@@ -2014,7 +2089,7 @@ const $rail = document.getElementById('rail');
 const $card = document.getElementById('eqCard');
 const $wave = document.getElementById('eqWave');
 const $status = document.getElementById('eqStatus');
-const COLS = 46, ROWS = 4;
+const COLS = 22, ROWS = 3;
 
 // Build the waveform grid once.
 const cells = [];
@@ -2034,6 +2109,10 @@ function startWave() {
   waveTimer = setInterval(() => {
     turn = (turn + 1) % 40;
     const youTalking = turn < 22;
+    // Light up whoever's talking: you, or one of the others in turn.
+    const other = ['tile1', 'tile2', 'tile3'][Math.floor(Date.now() / 4000) % 3];
+    document.getElementById('tileYou').classList.toggle('talking', youTalking);
+    ['tile1', 'tile2', 'tile3'].forEach(id => document.getElementById(id).classList.toggle('talking', !youTalking && id === other));
     histYou.push(youTalking ? 1 + Math.floor(Math.random() * ROWS) : (Math.random() < .1 ? 1 : 0)); histYou.shift();
     histThem.push(!youTalking ? 1 + Math.floor(Math.random() * ROWS) : 0); histThem.shift();
     drawWave();
@@ -2076,10 +2155,13 @@ async function play(key) {
   document.getElementById('eqApp').textContent = d.app;
   document.getElementById('eqDur').textContent = d.dur;
   $card.classList.remove('show');
-  $status.textContent = 'Halen EQ · listening to you';
+  document.getElementById('eqCall').classList.remove('ended');
+  $status.textContent = 'Halen · listening to you';
   startWave();
   await wait(2600);
   stopWave();
+  document.querySelectorAll('.tile').forEach(t => t.classList.remove('talking'));
+  document.getElementById('eqCall').classList.add('ended');
   $status.textContent = 'Call ended · audio discarded';
   document.getElementById('eqRings').innerHTML = d.scores.map((v, i) => ring(v, COLORS[i], NAMES[i])).join('');
   document.getElementById('eqTake').textContent = d.take;

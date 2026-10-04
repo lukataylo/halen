@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/eq/post-call.png" alt="The card Halen EQ shows when a call ends: Presence, Clarity and Composure as dot rings, one takeaway, and a slider asking how it went." width="360" />
+  <img src="assets/eq/post-call.png" alt="The card Halen shows when a call ends: Presence, Clarity and Composure as dot rings, one takeaway, and a slider asking how it went." width="360" />
 </p>
 
-<h1 align="center">Halen EQ</h1>
+<h1 align="center">Halen</h1>
 
 <p align="center">
   <strong>Hear how you come across on calls.</strong><br>
@@ -13,7 +13,7 @@
 
 ---
 
-You spend hours a day on calls and almost nobody tells you how you sounded. Halen EQ sits in your menu bar, starts when Zoom, Teams, FaceTime, Slack, Discord, WhatsApp or Webex picks up the mic (and asks first for Meet in a browser), and when the call ends it gives you three numbers and one thing to try next time.
+You spend hours a day on calls and almost nobody tells you how you sounded. Halen sits in your menu bar, starts when Zoom, Teams, FaceTime, Slack, Discord, WhatsApp or Webex picks up the mic (and asks first for Meet in a browser), and when the call ends it gives you three numbers and one thing to try next time.
 
 | | What it looks at |
 |---|---|
@@ -24,7 +24,7 @@ You spend hours a day on calls and almost nobody tells you how you sounded. Hale
 Then you drag one slider to say how the call felt. After a few calls it shows you which habits line up with the calls you felt good about.
 
 <p align="center">
-  <img src="assets/eq/overview.png" alt="The Halen EQ window: today's scores, the last seven days as dot bars, this week's focus." width="760" />
+  <img src="assets/eq/overview.png" alt="The Halen window: today's scores, the last seven days as dot bars, this week's focus." width="760" />
 </p>
 
 ## Privacy
@@ -36,13 +36,13 @@ Then you drag one slider to say how the call felt. After a few calls it shows yo
 
 ## Install
 
-[**Download Halen EQ**](https://github.com/lukataylo/halen/releases/download/eq-v1.0.0/HalenEQ-1.0.0.dmg). Free, MIT licensed. Needs macOS 26 or later on Apple silicon.
+[**Download Halen**](https://github.com/lukataylo/halen/releases/download/eq-v1.0.0/HalenEQ-1.0.0.dmg). Free, MIT licensed. Needs macOS 26 or later on Apple silicon.
 
-1. Open the DMG and drag **Halen EQ** to Applications.
+1. Open the DMG and drag **Halen** to Applications.
 2. Launch it. It lives in the menu bar.
 3. Click **Set Up** to do the 30-second voice check. That's it.
 
-Halen EQ checks for updates daily and asks before installing.
+Halen checks for updates daily and asks before installing.
 
 ## Build from source
 
@@ -60,7 +60,7 @@ Under the hood: Apple's on-device speech recognition and Foundation Models, [Flu
 
 ## The old Halen
 
-Halen used to be a local-AI writing assistant. It's archived in [`archive/halen-writing`](archive/halen-writing/ARCHIVED.md), and its last release ([v0.3.0](https://github.com/lukataylo/halen/releases/tag/v0.3.0)) still works and is still downloadable.
+Before this, Halen was a local-AI writing assistant. It's archived in [`archive/halen-writing`](archive/halen-writing/ARCHIVED.md), and its last release ([v0.3.0](https://github.com/lukataylo/halen/releases/tag/v0.3.0)) still works and is still downloadable.
 
 ## License
 
