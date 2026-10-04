@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Halen | Nobody will tell you. Halen will.</title>
+<title>Halen | You can&rsquo;t hear yourself on calls. Halen can.</title>
 <meta name="description" content="A tiny Mac app that listens to your side of your calls and tells you how you came across. Runs entirely on your Mac and forgets the audio." />
 <meta name="keywords" content="speech coach, communication coach, meeting feedback, public speaking, emotional intelligence, on-device AI, private, macOS, Zoom, Teams" />
 <meta name="author" content="Halen Labs" />
@@ -13,7 +13,7 @@
 <!-- Open Graph / Facebook / LinkedIn -->
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Halen" />
-<meta property="og:title" content="Halen | Nobody will tell you. Halen will." />
+<meta property="og:title" content="Halen | You can&rsquo;t hear yourself on calls. Halen can." />
 <meta property="og:description" content="A tiny Mac app that listens to your side of your calls and tells you how you came across. Runs entirely on your Mac and forgets the audio." />
 <meta property="og:url" content="https://halen.dev/" />
 <meta property="og:image" content="https://halen.dev/assets/eq/post-call.png" />
@@ -24,7 +24,7 @@
 
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Halen | Nobody will tell you. Halen will." />
+<meta name="twitter:title" content="Halen | You can&rsquo;t hear yourself on calls. Halen can." />
 <meta name="twitter:description" content="A tiny Mac app that listens to your side of your calls and tells you how you came across. Runs entirely on your Mac and forgets the audio." />
 <meta name="twitter:image" content="https://halen.dev/assets/eq/post-call.png" />
 <meta name="twitter:image:alt" content="Halen: hear how you come across on calls." />
@@ -1403,7 +1403,7 @@ img { display: block; max-width: 100%; }
 .eq-dots i.thumb { transform: scale(1.7); }
 .eq-word { font-family: var(--mono); font-size: 11px; font-weight: 600; min-width: 38px; text-align: right; }
 @media (max-width: 760px) { .popover { right: 10px; } .eq-card { width: 230px; } .win { width: 92%; } .menubar .mb-l span { display: none; } }
-.hero-sub { max-width: none; margin: -30px auto 0; text-align: center; font-size: clamp(19px, 2vw, 24px); font-weight: 600; letter-spacing: -0.01em; line-height: 1.35; color: #3a3a3c; opacity: 0; animation: rise 0.9s var(--ease) 1.4s forwards; }
+.hero-sub { max-width: 46ch; margin: -30px auto 0; text-align: center; font-size: clamp(19px, 2vw, 24px); font-weight: 600; letter-spacing: -0.01em; line-height: 1.35; color: #3a3a3c; opacity: 0; animation: rise 0.9s var(--ease) 1.4s forwards; }
 
 /* ---------- download section: wider space + cards that look like Halen ---------- */
 .cta { padding: 210px 28px 190px; }
@@ -1478,6 +1478,32 @@ img { display: block; max-width: 100%; }
 .cta .cta-card.c-snippets .hx-call b { text-align: left; }
 .cta .cta-card.c-typing .hx-tip { text-align: left; }
 @media (max-width: 1180px) { .cta-card.c-assistant, .cta-card.c-improve { display: none; } }
+
+/* ---------- typography hygiene: no orphans, sensible breaks, tighter rhythm ---------- */
+h1, h2, h3, .hero-sub, .demo-head p, .st, .cta h2, .eq-take, .snip .desc { text-wrap: balance; }
+p, li, .snip .desc, .eq-take { text-wrap: pretty; }
+.story { padding-bottom: 72px; }
+.demo { padding-top: 96px; }
+.demo-head { margin-bottom: 56px; }
+.dl-specs { flex-wrap: wrap; justify-content: center; }
+.dl-specs .chip { white-space: nowrap; }
+.foot > span { white-space: nowrap; }
+@media (max-width: 760px) {
+  .hero-sub { font-size: 18px; padding: 0 8px; }
+  .hero-sub br { display: none; }
+  .cta { padding: 120px 20px 110px; }
+  .dl-specs { font-size: 9.5px; letter-spacing: .1em; gap: 6px; }
+  .dl-specs .chip { padding: 5px 10px; }
+  .foot { flex-direction: column; gap: 14px; text-align: center; padding: 24px 20px 30px; }
+  .foot .links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; }
+  .foot .links a { margin-left: 0; }
+  /* demo: a taller "screen" so the call and the post-call card both fit */
+  .screen { aspect-ratio: 4 / 5.6; }
+  .win { left: 4%; width: 92%; top: 7.5%; height: 42%; }
+  .popover { right: 4%; left: 4%; width: auto; }
+  .eq-card { left: 4%; right: 4%; width: auto; top: auto; bottom: 3.5%; background: rgba(246,246,248,.97); }
+  .menubar .mb-r svg:not(.halen-item svg) { display: none; }
+}
 </style>
 </head>
 <body>
@@ -1501,14 +1527,15 @@ img { display: block; max-width: 100%; }
   <span class="brandmark" aria-hidden="true">
     <img src="assets/halen-icon.svg" alt="" />
   </span>
-  <h1 aria-label="Nobody will tell you. Halen will.">
-    <span class="w w1">Nobody</span>
-    <span class="w w2">will</span>
-    <span class="w w3">tell</span>
-    <span class="w w4">you.</span><br/>
-    <span class="grp"><span class="w w5 ac">Halen</span> <span class="w w6">will</span><span class="dot"></span></span>
+  <h1 aria-label="You can't hear yourself on calls. Halen can.">
+    <span class="w w1">You</span>
+    <span class="w w2">can&rsquo;t</span>
+    <span class="w w3">hear</span>
+    <span class="w w4">yourself</span>
+    <span class="w w5">on&nbsp;calls.</span><br/>
+    <span class="grp"><span class="w w6 ac">Halen</span> <span class="w w7">can</span><span class="dot"></span></span>
   </h1>
-  <p class="hero-sub">Rambling, rushing, interrupting: caught privately, fixed one call at a time.<br/>Free, on your Mac.</p>
+  <p class="hero-sub">Rambling, rushing, interrupting: caught privately, fixed one call at a&nbsp;time. <br/>Free, on your&nbsp;Mac.</p>
 </div>
 
 <!-- ============ MANIFESTO ============ -->
@@ -1525,9 +1552,9 @@ img { display: block; max-width: 100%; }
 
   <p class="st">Most tools that could tell you record everyone, upload it to the <span class="kw" data-swarm="cloud">cloud</span> and charge <span class="kw" data-swarm="subs">monthly</span>.</p>
 
-  <p class="st">Halen runs on <span class="kw" data-swarm="models">your Mac</span>. Do the 30-second voice check and it ignores every voice but yours. It turns the sound into a few numbers and throws the audio away.</p>
+  <p class="st">Halen runs on <span class="kw" data-swarm="models">your Mac</span>. Do the 30&#8209;second voice check and it ignores every voice but yours. It turns the sound into a few numbers and throws the audio away.</p>
 
-  <p class="st">No bot in the call, no audio saved, no account.</p>
+  <p class="st">No bot in the call. No audio saved. No&nbsp;account.</p>
 
   <p class="st">After each call you get one thing to try next time. You say how it went. After six rated calls it shows you which habits match your good ones.</p>
 
