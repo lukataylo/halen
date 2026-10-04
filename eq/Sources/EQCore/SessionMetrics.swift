@@ -31,7 +31,6 @@ public struct SessionMetrics: Codable, Sendable, Equatable {
     /// Only when the far-end level meter ran (calls with audio-capture permission).
     public var talkRatio: Double?
     public var interruptionsPer10Min: Double?
-    public var medianResponseLatency: Double?
 
     // Tone — shown, never scored.
     /// Mean sentiment of your own sentences, −1…1 (Apple NaturalLanguage).
@@ -61,7 +60,6 @@ extension SessionMetrics {
         turnsOver90s = try c.decodeIfPresent(Int.self, forKey: .turnsOver90s) ?? 0
         talkRatio = try c.decodeIfPresent(Double.self, forKey: .talkRatio)
         interruptionsPer10Min = try c.decodeIfPresent(Double.self, forKey: .interruptionsPer10Min)
-        medianResponseLatency = try c.decodeIfPresent(Double.self, forKey: .medianResponseLatency)
         tone = try c.decodeIfPresent(Double.self, forKey: .tone)
         laughs = try c.decodeIfPresent(Int.self, forKey: .laughs) ?? 0
         ignoredSeconds = try c.decodeIfPresent(Double.self, forKey: .ignoredSeconds) ?? 0
@@ -96,7 +94,6 @@ public enum MetricsBuilder {
             let otherTime = other.reduce(0) { $0 + $1.duration }
             if speaking + otherTime > 10 { m.talkRatio = speaking / (speaking + otherTime) }
             m.interruptionsPer10Min = Double(interruptions(own: turns, other: other)) / minutes * 10
-            m.medianResponseLatency = Stats.median(responseLatencies(own: turns, other: other))
         }
         return m
     }
@@ -119,15 +116,6 @@ public enum MetricsBuilder {
             guard t.duration > 1 else { return false }
             return other.contains { o in o.start <= t.start - 0.5 && o.end >= t.start + 0.3 }
         }.count
-    }
-
-    /// Gap between them finishing and you starting, when you reply within 3 s.
-    static func responseLatencies(own: [Span], other: [Span]) -> [Double] {
-        other.compactMap { o in
-            guard let next = own.first(where: { $0.start >= o.end - 0.2 }) else { return nil }
-            let gap = next.start - o.end
-            return gap <= 3 ? max(gap, 0) : nil
-        }
     }
 
     static func windows(frames: [Frame], words: [Word], speech: [Span], duration: Double) -> [WindowSummary] {

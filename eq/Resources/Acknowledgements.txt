@@ -1,0 +1,8 @@
+Halen uses the following open-source work. Thank you.
+
+FluidAudio — Apache License 2.0 — https://github.com/FluidInference/FluidAudio
+Speaker models (downloaded on first voice check, converted to Core ML by Fluid Inference):
+  pyannote segmentation (pyannote.audio, Hervé Bredin et al.) and WeSpeaker speaker embeddings.
+  https://huggingface.co/FluidInference/speaker-diarization-coreml
+Doto typeface — SIL Open Font License 1.1 — https://github.com/oliverlalan/Doto
+Sparkle (direct-download build only) — MIT — https://sparkle-project.org

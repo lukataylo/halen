@@ -28,3 +28,5 @@ __pycache__/
 # Halen EQ build output
 eq/.build/
 eq/dist/
+eq/Resources/*.provisionprofile
+eq/.build-appstore/

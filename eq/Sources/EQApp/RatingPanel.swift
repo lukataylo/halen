@@ -86,7 +86,7 @@ struct PostCallCard: View {
                 HStack(spacing: 8) {
                     SourceIcon(bundleID: r.source, size: 16)
                     Text(r.title).font(.headline)
-                    Text("\(max(1, Int(r.metrics.duration / 60))) min").font(.callout).foregroundStyle(.secondary)
+                    Text("\(r.minutes) min").font(.callout).foregroundStyle(.secondary)
                     Spacer()
                     Button("Skip", systemImage: "xmark", action: onDone)
                         .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(.secondary)
@@ -157,10 +157,7 @@ struct AskCard: View {
         .frame(width: 340)
     }
 
-    private var appName: String {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: call.bundleID)
-            .map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } ?? call.appName
-    }
+    private var appName: String { appDisplayName(call.bundleID, fallback: call.appName) }
 }
 
 extension Binding where Value: Equatable {

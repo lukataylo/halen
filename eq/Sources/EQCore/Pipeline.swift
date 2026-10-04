@@ -13,7 +13,7 @@ public protocol Transcriber: AnyObject, Sendable {
 public actor SessionPipeline {
     private let voiceCheck: VoiceCheck?
     private let transcriber: Transcriber?
-    private let laughs = LaughDetector()
+    private let laughs = LaughDetector.make()
     private var prosody = ProsodyExtractor()
     private var pending: [Float] = []
     private var frames: [Frame] = []
@@ -54,7 +54,7 @@ public actor SessionPipeline {
         }
         samplesSeen += window.count
         frames.append(contentsOf: prosody.process(window))
-        laughs?.feed(window)
+        if window.contains(where: { $0 != 0 }) { laughs?.feed(window) } else { laughs?.skip(window.count) }
         await transcriber?.feed(window)
     }
 

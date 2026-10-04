@@ -3,7 +3,7 @@ import Foundation
 import Security
 
 /// A finished conversation, as it lives on disk.
-public struct SessionRecord: Codable, Sendable, Identifiable, Equatable, Hashable {
+public struct SessionRecord: Codable, Sendable, Identifiable, Equatable {
     public var id: UUID
     public var startedAt: Date
     /// Bundle id of the app that held the mic (Zoom, Teams…), or nil for manual.
@@ -44,10 +44,7 @@ public struct SessionRecord: Codable, Sendable, Identifiable, Equatable, Hashabl
     public var title: String { source.flatMap { CallDetector.match($0)?.value } ?? "Conversation" }
     public var effectiveScores: ScoreCard { scores.without(disputed) }
 
-    public static func == (a: Self, b: Self) -> Bool {
-        a.id == b.id && a.rating == b.rating && a.note == b.note && a.disputed == b.disputed && a.takeaway == b.takeaway && a.words == b.words
-    }
-    public func hash(into h: inout Hasher) { h.combine(id) }
+    public var minutes: Int { max(1, Int(metrics.duration / 60)) }
 }
 
 /// The enrolled voice: a mean speaker embedding plus the similarity threshold
@@ -157,13 +154,24 @@ enum Keychain {
     static let service = "dev.halen.eq"
     static let account = "store-key"
 
-    static func storeKey() throws -> SymmetricKey {
-        let query: [String: Any] = [
+    /// The sandboxed App Store build uses the data-protection keychain (its
+    /// provisioning profile supplies the application identifier it needs);
+    /// the Developer ID build keeps the login keychain it shipped with.
+    static var base: [String: Any] {
+        var q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
         ]
+        #if APPSTORE
+        q[kSecUseDataProtectionKeychain as String] = true
+        #endif
+        return q
+    }
+
+    static func storeKey() throws -> SymmetricKey {
+        var query = base
+        query[kSecReturnData as String] = true
         var out: CFTypeRef?
         let found = SecItemCopyMatching(query as CFDictionary, &out)
         if found == errSecSuccess, let data = out as? Data { return SymmetricKey(data: data) }
@@ -171,23 +179,15 @@ enum Keychain {
         // silently mint a second key — files sealed with it would be orphaned.
         guard found == errSecItemNotFound else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(found)) }
         let key = SymmetricKey(size: .bits256)
-        let add: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-            kSecValueData as String: key.withUnsafeBytes { Data($0) },
-        ]
+        var add = base
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        add[kSecValueData as String] = key.withUnsafeBytes { Data($0) }
         let status = SecItemAdd(add as CFDictionary, nil)
         guard status == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(status)) }
         return key
     }
 
     static func deleteStoreKey() {
-        SecItemDelete([
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ] as CFDictionary)
+        SecItemDelete(base as CFDictionary)
     }
 }

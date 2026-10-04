@@ -1,3 +1,4 @@
+import Accelerate
 import AudioToolbox
 import CoreAudio
 import Foundation
@@ -17,7 +18,11 @@ public final class FarEndTap: @unchecked Sendable {
     private var levels: [(t: Double, db: Float)] = []
     private var _current: Float = -120
 
-    public init() { levels.reserveCapacity(400_000) }   // ~70 min at ~94 Hz: no reallocs on the IO thread
+    // One level per 50 ms (the loudest in that slice): 20 Hz is plenty for
+    // turn-taking, and 200k slots cover ~2.8 h with no reallocation on the
+    // real-time IO thread.
+    public init() { levels.reserveCapacity(200_000) }
+    private var bucketStart = 0.0, bucketMax: Float = -120
     deinit { teardown() }
 
     /// Latest far-end level in dBFS, for the live meter.
@@ -55,19 +60,27 @@ public final class FarEndTap: @unchecked Sendable {
 
         try check(AudioDeviceCreateIOProcIDWithBlock(&procID, aggregateID, nil) { [weak self] _, input, inputTime, _, _ in
             guard let self else { return }
-            var sum: Float = 0, n = 0
+            var sum: Float = 0, n = 0, s: Float = 0
             // The aggregate's input list starts with the output device's own
             // inputs (a headset mic!) — skip them and read only the tap.
             for buf in UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input)).dropFirst(outputInputBuffers) {
                 guard let p = buf.mData?.assumingMemoryBound(to: Float.self) else { continue }
                 let count = Int(buf.mDataByteSize) / MemoryLayout<Float>.size
-                for i in 0 ..< count { sum += p[i] * p[i] }
+                vDSP_svesq(p, 1, &s, vDSP_Length(count))
+                sum += s
                 n += count
             }
             guard n > 0 else { return }
             let db = 10 * log10(max(sum / Float(n), 1e-12))
             let t = HostTime.seconds(inputTime.pointee.mHostTime)
-            self.lock.withLock { self.levels.append((t, db)); self._current = db }
+            self.lock.withLock {
+                self._current = db
+                self.bucketMax = max(self.bucketMax, db)
+                if t - self.bucketStart >= 0.05 {
+                    if self.levels.count < self.levels.capacity { self.levels.append((t, self.bucketMax)) }
+                    self.bucketStart = t; self.bucketMax = -120
+                }
+            }
         })
         try check(AudioDeviceStart(aggregateID, procID))
     }

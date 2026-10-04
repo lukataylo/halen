@@ -33,16 +33,17 @@ private struct GeneralSettings: View {
                 }
             }
             Section {
-                ForEach(model.installedCallApps, id: \.self) { id in
+                let apps = model.installedCallApps
+                ForEach(apps, id: \.self) { id in
                     AppModeRow(bundleID: id)
                 }
-                if model.installedCallApps.isEmpty {
+                if apps.isEmpty {
                     Text("No supported call apps found.").foregroundStyle(.secondary)
                 }
             } header: {
                 Text("When an app uses the mic")
             } footer: {
-                Text("Browsers ask first — the mic there isn't always a call. You can always press Start in the menu bar.")
+                Text("Browsers ask first — the mic there isn't always a call. You can always press Listen Now in the menu bar.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             .disabled(!model.autoStart)
@@ -132,8 +133,5 @@ private struct AppModeRow: View {
         }
     }
 
-    private var name: String {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
-            .map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } ?? bundleID
-    }
+    private var name: String { appDisplayName(bundleID, fallback: bundleID) }
 }

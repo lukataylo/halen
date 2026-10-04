@@ -14,16 +14,17 @@ enum Dot {
     /// Registers Doto (SIL OFL) from the app bundle, or from the source tree
     /// for `swift run`. Falls back to SF Mono if neither is found.
     static func registerFont() {
-        let candidates = [
-            Bundle.main.url(forResource: "Doto", withExtension: "ttf"),
-            URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../Resources/Doto.ttf").standardized,
-        ]
+        var candidates = [Bundle.main.url(forResource: "Doto", withExtension: "ttf")]
+        #if DEBUG
+        candidates.append(URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../Resources/Doto.ttf").standardized)
+        #endif
         if let url = candidates.compactMap({ $0 }).first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
             CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
         }
     }
 
-    static var hasFont: Bool { NSFont(name: "Doto", size: 12) != nil }
+    /// Checked once, after registerFont() ran at launch.
+    static let hasFont = NSFont(name: "Doto", size: 12) != nil
 
     static func font(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
         hasFont ? .custom("Doto", size: size, relativeTo: .body).weight(weight) : .system(size: size, weight: weight, design: .monospaced)
@@ -35,11 +36,14 @@ struct DotLabel: View {
     @Environment(\.colorSchemeContrast) private var contrast
     let text: String
     var size: CGFloat = 11
-    init(_ text: String, size: CGFloat = 11) { self.text = text; self.size = size }
+    /// Overrides the default muted label colour (an outer .foregroundStyle
+    /// wouldn't — the inner one wins).
+    var tint: Color? = nil
+    init(_ text: String, size: CGFloat = 11, tint: Color? = nil) { self.text = text; self.size = size; self.tint = tint }
     var body: some View {
         Text(text).textCase(.uppercase)
             .font(Dot.font(max(11, size), .heavy)).tracking(max(11, size) * 0.12)
-            .foregroundStyle(contrast == .increased ? .primary : Color.primary.opacity(0.72))
+            .foregroundStyle(tint ?? (contrast == .increased ? .primary : Color.primary.opacity(0.72)))
             .lineLimit(1).fixedSize()
     }
 }
@@ -80,8 +84,7 @@ struct DotRing: View {
             .frame(width: size, height: size)
             .animation(.smooth, value: value)
             if let label {
-                if let labelColor { DotLabel(label, size: max(9, size * 0.15)).foregroundStyle(labelColor) }
-                else { DotLabel(label, size: max(9, size * 0.15)) }
+                DotLabel(label, size: max(9, size * 0.15), tint: labelColor)
             }
         }
         .accessibilityElement(children: .ignore)

@@ -48,7 +48,6 @@ public enum Tone {
     }
 
     public enum Mood: String, Sendable { case positive, neutral, negative
-        public var symbol: String { switch self { case .positive: "face.smiling"; case .neutral: "face.dashed"; case .negative: "face.dashed.fill" } }
         public var label: String { switch self { case .positive: "Warm"; case .neutral: "Even"; case .negative: "Tense" } }
     }
 

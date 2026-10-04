@@ -56,14 +56,7 @@ struct MenuBarView: View {
                 }
             }
             if model.isListening {
-                VStack(alignment: .leading, spacing: 4) {
-                    DotWaveform(you: model.historyYou, them: model.historyThem)
-                    HStack {
-                        DotLabel("You", size: 9)
-                        Spacer()
-                        if model.historyThem != nil { DotLabel("Them · level only", size: 9) }
-                    }
-                }
+                LiveWave(live: model.live)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -159,5 +152,20 @@ struct MenuRow: View {
         .buttonStyle(.plain)
         .keyboardShortcut(KeyEquivalent(shortcut), modifiers: .command)
         .onHover { hover = $0 }
+    }
+}
+
+/// Observes only the live meter, so 10 Hz updates redraw just this.
+private struct LiveWave: View {
+    @ObservedObject var live: LiveMeter
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            DotWaveform(you: live.you, them: live.them)
+            HStack {
+                DotLabel("You", size: 9)
+                Spacer()
+                if live.them != nil { DotLabel("Them · level only", size: 9) }
+            }
+        }
     }
 }

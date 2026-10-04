@@ -66,7 +66,7 @@ struct VoiceSetupView: View {
             }
         case .recording(let p):
             VStack(spacing: 10) {
-                DotWaveform(you: model.historyYou, them: nil, rows: 5).frame(width: 300)
+                EnrollWave(live: model.live).frame(width: 300)
                 Text("\(Int(((1 - p) * 30).rounded(.up)))").font(Dot.font(26)).monospacedDigit()
                     .contentTransition(.numericText(countsDown: true)).animation(.snappy, value: Int((1 - p) * 30))
             }
@@ -80,4 +80,9 @@ struct VoiceSetupView: View {
             }
         }
     }
+}
+
+private struct EnrollWave: View {
+    @ObservedObject var live: LiveMeter
+    var body: some View { DotWaveform(you: live.you, them: nil, rows: 5) }
 }

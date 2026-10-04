@@ -89,8 +89,6 @@ func silence(_ seconds: Double) -> [Float] { [Float](repeating: 0, count: Int(se
         let other = [Span(0, 10), Span(20, 25)]
         let own = [Span(8, 15), Span(25.4, 30)]   // cut in at 8 s; replied 0.4 s after they finished at 25
         #expect(MetricsBuilder.interruptions(own: own, other: other) == 1)
-        let lat = MetricsBuilder.responseLatencies(own: own, other: other)
-        #expect(lat.contains { abs($0 - 0.4) < 1e-9 })
     }
 }
 

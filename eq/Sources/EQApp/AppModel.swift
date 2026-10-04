@@ -20,15 +20,16 @@ final class AppModel: ObservableObject {
     @Published private(set) var detectedCall: CallDetector.Call?
     @Published private(set) var voicePrint: VoicePrint?
     @Published private(set) var enrollment: Enrollment = .idle
-    @Published private(set) var liveYou: Float = -120
-    @Published private(set) var liveThem: Float?
     /// Recent levels for the dot-matrix waveform (10 Hz, ~6 s).
-    @Published private(set) var historyYou: [Float] = []
-    @Published private(set) var historyThem: [Float]?
+    /// Live levels live in their own object so 10 Hz updates only redraw
+    /// the waveform, not every window observing the model.
+    let live = LiveMeter()
     @Published var lastError: String?
 
     @AppStorage("autoStart") var autoStart = true
     @AppStorage("appModes") private var appModesJSON = "{}"
+    /// What dedicated call apps do by default; chosen in the welcome window.
+    @AppStorage("defaultCallMode") var defaultCallMode = AppMode.ask.rawValue
 
     /// Per-app behaviour when that app takes the mic.
     enum AppMode: String, Codable, CaseIterable, Identifiable {
@@ -39,7 +40,8 @@ final class AppModel: ObservableObject {
 
     func mode(for bundleID: String) -> AppMode {
         let stored = (try? JSONDecoder().decode([String: AppMode].self, from: Data(appModesJSON.utf8)))?[bundleID]
-        return stored ?? (CallDetector.callApps[bundleID] == "Browser" ? .ask : .auto)
+        if let stored { return stored }
+        return CallDetector.isBrowser(bundleID) ? .ask : (AppMode(rawValue: defaultCallMode) ?? .ask)
     }
 
     func setMode(_ mode: AppMode, for bundleID: String) {
@@ -53,7 +55,7 @@ final class AppModel: ObservableObject {
     var installedCallApps: [String] {
         CallDetector.callApps.keys
             .filter { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
-            .sorted { (CallDetector.callApps[$0] == "Browser" ? 1 : 0, $0) < (CallDetector.callApps[$1] == "Browser" ? 1 : 0, $1) }
+            .sorted { (CallDetector.isBrowser($0) ? 1 : 0, $0) < (CallDetector.isBrowser($1) ? 1 : 0, $1) }
     }
     /// Off by default; only possible once the voice check is set up.
     @AppStorage("saveTranscripts") var saveTranscripts = false { didSet { transcriptSettingChanged() } }
@@ -72,25 +74,34 @@ final class AppModel: ObservableObject {
     private var retentionTimer: Timer?
     let ratingPanel = RatingPanelController()
 
-    /// `EQ_DEMO=1`: throwaway store with sample calls, no call detection —
-    /// for screenshots and design work without touching real data.
+    /// `EQ_DEMO=1` (debug builds only): throwaway store with sample calls, no
+    /// call detection — for screenshots and design work without real data.
+    #if DEBUG
     static let isDemo = ProcessInfo.processInfo.environment["EQ_DEMO"] == "1"
+    #else
+    static let isDemo = false
+    #endif
+
+    /// First launch: the welcome window explains the menu bar icon and asks
+    /// how calls should start. Until then auto-listen is off.
+    static var needsOnboarding: Bool { !UserDefaults.standard.bool(forKey: "onboarded") && !isDemo }
 
     init() {
+        #if DEBUG
         if Self.isDemo {
             store = try? SessionStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("HalenEQ-demo-\(UUID())"),
                                       key: .init(size: .bits256))
             Demo.seed(store)
-            refresh()
+            sessions = store?.all() ?? []
             ratingPanel.model = self
             if let first = sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.ratingPanel.present(first.id) } }
             return
         }
+        #endif
         do { store = try SessionStore() } catch { store = nil; lastError = "Couldn't open storage: \(error.localizedDescription)" }
         baseline = Self.loadBaseline()
         voicePrint = store?.loadVoicePrint()
         refresh()
-        enforceRetention()
         retentionTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.enforceRetention() }
         }
@@ -110,7 +121,7 @@ final class AppModel: ObservableObject {
 
     private func callChanged(_ call: CallDetector.Call?) {
         detectedCall = call
-        guard autoStart else { return }
+        guard autoStart, !Self.needsOnboarding else { return }
         switch (call, state) {
         case (let c?, .idle):
             switch mode(for: c.bundleID) {
@@ -181,10 +192,7 @@ final class AppModel: ObservableObject {
         meterTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, let mic = self.mic else { return }
-                self.liveYou = mic.currentLevel
-                self.liveThem = self.tap?.currentLevel
-                self.historyYou = Array((self.historyYou + [self.liveYou]).suffix(64))
-                if let them = self.liveThem { self.historyThem = Array(((self.historyThem ?? []) + [them]).suffix(64)) }
+                self.live.push(you: mic.currentLevel, them: self.tap?.currentLevel)
             }
         }
     }
@@ -199,8 +207,7 @@ final class AppModel: ObservableObject {
         let spans = tap?.stop(origin: origin ?? HostTime.now)
         let other = origin == nil ? nil : spans
         tap = nil
-        liveThem = nil
-        historyYou = []; historyThem = nil
+        live.reset()
         state = .analysing
         await feeder?.value   // drain every captured chunk before finishing
         feeder = nil
@@ -215,7 +222,7 @@ final class AppModel: ObservableObject {
             baseline.absorb(metrics)
             Self.saveBaseline(baseline)
             try store?.save(record)
-            refresh()
+            sessions.insert(record, at: 0)
             saved = record
             }
         } catch {
@@ -240,12 +247,12 @@ final class AppModel: ObservableObject {
     }
 
     /// "That's not right" — the factor drops out of this session's score, the
-    /// weekly focus, and what the coach learns from.
+    /// weekly focus, and the takeaway.
     func toggleDispute(_ id: UUID, factor: String) {
         update(id) { r in if r.disputed.contains(factor) { r.disputed.remove(factor) } else { r.disputed.insert(factor) } }
     }
 
-    func delete(_ id: UUID) { store?.delete(id); refresh() }
+    func delete(_ id: UUID) { store?.delete(id); sessions.removeAll { $0.id == id } }
 
     /// Patch one record in memory and on disk — no full reload.
     private func update(_ id: UUID, _ change: (inout SessionRecord) -> Void) {
@@ -260,7 +267,7 @@ final class AppModel: ObservableObject {
     /// pitch reference for Composure — one step instead of two.
     func enroll() async {
         guard state == .idle else { lastError = "Finish your call first."; return }
-        switch enrollment { case .recording, .processing: return; default: break }
+        guard !isEnrolling else { return }
         guard await MicCapture.requestPermission() else { enrollment = .failed("Microphone access is off."); return }
         let mic = MicCapture()
         let collector: Task<[Float], Never>
@@ -274,17 +281,16 @@ final class AppModel: ObservableObject {
             // A call started (or a session began) mid-setup: abandon rather
             // than learn someone else's voice.
             if state != .idle || detectedCall.map({ !$0.isBrowser }) == true {
-                mic.stop(); _ = await collector.value; historyYou = []
+                mic.stop(); _ = await collector.value; live.reset()
                 enrollment = .failed("A call started — try again when you're off the call.")
                 return
             }
             enrollment = .recording(progress: Double(i) / Double(ticks))
-            liveYou = mic.currentLevel
-            historyYou = Array((historyYou + [liveYou]).suffix(64))
+            live.push(you: mic.currentLevel, them: nil)
             try? await Task.sleep(for: .milliseconds(250))
         }
         mic.stop()
-        historyYou = []
+        live.reset()
         let samples = await collector.value
         enrollment = .processing
         do {
@@ -306,6 +312,15 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Welcome window finished: remember the choice, ask for the mic now —
+    /// in context — rather than in the middle of someone's first call.
+    func finishOnboarding(mode: AppMode) async {
+        defaultCallMode = mode.rawValue
+        UserDefaults.standard.set(true, forKey: "onboarded")
+        _ = await MicCapture.requestPermission()
+        objectWillChange.send()
+    }
+
     func resetEnrollmentState() { if enrollment != .processing { enrollment = .idle } }
 
     func deleteVoicePrint() {
@@ -318,13 +333,23 @@ final class AppModel: ObservableObject {
     // MARK: Privacy
 
     private func transcriptSettingChanged() {
-        if !saveTranscripts { try? store?.dropAllTranscripts(); refresh() }
+        guard !saveTranscripts, sessions.contains(where: { $0.words != nil }) else { return }
+        for i in sessions.indices where sessions[i].words != nil {
+            sessions[i].words = nil
+            try? store?.save(sessions[i])
+        }
     }
 
     /// Runs on launch, hourly, and when the setting changes — a menubar app
     /// can stay up for weeks.
     func enforceRetention() {
-        if (try? store?.enforce(transcriptDays: transcriptDays)) ?? 0 > 0 { refresh() }
+        // Nothing to expire unless some session still has words — skip the
+        // (decrypt-everything) disk pass entirely in the common case.
+        let cutoff = Date.now.addingTimeInterval(-Double(transcriptDays) * 86_400)
+        for i in sessions.indices where sessions[i].words != nil && sessions[i].startedAt < cutoff {
+            sessions[i].words = nil
+            try? store?.save(sessions[i])
+        }
     }
 
     func forgetEverything() {
@@ -334,7 +359,7 @@ final class AppModel: ObservableObject {
         voicePrint = nil
         voiceCheck = nil
         saveTranscripts = false
-        refresh()
+        sessions = []
     }
 
     var launchAtLogin: Bool {
@@ -346,7 +371,17 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func refresh() { sessions = store?.all() ?? [] }
+    /// Full load from disk, off the main thread (decrypting hundreds of
+    /// sessions takes seconds). Also purges undecryptable files once.
+    private func refresh() {
+        guard let store else { return }
+        let days = transcriptDays
+        Task.detached(priority: .utility) {
+            _ = try? store.enforce(transcriptDays: days)
+            let all = store.all()
+            await MainActor.run { self.sessions = all }
+        }
+    }
 
     // Baseline is a mean and variance of pitch — fine in defaults.
     private static func loadBaseline() -> Baseline {

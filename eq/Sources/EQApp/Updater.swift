@@ -1,10 +1,22 @@
-import Sparkle
 import SwiftUI
+#if !APPSTORE
+import Sparkle
+#endif
 
 /// Sparkle 2 auto-updates. Feed and public key live in Info.plist
 /// (SUFeedURL / SUPublicEDKey); every update is EdDSA-verified before it
 /// replaces the app. This is one of only two network requests Halen EQ makes
 /// (the other is the one-time voice model download).
+#if APPSTORE
+/// The App Store build updates through the App Store; nothing to show.
+@MainActor
+final class Updater: ObservableObject {
+    @Published var canCheck = false
+    var isAvailable: Bool { false }
+    func checkForUpdates() {}
+    var automaticallyChecks: Bool { get { false } set {} }
+}
+#else
 @MainActor
 final class Updater: ObservableObject {
     private let controller: SPUStandardUpdaterController?
@@ -26,3 +38,4 @@ final class Updater: ObservableObject {
         set { controller?.updater.automaticallyChecksForUpdates = newValue; objectWillChange.send() }
     }
 }
+#endif

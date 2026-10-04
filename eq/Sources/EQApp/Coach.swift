@@ -25,7 +25,7 @@ struct Coach {
             .joined(separator: "\n")
         let prompt = """
         You are a calm, kind communication coach. These measurements describe only how the user spoke \
-        in a \(max(1, Int(r.metrics.duration / 60)))-minute conversation (\(r.title)). Pace, fillers and \
+        in a \(r.minutes)-minute conversation (\(r.title)). Pace, fillers and \
         vocal variety are compared with common targets; heated moments are compared with the user's own calm voice. \
         Do not invent facts beyond them, and don't mention numeric scores.
 

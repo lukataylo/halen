@@ -23,12 +23,21 @@ struct HalenEQApp: App {
         .windowToolbarStyle(.unifiedCompact)
         .defaultLaunchBehavior(AppModel.isDemo ? .presented : .suppressed)
 
+        #if DEBUG
         // Demo only: the menu bar popover in a regular window, for screenshots.
         Window("Menu (demo)", id: "menu-demo") {
             MenuBarView().environmentObject(model).environmentObject(updater)
         }
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(AppModel.isDemo ? .presented : .suppressed)
+        #endif
+
+        Window("Welcome to Halen", id: "welcome") {
+            WelcomeView().environmentObject(model)
+        }
+        .windowResizability(.contentSize)
+        .windowStyle(.hiddenTitleBar)
+        .defaultLaunchBehavior(AppModel.needsOnboarding ? .presented : .suppressed)
 
         Window("Voice Check", id: "voice") {
             VoiceSetupView().environmentObject(model)

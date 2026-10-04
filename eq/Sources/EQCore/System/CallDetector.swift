@@ -29,7 +29,7 @@ public final class CallDetector {
     public struct Call: Equatable, Sendable {
         public var bundleID: String
         public var appName: String
-        public var isBrowser: Bool { appName == "Browser" }
+        public var isBrowser: Bool { CallDetector.isBrowser(bundleID) }
     }
 
     public private(set) var current: Call?
@@ -58,6 +58,8 @@ public final class CallDetector {
             onChange?(call)
         }
     }
+
+    public nonisolated static func isBrowser(_ bundleID: String) -> Bool { callApps[bundleID] == "Browser" }
 
     /// Browsers capture from helper processes ("com.google.Chrome.helper"),
     /// so match on prefix as well as exact id.

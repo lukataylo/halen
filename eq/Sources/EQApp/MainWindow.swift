@@ -48,7 +48,7 @@ struct SessionRow: View {
             SourceIcon(bundleID: record.source, size: 18)
             VStack(alignment: .leading, spacing: 1) {
                 Text(record.startedAt.formatted(date: .omitted, time: .shortened)).monospacedDigit()
-                Text("\(record.title) · \(max(1, Int(record.metrics.duration / 60))) min")
+                Text("\(record.title) · \(record.minutes) min")
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 4)
@@ -297,7 +297,7 @@ struct SessionDetail: View {
         HStack(spacing: 12) {
             SourceIcon(bundleID: record.source, size: 28)
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(record.startedAt.formatted(date: .complete, time: .shortened)) · \(max(1, Int(record.metrics.duration / 60))) min, you spoke \(Int(record.metrics.speakingSeconds / 60)) min")
+                Text("\(record.startedAt.formatted(date: .complete, time: .shortened)) · \(record.minutes) min, you spoke \(Int(record.metrics.speakingSeconds / 60)) min")
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -325,7 +325,7 @@ struct SessionDetail: View {
     }
 
     /// Where it got heated: each bar is 5 s; height is how much you spoke,
-    /// orange means pitch/loudness/pace were up together.
+    /// red means pitch/loudness/pace were up together.
     private var timeline: some View {
         let a = Composure.analyse(record.metrics.windows, calm: model.baseline)
         let elevated = Set(a.active.filter(\.elevated).map(\.summary.start))
@@ -359,8 +359,8 @@ struct DimensionCard: View {
         let score = dimension.score(record.effectiveScores)
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                Ring(value: score.value, dimension: dimension, size: 42, showLabel: false)
-                DotLabel(dimension.rawValue, size: 12).foregroundStyle(.primary)
+                DotRing(value: score.value, size: 42, color: Palette.color(dimension))
+                DotLabel(dimension.rawValue, size: 12, tint: .primary)
             }
             if score.factors.isEmpty {
                 Text(dimension == .composure ? "Needs a few minutes of you speaking." : "Not measured.")
@@ -377,7 +377,7 @@ struct DimensionCard: View {
 }
 
 /// One measured factor. "Not right?" lets you overrule it — it then stops
-/// counting toward this call's score and the coach's learning. The control
+/// counting toward this call's score, the weekly focus and the takeaway. The control
 /// lives in a fixed-width slot that only fades in, so hovering never
 /// reflows the card.
 struct FactorRow: View {

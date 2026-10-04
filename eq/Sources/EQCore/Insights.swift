@@ -20,9 +20,12 @@ public enum Insights {
     public static func daily(_ dim: Dimension, _ rs: [SessionRecord], days: Int = 7, now: Date = .now) -> [(day: Date, value: Int?)] {
         let cal = Calendar.current
         let today = cal.startOfDay(for: now)
+        // Day boundaries once, then plain date comparisons (Calendar calls
+        // per session × day were the cost).
         return (0 ..< days).reversed().map { back in
             let day = cal.date(byAdding: .day, value: -back, to: today)!
-            return (day, score(dim, rs.filter { cal.isDate($0.startedAt, inSameDayAs: day) }))
+            let next = cal.date(byAdding: .day, value: 1, to: day)!
+            return (day, score(dim, rs.filter { $0.startedAt >= day && $0.startedAt < next }))
         }
     }
 

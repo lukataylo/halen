@@ -1,3 +1,4 @@
+#if DEBUG
 import EQCore
 import Foundation
 
@@ -39,3 +40,4 @@ enum Demo {
         }
     }
 }
+#endif

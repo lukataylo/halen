@@ -12,11 +12,19 @@ public final class LaughDetector: NSObject, SNResultsObserving, @unchecked Senda
     private var inLaugh = false
     private var count = 0
 
-    public init?(format: AVAudioFormat = MicCapture.format) {
-        analyzer = SNAudioStreamAnalyzer(format: format)
+    /// nil if the system sound classifier isn't available.
+    public static func make() -> LaughDetector? { LaughDetector(analyzer: SNAudioStreamAnalyzer(format: MicCapture.format)) }
+
+    private init?(analyzer: SNAudioStreamAnalyzer) {
+        self.analyzer = analyzer
         super.init()
         guard let request = try? SNClassifySoundRequest(classifierIdentifier: .version1) else { return nil }
         guard (try? analyzer.add(request, withObserver: self)) != nil else { return nil }
+    }
+
+    /// Rejected (zeroed) audio: just advance the clock, skip inference.
+    public func skip(_ count: Int) {
+        queue.async { [self] in position += AVAudioFramePosition(count) }
     }
 
     public func feed(_ samples: [Float]) {

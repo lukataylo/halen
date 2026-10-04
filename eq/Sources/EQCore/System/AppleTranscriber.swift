@@ -7,7 +7,6 @@ import Speech
 /// fillers (writes "uh" as "ah"); `FilledPauses` backs it up acoustically.
 public final class AppleTranscriber: Transcriber, @unchecked Sendable {
     private let locale: Locale
-    private var transcriber: SpeechTranscriber?
     private var analyzer: SpeechAnalyzer?
     private var input: AsyncStream<AnalyzerInput>.Continuation?
     private var collector: Task<[Word], Error>?
@@ -28,7 +27,6 @@ public final class AppleTranscriber: Transcriber, @unchecked Sendable {
 
         let (stream, cont) = AsyncStream<AnalyzerInput>.makeStream()
         input = cont
-        transcriber = t
         analyzer = a
 
         collector = Task {

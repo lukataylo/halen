@@ -3,7 +3,7 @@ import EQCore
 import SwiftUI
 
 /// One accent per dimension, lit dots only; everything else stays
-/// monochrome. Red is reserved for "heated".
+/// monochrome. Red marks "heated" and "well off target".
 enum Palette {
     static let presence = Color(red: 0.24, green: 0.48, blue: 1.00)    // electric blue
     static let clarity = Color(red: 0.13, green: 0.80, blue: 0.47)     // signal green
@@ -17,7 +17,10 @@ enum Palette {
 /// While listening, a small dot is drawn beside it (template too, so it
 /// follows light/dark/accent like every other status item).
 enum MenubarIcon {
-    static func image(listening: Bool) -> NSImage {
+    private static let idle = make(listening: false), active = make(listening: true)
+    static func image(listening: Bool) -> NSImage { listening ? active : idle }
+
+    private static func make(listening: Bool) -> NSImage {
         let base = NSImage(named: "HalenMenubar") ?? NSImage(systemSymbolName: "bubble", accessibilityDescription: nil)!
         let size = NSSize(width: listening ? 22 : 16, height: 16)
         let img = NSImage(size: size, flipped: false) { _ in
@@ -31,24 +34,6 @@ enum MenubarIcon {
     }
 }
 
-struct Ring: View {
-    var value: Int?
-    var dimension: Insights.Dimension
-    var size: CGFloat = 56
-    var showLabel = true
-    var body: some View { DotRing(value: value, label: showLabel ? dimension.rawValue : nil, size: size, color: Palette.color(dimension)) }
-}
-
-struct Rings: View {
-    var card: (Insights.Dimension) -> Int?
-    var size: CGFloat = 56
-    var body: some View {
-        HStack(spacing: size * 0.4) {
-            ForEach(Insights.Dimension.allCases, id: \.self) { Ring(value: card($0), dimension: $0, size: size) }
-        }
-    }
-}
-
 struct MoodBadge: View {
     let tone: Double?
     let laughs: Int
@@ -57,7 +42,7 @@ struct MoodBadge: View {
             HStack(spacing: 8) {
                 DotFace(mood: mood, size: 20)
                 VStack(alignment: .leading, spacing: 1) {
-                    DotLabel(mood.label, size: 11).foregroundStyle(.primary)
+                    DotLabel(mood.label, size: 11, tint: .primary)
                     if laughs > 0 { Text("laughed \(laughs)×").font(.caption).foregroundStyle(.secondary) }
                 }
             }
@@ -72,15 +57,24 @@ struct SourceIcon: View {
     var size: CGFloat = 18
     var body: some View {
         Group {
-            if let id = bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
-                    .resizable()
+            if let id = bundleID, let icon = Self.icon(id) {
+                Image(nsImage: icon).resizable()
             } else {
                 Image(systemName: "person.wave.2.fill").resizable().scaledToFit().foregroundStyle(.secondary).padding(2)
             }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
+    }
+
+    /// LaunchServices lookups are slow; cache per bundle id.
+    @MainActor private static var cache: [String: NSImage] = [:]
+    @MainActor private static func icon(_ id: String) -> NSImage? {
+        if let i = cache[id] { return i }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return nil }
+        let i = NSWorkspace.shared.icon(forFile: url.path)
+        cache[id] = i
+        return i
     }
 }
 
@@ -98,4 +92,10 @@ extension Date {
         if cal.isDateInYesterday(self) { return "Yesterday" }
         return formatted(.dateTime.weekday(.wide).day().month())
     }
+}
+
+/// "Zoom", "Microsoft Teams"… from an app's bundle id, as Finder shows it.
+func appDisplayName(_ bundleID: String, fallback: String) -> String {
+    NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+        .map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } ?? fallback
 }
